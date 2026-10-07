@@ -3,21 +3,29 @@ import { gridSize } from '../game/config';
 import { GameEngine } from '../game/engine';
 import { sideAtSlot, slotOfSide } from '../game/glass';
 import type { Side } from '../game/side';
+import { zenLevelOf, zenLevelProgress, zenLevelTarget } from '../game/zen';
 import { KeyboardController } from '../input/keyboard';
 import { Effects } from '../render/effects';
 import { GameRenderer } from '../render/renderer';
 import { configFor, type Settings } from '../services/settingsStore';
 import { Hud } from './Hud';
-import { formatClock, type Callout, type HudState } from './hudState';
+import { formatClock, formatScore, type Callout, type GameMode, type HudState } from './hudState';
 
-type Status = 'playing' | 'paused' | 'over';
+type Status = 'playing' | 'paused' | 'levelUp' | 'over';
 
 interface Result extends HudState {
   /** Screen slot of the glass that overflowed. */
   slot: Side;
 }
 
+/** A Zen level that has just been reached and is being celebrated. */
+interface LevelUp {
+  id: number;
+  level: number;
+}
+
 interface Props {
+  mode: GameMode;
   settings: Settings;
   /** True while the settings panel is on top: the game is frozen and the
    * keyboard belongs to the panel. */
@@ -26,33 +34,48 @@ interface Props {
   onExit: () => void;
 }
 
-const EMPTY_HUD: HudState = { score: 0, combo: 0, bestCombo: 0, matches: 0, pieces: 0, seconds: 0 };
+const EMPTY_HUD: HudState = {
+  score: 0,
+  combo: 0,
+  bestCombo: 0,
+  matches: 0,
+  pieces: 0,
+  seconds: 0,
+  level: 0,
+  levelInto: 0,
+  levelTarget: 0,
+};
 
 /** Longest frame the game will simulate in one go (hitches, tab switches). */
 const MAX_FRAME_SECONDS = 0.05;
 
+/** How long the game stands still while a new Zen level is announced. */
+const LEVEL_UP_SECONDS = 2.4;
+
 const SLOT_NAMES = ['Верхний', 'Правый', 'Нижний', 'Левый'] as const;
 
-const hudOf = (engine: GameEngine): HudState => ({
-  score: engine.state.score,
-  combo: engine.state.combo,
-  bestCombo: engine.state.bestCombo,
-  matches: engine.state.matches,
-  pieces: engine.state.piecesPlaced,
-  seconds: Math.floor(engine.state.elapsedSeconds),
-});
+/** `level` is the Zen level being played, 0 outside Zen. */
+const hudOf = (engine: GameEngine, level: number): HudState => {
+  const progress = level > 0 ? zenLevelProgress(engine.state.score, level) : { into: 0, target: 0 };
+  return {
+    score: engine.state.score,
+    combo: engine.state.combo,
+    bestCombo: engine.state.bestCombo,
+    matches: engine.state.matches,
+    pieces: engine.state.piecesPlaced,
+    seconds: Math.floor(engine.state.elapsedSeconds),
+    level,
+    levelInto: progress.into,
+    levelTarget: progress.target,
+  };
+};
 
 const sameHud = (a: HudState, b: HudState): boolean =>
-  a.score === b.score &&
-  a.combo === b.combo &&
-  a.bestCombo === b.bestCombo &&
-  a.matches === b.matches &&
-  a.pieces === b.pieces &&
-  a.seconds === b.seconds;
+  (Object.keys(a) as (keyof HudState)[]).every((key) => a[key] === b[key]);
 
 /** The playable screen: owns the engine, runs it from the frame loop and
  * turns key presses into engine input. */
-export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props) {
+export function GameScreen({ mode, settings, blocked, onOpenSettings, onExit }: Props) {
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
@@ -64,6 +87,7 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
   const [callout, setCallout] = useState<Callout | null>(null);
   const [status, setStatus] = useState<Status>('playing');
   const [result, setResult] = useState<Result | null>(null);
+  const [levelUp, setLevelUp] = useState<LevelUp | null>(null);
 
   // The frame loop and the key handlers are set up once; they read whatever
   // is current through this.
@@ -93,8 +117,9 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
   }, []);
 
   useEffect(() => {
-    // The options are fixed for the life of this component: the parent
-    // re-keys it when they change.
+    // The mode and the options are fixed for the life of this component:
+    // the parent re-keys it when they change.
+    const zen = mode === 'zen';
     const engine = new GameEngine(configFor(live.current.settings.game));
     const fx = new Effects();
     fx.reset(engine.activeSide);
@@ -106,32 +131,44 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
     );
     engineRef.current = engine;
     rendererRef.current = renderer;
+    // A handle for poking at a running game from the console while developing.
+    if (import.meta.env.DEV) Object.assign(window, { __rotathree: engine });
 
     let calloutId = 0;
     let shown = EMPTY_HUD;
+    // Zen: the level being played, and the seconds left of the pause that
+    // announces a new one.
+    let level = zen ? 1 : 0;
+    let levelUpLeft = 0;
+    let levelUpId = 0;
 
     restartRef.current = () => {
       engine.restart();
       fx.reset(engine.activeSide);
       keyboard.releaseAll();
+      level = zen ? 1 : 0;
+      levelUpLeft = 0;
       setCallout(null);
       setResult(null);
+      setLevelUp(null);
       setStatus('playing');
     };
+
+    const playing = () => live.current.status === 'playing' && levelUpLeft <= 0;
 
     const keyboard = new KeyboardController(
       () => live.current.settings.bindings,
       () => live.current.settings.handling,
       {
         move: (direction, toWall) => {
-          if (live.current.status !== 'playing') return;
+          if (!playing()) return;
           engine.moveActive(toWall ? direction * engine.config.boardSize : direction);
         },
         softDrop: (held) => engine.setSoftDrop(held),
         press: (action) => {
           if (action === 'pause') return togglePause();
           if (action === 'restart') return restartRef.current();
-          if (live.current.status !== 'playing') {
+          if (!playing()) {
             // On the result screen the drop key starts the next game.
             if (live.current.status === 'over' && action === 'hardDrop') restartRef.current();
             return;
@@ -175,9 +212,10 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, (now - last) / 1000));
       last = now;
       const { status: current, blocked: frozen, settings: latest } = live.current;
-      const running = current === 'playing' && !frozen;
+      const running = current === 'playing' && !frozen && levelUpLeft <= 0;
       if (frozen) keyboard.releaseAll();
       fx.screenShake = latest.screenShake;
+      fx.turnSeconds = latest.turnMs / 1000;
 
       if (running) {
         keyboard.update(seconds);
@@ -192,13 +230,34 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
         if (event.type === 'matchScored') {
           setCallout({ id: ++calloutId, combo: event.combo, score: event.score });
         } else if (event.type === 'gameEnded') {
-          setResult({ ...hudOf(engine), slot: slotOfSide(engine.activeSide, event.side) });
+          setResult({ ...hudOf(engine, level), slot: slotOfSide(engine.activeSide, event.side) });
           setStatus('over');
         }
       }
 
+      if (levelUpLeft > 0) {
+        if (!frozen) levelUpLeft -= seconds;
+        if (levelUpLeft <= 0) {
+          levelUpLeft = 0;
+          setLevelUp(null);
+          setStatus((value) => (value === 'levelUp' ? 'playing' : value));
+        }
+      } else if (zen && running && engine.phase === 'playing') {
+        // The board is at rest, so a cascade that carried the score over the
+        // line has played out in full before the game stops to celebrate.
+        const reached = zenLevelOf(engine.state.score);
+        if (reached > level) {
+          level = reached;
+          levelUpLeft = LEVEL_UP_SECONDS;
+          keyboard.releaseAll();
+          fx.celebrate(engine.config.numberOfColors);
+          setLevelUp({ id: ++levelUpId, level });
+          setStatus('levelUp');
+        }
+      }
+
       renderer.draw(engine, fx);
-      const next = hudOf(engine);
+      const next = hudOf(engine, level);
       if (!sameHud(next, shown)) {
         shown = next;
         setHud(next);
@@ -213,7 +272,7 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
     };
-  }, [togglePause]);
+  }, [mode, togglePause]);
 
   /** Clicking a glass brings it to the top. */
   const onCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -227,15 +286,30 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
     }
   };
 
+  const zen = mode === 'zen';
   const config = configFor(settings.game);
   const corner = `${(100 * config.armLength) / gridSize(config)}%`;
 
   return (
     <main className="game">
+      {zen && (
+        // A wash of colour behind the field that moves on with every level.
+        <div
+          className="game__aura"
+          aria-hidden="true"
+          style={{ filter: `hue-rotate(${(Math.max(1, hud.level) - 1) * 47}deg)` }}
+        />
+      )}
       <div className="game__frame" ref={frameRef}>
         <div
           className="stage"
-          style={{ width: size, height: size, fontSize: Math.max(9, size / 58), ['--corner' as string]: corner }}
+          style={{
+            width: size,
+            height: size,
+            fontSize: Math.max(9, size / 58),
+            ['--corner' as string]: corner,
+            ['--hud-opacity' as string]: settings.hud.opacity,
+          }}
         >
           <canvas
             ref={canvasRef}
@@ -247,20 +321,37 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
             hud={hud}
             callout={callout}
             bindings={settings.bindings}
+            options={settings.hud}
             onPause={togglePause}
             onOpenSettings={onOpenSettings}
           />
+
+          {levelUp && (
+            <div className="levelup" key={levelUp.id} role="status">
+              <div className="levelup__sweep" />
+              <div className="levelup__card">
+                <span className="levelup__label">Уровень {levelUp.level - 1} пройден</span>
+                <span className="levelup__title">
+                  Уровень <b>{levelUp.level}</b>
+                </span>
+                <span className="levelup__goal">
+                  Цель · {formatScore(zenLevelTarget(levelUp.level))} очков
+                </span>
+              </div>
+            </div>
+          )}
 
           {status === 'paused' && !blocked && (
             <div className="overlay">
               <div className="dialog">
                 <h2 className="dialog__title">Пауза</h2>
+                {zen && <p className="dialog__note">Дзен · уровень {hud.level}</p>}
                 <div className="dialog__actions">
                   <button type="button" className="button button--primary" onClick={togglePause} autoFocus>
                     Продолжить
                   </button>
                   <button type="button" className="button" onClick={restart}>
-                    Заново
+                    {zen ? 'Начать заново' : 'Заново'}
                   </button>
                   <button type="button" className="button" onClick={onOpenSettings}>
                     Настройки
@@ -279,11 +370,18 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
                 <h2 className="dialog__title dialog__title--danger">Игра окончена</h2>
                 <p className="dialog__note">
                   {SLOT_NAMES[result.slot]} стакан заполнился до конца рукава.
+                  {zen && ' Начнёте заново с первого уровня?'}
                 </p>
                 <dl className="stats">
-                  <div className="stats__row stats__row--main">
+                  {zen && (
+                    <div className="stats__row stats__row--main">
+                      <dt>Уровень</dt>
+                      <dd>{result.level}</dd>
+                    </div>
+                  )}
+                  <div className={`stats__row ${zen ? '' : 'stats__row--main'}`}>
                     <dt>Счёт</dt>
-                    <dd>{result.score.toLocaleString('ru-RU')}</dd>
+                    <dd>{formatScore(result.score)}</dd>
                   </div>
                   <div className="stats__row">
                     <dt>Лучшее комбо</dt>
@@ -304,7 +402,7 @@ export function GameScreen({ settings, blocked, onOpenSettings, onExit }: Props)
                 </dl>
                 <div className="dialog__actions">
                   <button type="button" className="button button--primary" onClick={restart} autoFocus>
-                    Заново
+                    {zen ? 'Начать заново' : 'Заново'}
                   </button>
                   <button type="button" className="button" onClick={onOpenSettings}>
                     Настройки

@@ -179,18 +179,55 @@ describe('settings', () => {
     settings.bindings = bindKey(settings.bindings, 'glassLeft', 0, 'KeyQ');
     settings.handling.dasMs = 90;
     settings.game.armLength = 8;
-    saveSettings(settings, storage);
+    settings.game.glassCount = 2;
+    settings.game.numberOfColors = 6;
+    settings.hud = { keyHints: false, score: true, stats: false, opacity: 0.35 };
+    settings.turnMs = 420;
+    expect(saveSettings(settings, storage)).toBe(true);
     expect(loadSettings(storage)).toEqual(settings);
+  });
+
+  it('report it when the browser will not store them', () => {
+    const full = {
+      setItem: () => {
+        throw new Error('quota');
+      },
+    };
+    expect(saveSettings(defaultSettings(), full)).toBe(false);
+    expect(saveSettings(defaultSettings(), null)).toBe(false);
+  });
+
+  it('saved by an older version: the keys are kept, new options get defaults', () => {
+    const old = {
+      bindings: { ...defaultBindings, glassLeft: ['KeyQ'], hardDrop: ['Enter'] },
+      handling: { dasMs: 120, arrMs: 20 },
+      game: { activeStepSeconds: 1, inactiveStepSeconds: 3, armLength: 9, numberOfColors: 4 },
+      screenShake: false,
+    };
+    const loaded = loadSettings({ getItem: () => JSON.stringify(old) });
+    expect(loaded.bindings.glassLeft).toEqual(['KeyQ']);
+    expect(loaded.bindings.hardDrop).toEqual(['Enter']);
+    expect(loaded.handling).toEqual({ dasMs: 120, arrMs: 20 });
+    expect(loaded.screenShake).toBe(false);
+    expect(loaded.game.numberOfColors).toBe(4);
+    expect(loaded.game.glassCount).toBe(4);
+    expect(loaded.hud).toEqual(defaultSettings().hud);
+    expect(loaded.turnMs).toBe(defaultSettings().turnMs);
   });
 
   it('fall back to defaults for anything missing or out of range', () => {
     const cleaned = sanitizeSettings({
       handling: { dasMs: -5, arrMs: 'fast' },
-      game: { armLength: 99, numberOfColors: 7, gravityScope: 'sideways' },
+      game: { armLength: 99, numberOfColors: 7, glassCount: 1, gravityScope: 'sideways' },
+      hud: { keyHints: 'no', opacity: 0 },
+      turnMs: 5000,
     });
     expect(cleaned.handling).toEqual({ dasMs: 0, arrMs: 35 });
     expect(cleaned.game.armLength).toBe(12);
-    expect(cleaned.game.numberOfColors).toBe(4);
+    expect(cleaned.game.numberOfColors).toBe(6);
+    expect(cleaned.game.glassCount).toBe(2);
+    expect(cleaned.hud).toEqual({ keyHints: true, score: true, stats: true, opacity: 0.1 });
+    expect(cleaned.turnMs).toBe(800);
     expect(cleaned.game.gravityScope).toBe('wholeGlass');
     expect(cleaned.bindings).toEqual(defaultBindings);
     expect(loadSettings({ getItem: () => '{broken' })).toEqual(defaultSettings());

@@ -6,9 +6,10 @@ import { PieceGenerator } from '../game/generator';
 import { GlassView, sideAtSlot, slotOfSide, viewToWorld, worldToView } from '../game/glass';
 import { settle } from '../game/gravity';
 import { findMatches } from '../game/matchDetector';
-import { isHorizontal, pieceOffsets, rotatePiece, samePiece } from '../game/piece';
+import { MAX_COLORS, isHorizontal, pieceOffsets, rotatePiece, samePiece } from '../game/piece';
 import { computeDrop, headroom, landingRow } from '../game/placement';
 import { BOTTOM, LEFT, RIGHT, SIDES, TOP, stepsTo, turned } from '../game/side';
+import { BLOCK_TONES } from '../render/theme';
 import { ARM, B, DEPTH, G, R, Y, boardOf, centerAt, emptyBoard, lying, standing, testConfig } from './helpers';
 
 describe('piece', () => {
@@ -51,10 +52,20 @@ describe('piece', () => {
       expect(piece.colors).toHaveLength(3);
       expect(piece.colors.every((color) => color < 3)).toBe(true);
     }
-    const four = new PieceGenerator({ ...defaultConfig, seed: 3, numberOfColors: 4 });
-    const seen = new Set<number>();
-    for (let i = 0; i < 300; i++) four.next().colors.forEach((color) => seen.add(color));
-    expect([...seen].sort()).toEqual([0, 1, 2, 3]);
+    for (const palette of [4, 5, 6]) {
+      const generator = new PieceGenerator({ ...defaultConfig, seed: 3, numberOfColors: palette });
+      const seen = new Set<number>();
+      for (let i = 0; i < 400; i++) generator.next().colors.forEach((color) => seen.add(color));
+      expect([...seen].sort()).toEqual(Array.from({ length: palette }, (_, color) => color));
+    }
+  });
+
+  it('all six colours can be painted, matched and read back', () => {
+    const board = boardOf(['P P P W G W']);
+    expect(board.centerRows().at(-1)).toBe('P P P W G W . . . .');
+    const match = findMatches(board, 3);
+    expect(match.runs.map((run) => run.color)).toEqual([4]);
+    expect(BLOCK_TONES).toHaveLength(MAX_COLORS);
   });
 
   it('single-colour sticks are rarer than a fair roll', () => {

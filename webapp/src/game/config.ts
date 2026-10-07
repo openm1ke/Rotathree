@@ -1,3 +1,5 @@
+import { LEFT, RIGHT, SIDES, TOP, type Side } from './side';
+
 /** Which blocks fall after a match has popped. */
 export type GravityScope =
   /** Every unsupported block of the active glass falls to rest. */
@@ -12,9 +14,12 @@ export interface GameConfig {
   boardSize: number;
   /** Length of each outer arm, in cells. A glass is one arm plus the centre. */
   armLength: number;
+  /** How many of the four glasses are in play, 2 to 4: the one the game
+   * starts in plus one to three more. The arms of the others do not exist. */
+  glassCount: number;
   /** Number of squares in a stick. */
   pieceLength: number;
-  /** How many colours are in play (3 or 4). */
+  /** How many colours are in play, 3 to 6. */
   numberOfColors: number;
   /** Shortest line of one colour that counts as a match. */
   minMatchLength: number;
@@ -64,6 +69,7 @@ export interface GameConfig {
 export const defaultConfig: GameConfig = {
   boardSize: 10,
   armLength: 9,
+  glassCount: 4,
   pieceLength: 3,
   numberOfColors: 3,
   minMatchLength: 3,
@@ -88,6 +94,11 @@ export const defaultConfig: GameConfig = {
   basePoints: 100,
   seed: null,
 };
+
+/** The glasses in play. Two are neighbours, so that switching is a quarter
+ * turn; three leave out the one opposite the starting glass. */
+export const sidesInPlay = (c: GameConfig): readonly Side[] =>
+  c.glassCount <= 2 ? [TOP, RIGHT] : c.glassCount === 3 ? [TOP, RIGHT, LEFT] : SIDES;
 
 /** Rows of one glass, from the far end of its arm to its floor. */
 export const glassDepth = (c: GameConfig): number => c.armLength + c.boardSize;

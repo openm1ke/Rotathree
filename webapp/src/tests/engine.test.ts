@@ -61,6 +61,54 @@ describe('four streams', () => {
   });
 });
 
+describe('fewer glasses', () => {
+  it('two glasses are neighbours and every switch key leads to the other one', () => {
+    const engine = newEngine({ glassCount: 2 });
+    expect([...engine.state.incoming.keys()]).toEqual([TOP, RIGHT]);
+    engine.switchSide(-1); // nothing on the left: on round to the glass there is
+    expect(engine.activeSide).toBe(RIGHT);
+    engine.switchSide(-1);
+    expect(engine.activeSide).toBe(TOP);
+    engine.switchSide(1);
+    expect(engine.activeSide).toBe(RIGHT);
+    engine.switchSide(2); // there is no glass opposite
+    engine.activateSide(BOTTOM); // nor at the bottom
+    expect(engine.activeSide).toBe(RIGHT);
+    // The cross turns the short way, whichever key was pressed.
+    const turns = engine.drainEvents().flatMap((e) => (e.type === 'sideSwitched' ? [e.quarterTurns] : []));
+    expect(turns).toEqual([1, -1, 1]);
+  });
+
+  it('three glasses leave out the one opposite the start', () => {
+    const engine = newEngine({ glassCount: 3 });
+    expect([...engine.state.incoming.keys()]).toEqual([TOP, RIGHT, LEFT]);
+    const visited: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      engine.switchSide(1);
+      visited.push(engine.activeSide);
+    }
+    expect(visited).toEqual([RIGHT, LEFT, TOP]);
+    engine.switchSide(2);
+    expect(engine.activeSide).toBe(TOP); // nothing opposite the top
+    engine.switchSide(-1);
+    engine.switchSide(2);
+    expect(engine.activeSide).toBe(RIGHT); // left and right face each other
+  });
+
+  it('a locked piece is replaced in its own glass and no other appears', () => {
+    const engine = newEngine({ glassCount: 2 });
+    engine.incoming.put(TOP, lying([R, B, Y]), { column: 0 });
+    engine.dropActive();
+    runUntilPlaying(engine);
+    engine.update(30);
+    expect([...engine.state.incoming.keys()].sort()).toEqual([TOP, RIGHT]);
+    engine.board.forEachBlock((row, col) => {
+      // Nothing ever lands in the arms that are not in play.
+      expect(row < ARM + 10 && col >= ARM).toBe(true);
+    });
+  });
+});
+
 describe('falling and locking', () => {
   it('a piece steps on through the centre, rests one step, then locks', () => {
     const engine = newEngine();
@@ -342,9 +390,12 @@ describe('determinism', () => {
 
   it('random play keeps the engine consistent', () => {
     for (let seed = 0; seed < 12; seed++) {
+      const glasses = 2 + (seed % 3);
       const engine = new GameEngine({
         ...defaultConfig,
         seed,
+        glassCount: glasses,
+        numberOfColors: 3 + (seed % 4),
         activeStepSeconds: 0.3,
         inactiveStepSeconds: 0.6,
         settleAfterBoardRotation: seed % 2 === 1,
@@ -367,7 +418,7 @@ describe('determinism', () => {
         expect(state.board.blockCount).toBe(
           state.piecesPlaced * 3 - state.clearedCells + (state.activeMatch?.cells.size ?? 0),
         );
-        if (state.phase === 'playing') expect(state.incoming.size).toBe(4);
+        if (state.phase === 'playing') expect(state.incoming.size).toBe(glasses);
       }
       expect(engine.state.piecesPlaced).toBeGreaterThan(0);
     }

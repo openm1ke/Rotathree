@@ -1,6 +1,6 @@
 import { Board } from './board';
 import { clearMatch, scoreFor } from './cascade';
-import { dropSeconds, fallPhaseSeconds, type GameConfig } from './config';
+import { dropSeconds, fallPhaseSeconds, sidesInPlay, type GameConfig } from './config';
 import { PieceGenerator } from './generator';
 import { settle, type BlockMove } from './gravity';
 import { IncomingController, type IncomingPiece } from './incoming';
@@ -89,9 +89,10 @@ const EPSILON = 1e-9;
  *
  * Rules in short:
  *  * the playfield is a cross: a central square and four arms. Each side
- *    owns a glass — its arm plus the central square — and the four glasses
- *    share the centre;
- *  * four pieces fall at the same time, one per glass, a whole cell per
+ *    owns a glass — its arm plus the central square — and the glasses
+ *    share the centre. Two to four of them are in play; the arms of the
+ *    rest do not exist;
+ *  * the pieces fall at the same time, one per glass, a whole cell per
  *    step — quickly in the active glass, slowly in the others — through the
  *    arm and on through the centre. A piece whose next step is blocked by
  *    the floor of its glass or by a block locks instead;
@@ -104,6 +105,8 @@ const EPSILON = 1e-9;
  * Time only moves through `update`. */
 export class GameEngine {
   readonly incoming: IncomingController;
+  /** The glasses in play, in the order TOP → RIGHT → BOTTOM → LEFT. */
+  readonly sides: readonly Side[];
   state!: GameState;
 
   private readonly inputs: Input[] = [];
@@ -116,6 +119,7 @@ export class GameEngine {
     readonly config: GameConfig,
     random?: () => number,
   ) {
+    this.sides = sidesInPlay(config);
     this.incoming = new IncomingController(config, new PieceGenerator(config, random));
     this.restart();
   }
@@ -218,7 +222,8 @@ export class GameEngine {
 
   // ---------------------------------------------------------------- input
 
-  /** Turns the cross by `quarterTurns` steps of TOP → RIGHT → BOTTOM → LEFT. */
+  /** Turns the cross: ±1 goes on round TOP → RIGHT → BOTTOM → LEFT to the
+   * next glass in play, 2 goes to the glass opposite if there is one. */
   switchSide(quarterTurns: number): void {
     this.submit({ kind: 'turn', quarterTurns });
   }
@@ -267,10 +272,10 @@ export class GameEngine {
     const side = this.state.activeSide;
     switch (input.kind) {
       case 'turn':
-        this.turn(input.quarterTurns);
+        this.turnTo(this.sideAfter(side, input.quarterTurns));
         break;
       case 'activate':
-        this.turn(stepsTo(side, input.side));
+        if (this.sides.includes(input.side)) this.turnTo(input.side);
         break;
       case 'move': {
         if (!this.incoming.pieceAt(side)) break;
@@ -295,12 +300,25 @@ export class GameEngine {
     }
   }
 
-  private turn(quarterTurns: number): void {
+  /** The glass a turn of `quarterTurns` leads to from `side`. A single step
+   * skips the sides that are not in play; any other turn only happens when
+   * a glass is exactly there. */
+  private sideAfter(side: Side, quarterTurns: number): Side {
+    if (Math.abs(quarterTurns) !== 1) {
+      const to = turned(side, quarterTurns);
+      return this.sides.includes(to) ? to : side;
+    }
+    let to = turned(side, quarterTurns);
+    while (!this.sides.includes(to)) to = turned(to, quarterTurns);
+    return to;
+  }
+
+  private turnTo(to: Side): void {
     const from = this.state.activeSide;
-    const to = turned(from, quarterTurns);
     if (to === from) return;
     this.state.activeSide = to;
-    this.events.push({ type: 'sideSwitched', from, to, quarterTurns });
+    // The cross always turns the short way round.
+    this.events.push({ type: 'sideSwitched', from, to, quarterTurns: stepsTo(from, to) });
 
     // By default the structure turns as one rigid body and nothing falls.
     if (!this.config.settleAfterBoardRotation) return;

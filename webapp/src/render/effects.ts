@@ -1,7 +1,7 @@
 import type { GameEngine, GameEvent } from '../game/engine';
 import { slotOfSide } from '../game/glass';
 import type { IncomingPiece } from '../game/incoming';
-import type { Orientation } from '../game/piece';
+import type { BlockColor, Orientation } from '../game/piece';
 import type { Placement } from '../game/placement';
 import { SIDES, type Side } from '../game/side';
 import { tonesOf } from './theme';
@@ -86,9 +86,18 @@ export class Effects {
   /** Extra zoom on a combo; decays to 0. */
   punch = 0;
 
+  /** Seconds a quarter turn of the cross takes; 0 turns it at once. Set
+   * from the settings. */
+  turnSeconds = 0.26;
+  /** How fast the cross is turning right now, 0 at rest … 1 at the fastest
+   * point of a turn. Fine lines fade by it so that they do not flicker. */
+  turnMotion = 0;
+
   // The view angle is counted in quarter turns; negative is anticlockwise.
   private fromTurns = 0;
   private toTurns = 0;
+  /** Speed at the start of the current turn, in quarter turns a second. */
+  private turnVelocity = 0;
   private turnStartedAt = -Infinity;
   private turnDuration = 0;
 
@@ -97,7 +106,6 @@ export class Effects {
 
   /** Slide of a piece into its next cell, in seconds. */
   static readonly stepSlideSeconds = 0.07;
-  static readonly turnSeconds = 0.2;
 
   reset(active: Side): void {
     this.clock = 0;
@@ -110,6 +118,7 @@ export class Effects {
     this.kickX = this.kickY = this.kickVx = this.kickVy = 0;
     this.shake = this.shakeX = this.shakeY = this.punch = 0;
     this.fromTurns = this.toTurns = -active;
+    this.turnVelocity = this.turnMotion = 0;
     this.turnStartedAt = -Infinity;
     SIDES.forEach((side) => (this.activeness[side] = side === active ? 1 : 0));
   }
@@ -119,23 +128,38 @@ export class Effects {
     return Math.min(1, Math.max(0, (this.clock - this.turnStartedAt) / this.turnDuration));
   }
 
+  /** The turn as a cubic that starts at the speed the cross already had and
+   * comes to rest exactly on its target: from standstill that is a plain
+   * ease in and out with no overshoot, and a turn ordered while another is
+   * still running carries on from it without a jerk. */
+  private turnsAt(s: number): number {
+    const s2 = s * s;
+    const s3 = s2 * s;
+    return (
+      (2 * s3 - 3 * s2 + 1) * this.fromTurns +
+      (s3 - 2 * s2 + s) * this.turnDuration * this.turnVelocity +
+      (3 * s2 - 2 * s3) * this.toTurns
+    );
+  }
+
+  /** Speed of the turn at `s`, in quarter turns a second. */
+  private turnSpeedAt(s: number): number {
+    if (this.turnDuration <= 0 || s >= 1) return 0;
+    const s2 = s * s;
+    return (
+      ((6 * s2 - 6 * s) * (this.fromTurns - this.toTurns)) / this.turnDuration +
+      (3 * s2 - 4 * s + 1) * this.turnVelocity
+    );
+  }
+
   /** Current rotation of the cross in radians (positive is clockwise). */
   get viewAngle(): number {
-    const t = this.turnProgress;
-    // Ease out with a small overshoot: the cross snaps round and settles.
-    const c = 1.4;
-    const eased = 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
-    return (this.fromTurns + (this.toTurns - this.fromTurns) * eased) * QUARTER;
+    return this.turnsAt(this.turnProgress) * QUARTER;
   }
 
   /** The angle the cross is turning towards, in quarter turns. */
   get targetTurns(): number {
     return this.toTurns;
-  }
-
-  /** The cross shrinks a little mid-turn so its corners stay on screen. */
-  get viewScale(): number {
-    return 1 - 0.07 * Math.sin(Math.PI * this.turnProgress) + this.punch;
   }
 
   /** How much of a cell the piece still has to slide to reach its row. */
@@ -151,12 +175,21 @@ export class Effects {
     const active = engine.activeSide;
     for (const event of events) {
       switch (event.type) {
-        case 'sideSwitched':
-          this.fromTurns = this.viewAngle / QUARTER;
+        case 'sideSwitched': {
+          const s = this.turnProgress;
+          const speed = this.turnSpeedAt(s);
+          this.fromTurns = this.turnsAt(s);
           this.toTurns -= event.quarterTurns;
+          const distance = Math.abs(this.toTurns - this.fromTurns);
+          // A half turn takes half as long again, not twice as long.
+          this.turnDuration = this.turnSeconds * (1 + 0.5 * Math.max(0, distance - 1));
+          // Faster than this at the start and the curve would swing past
+          // its target.
+          const limit = this.turnDuration > 0 ? (3 * distance) / this.turnDuration : 0;
+          this.turnVelocity = Math.max(-limit, Math.min(limit, speed));
           this.turnStartedAt = this.clock;
-          this.turnDuration = Effects.turnSeconds * (1 + 0.45 * (Math.abs(event.quarterTurns) - 1));
           break;
+        }
         case 'pieceMoved':
           if (event.blocked) this.kick(event.direction * 0.14, 0);
           break;
@@ -214,6 +247,9 @@ export class Effects {
 
     this.trackSteps(engine);
 
+    // A turn from standstill peaks at 1.5 quarter turns per `turnSeconds`.
+    this.turnMotion = Math.min(1, (Math.abs(this.turnSpeedAt(this.turnProgress)) * this.turnSeconds) / 1.5);
+
     // Spring back to rest.
     const stiffness = 520;
     const damping = 30;
@@ -235,6 +271,7 @@ export class Effects {
       particle.vy *= drag;
     }
     prune(this.particles, (particle) => particle.age < particle.life);
+    // A ring with a negative age has not started yet.
     for (const ring of this.rings) ring.age += seconds;
     prune(this.rings, (ring) => ring.age < ring.life);
     for (const beam of this.beams) beam.age += seconds;
@@ -291,7 +328,7 @@ export class Effects {
     for (const index of indices) {
       const color = board.atIndex(index);
       if (color < 0) continue;
-      const tones = tonesOf(color as 0 | 1 | 2 | 3);
+      const tones = tonesOf(color as BlockColor);
       const x = -half + (index % board.size) + 0.5;
       const y = -half + Math.floor(index / board.size) + 0.5;
       this.rings.push({ x, y, age: 0, life: 0.34, color: tones.rgb, reach: 1.25 });
@@ -310,6 +347,30 @@ export class Effects {
         });
       }
     }
+  }
+
+  /** A level has been finished: rings roll out from the centre of the cross
+   * and confetti in the colours in play flies after them. */
+  celebrate(colors: number): void {
+    for (let i = 0; i < 3; i++) {
+      this.rings.push({ x: 0, y: 0, age: -0.16 * i, life: 0.9, color: '255, 255, 255', reach: 13 });
+    }
+    for (let i = 0; i < 150; i++) {
+      const tones = tonesOf((i % colors) as BlockColor);
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 8 + Math.random() * 26;
+      this.particles.push({
+        x: Math.cos(angle) * 0.6,
+        y: Math.sin(angle) * 0.6,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 0.14 + Math.random() * 0.22,
+        life: 0.7 + Math.random() * 0.8,
+        age: 0,
+        color: i % 4 === 0 ? '#ffffff' : i % 2 === 0 ? tones.light : tones.base,
+      });
+    }
+    if (this.screenShake) this.punch = 0.05;
   }
 
   /** A few sparks where a hard-dropped piece hits. */

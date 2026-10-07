@@ -14,6 +14,8 @@ export const BLOCK_TONES: readonly BlockTones[] = [
   { base: '#3b82ff', light: '#93bbff', dark: '#1646b8', rgb: '59, 130, 255' },
   { base: '#ffc531', light: '#ffe696', dark: '#b97c00', rgb: '255, 197, 49' },
   { base: '#2fd985', light: '#93f2c2', dark: '#0d8a4d', rgb: '47, 217, 133' },
+  { base: '#a65cff', light: '#d6b3ff', dark: '#5a1fbd', rgb: '166, 92, 255' },
+  { base: '#e4eafa', light: '#ffffff', dark: '#8a94b4', rgb: '228, 234, 250' },
 ];
 
 export const tonesOf = (color: BlockColor): BlockTones => BLOCK_TONES[color];

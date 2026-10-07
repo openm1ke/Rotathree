@@ -1,11 +1,11 @@
 import type { Board } from './board';
-import { spawnColumnOf, type GameConfig } from './config';
+import { sidesInPlay, spawnColumnOf, type GameConfig } from './config';
 import type { PieceGenerator } from './generator';
 import { isHorizontal, pieceWidth, rotatePiece, type Piece } from './piece';
 import { fits, landingRow } from './placement';
 import { SIDES, type Side } from './side';
 
-/** A stick falling down one of the four glasses, one whole cell at a time. */
+/** A stick falling down one of the glasses, one whole cell at a time. */
 export interface IncomingPiece {
   readonly side: Side;
   piece: Piece;
@@ -27,11 +27,11 @@ const KICKS: readonly (readonly [number, number])[] = [
   [0, -2], [0, 2], [-1, -1], [-1, 1], [-2, 0],
 ];
 
-/** Owns the four independent streams of falling pieces, one per glass.
+/** Owns the independent streams of falling pieces, one per glass in play.
  *
  * Every piece falls along its own glass — through the arm and on through
  * the central square — one whole cell per step. Steps come quickly in the
- * active glass and slowly in the other three. A piece whose next step is
+ * active glass and slowly in the others. A piece whose next step is
  * blocked locks instead. Falling pieces do not collide with each other,
  * only with settled blocks. */
 export class IncomingController {
@@ -65,15 +65,17 @@ export class IncomingController {
     return this.config.activeStepSeconds;
   }
 
-  /** Starts a fresh game: one piece per glass, staggered so that TOP is the
-   * furthest along and LEFT starts at the very end of its arm. */
+  /** Starts a fresh game: one piece per glass in play, staggered so that
+   * TOP is the furthest along and the last glass starts at the very end of
+   * its arm. */
   reset(): void {
     this.pieces.clear();
     this.softDrop = false;
-    for (const side of SIDES) {
-      const headStart = (SIDES.length - 1 - side) * this.config.initialProgressStagger;
+    const sides = sidesInPlay(this.config);
+    sides.forEach((side, i) => {
+      const headStart = (sides.length - 1 - i) * this.config.initialProgressStagger;
       this.put(side, this.generator.next(), { row: Math.round(headStart * this.config.armLength) });
-    }
+    });
   }
 
   /** Puts a new piece at the far end of `side`'s glass. Returns null when

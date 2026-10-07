@@ -1,5 +1,5 @@
 import { EMPTY } from '../game/board';
-import { fallSeconds, gridSize, type GameConfig } from '../game/config';
+import { fallSeconds, gridSize, sidesInPlay, type GameConfig } from '../game/config';
 import type { GameEngine, GameState } from '../game/engine';
 import { worldToView } from '../game/glass';
 import type { IncomingPiece } from '../game/incoming';
@@ -81,11 +81,11 @@ export class GameRenderer {
       this.cssSize / 2 + (fx.kickX + fx.shakeX) * cell,
       this.cssSize / 2 + (fx.kickY + fx.shakeY) * cell,
     );
-    const scale = cell * FIT * fx.viewScale;
+    const scale = cell * FIT * viewScale(view, fx);
     ctx.scale(scale, scale);
     ctx.rotate(fx.viewAngle);
 
-    this.drawField(view);
+    this.drawField(view, sidesInPlay(config), 1 - 0.7 * fx.turnMotion);
     this.drawActiveGlass(view, fx);
     for (const side of SIDES) this.drawCrowdedWarning(view, engine, fx, side);
     for (const beam of fx.beams) this.drawBeam(view, beam);
@@ -171,11 +171,13 @@ export class GameRenderer {
 
   // ------------------------------------------------------------- playfield
 
-  private drawField(view: View): void {
+  /** The cross: the central square and the arm of every glass in play.
+   * `lines` fades the grid while the cross is turning. */
+  private drawField(view: View, sides: readonly Side[], lines: number): void {
     const { ctx } = this;
     const { n, arm, half, reach, px } = view;
 
-    for (const side of SIDES) {
+    for (const side of sides) {
       ctx.save();
       ctx.rotate(side * QUARTER);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.022)';
@@ -189,7 +191,7 @@ export class GameRenderer {
         ctx.moveTo(-half, -reach + j);
         ctx.lineTo(half, -reach + j);
       }
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.045 * lines})`;
       ctx.lineWidth = px;
       ctx.stroke();
       ctx.restore();
@@ -204,28 +206,31 @@ export class GameRenderer {
       ctx.moveTo(-half, -half + i);
       ctx.lineTo(half, -half + i);
     }
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.07 * lines})`;
     ctx.lineWidth = px;
     ctx.stroke();
 
-    // Outline of the whole cross, and of the centre a little brighter.
-    ctx.beginPath();
-    ctx.moveTo(-half, -reach);
-    ctx.lineTo(half, -reach);
-    ctx.lineTo(half, -half);
-    ctx.lineTo(reach, -half);
-    ctx.lineTo(reach, half);
-    ctx.lineTo(half, half);
-    ctx.lineTo(half, reach);
-    ctx.lineTo(-half, reach);
-    ctx.lineTo(-half, half);
-    ctx.lineTo(-reach, half);
-    ctx.lineTo(-reach, -half);
-    ctx.lineTo(-half, -half);
-    ctx.closePath();
+    // Outline of the whole cross — an arm where a glass is in play, the wall
+    // of the centre where there is none — and of the centre, brighter.
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
     ctx.lineWidth = 1.5 * px;
-    ctx.stroke();
+    ctx.lineJoin = 'round';
+    for (const side of SIDES) {
+      ctx.save();
+      ctx.rotate(side * QUARTER);
+      ctx.beginPath();
+      if (sides.includes(side)) {
+        ctx.moveTo(-half, -half);
+        ctx.lineTo(-half, -reach);
+        ctx.lineTo(half, -reach);
+        ctx.lineTo(half, -half);
+      } else {
+        ctx.moveTo(-half, -half);
+        ctx.lineTo(half, -half);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
     ctx.strokeRect(-half, -half, n, n);
   }
@@ -460,6 +465,7 @@ export class GameRenderer {
   private drawRings(view: View, fx: Effects): void {
     const { ctx } = this;
     for (const ring of fx.rings) {
+      if (ring.age < 0) continue;
       const t = ring.age / ring.life;
       const eased = 1 - (1 - t) * (1 - t);
       ctx.beginPath();
@@ -561,7 +567,7 @@ export class GameRenderer {
     const localY = -view.reach + piece.row - fx.slideLeft(piece) + pieceDepth(piece.piece) / 2;
     // …turned with its glass and with the cross into screen pixels.
     const angle = fx.viewAngle + piece.side * QUARTER;
-    const scale = cell * FIT * fx.viewScale;
+    const scale = cell * FIT * viewScale(view, fx);
     const x = this.cssSize / 2 + (fx.kickX + fx.shakeX) * cell +
       (localX * Math.cos(angle) - localY * Math.sin(angle)) * scale;
     const y = this.cssSize / 2 + (fx.kickY + fx.shakeY) * cell +
@@ -588,6 +594,18 @@ interface View {
   px: number;
   /** The quarter turn the cross is settling on. */
   turns: number;
+}
+
+/** Zoom of the cross. Turned off its axes, the corners of the arms reach
+ * further out than the canvas is wide, so mid-turn the cross shrinks by
+ * exactly as much as it takes to keep them in — and not a bit more, because
+ * a field that pumps in and out is tiring to watch. */
+function viewScale(view: View, fx: Effects): number {
+  const cos = Math.abs(Math.cos(fx.viewAngle));
+  const sin = Math.abs(Math.sin(fx.viewAngle));
+  const extent = Math.max(view.reach * cos + view.half * sin, view.reach * sin + view.half * cos);
+  const room = view.grid / 2 / FIT - 0.25;
+  return Math.min(1, room / extent) + fx.punch;
 }
 
 const urgencyColor = (secondsLeft: number): string =>

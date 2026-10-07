@@ -1,8 +1,11 @@
-/** Block colours: red, blue, yellow, green. The first
+/** Block colours: red, blue, yellow, green, purple, white. The first
  * `config.numberOfColors` of them are in play. */
-export type BlockColor = 0 | 1 | 2 | 3;
+export type BlockColor = 0 | 1 | 2 | 3 | 4 | 5;
 
-export const COLOR_SYMBOLS = ['R', 'B', 'Y', 'G'] as const;
+export const COLOR_SYMBOLS = ['R', 'B', 'Y', 'G', 'P', 'W'] as const;
+
+/** The most colours a game can have. */
+export const MAX_COLORS = COLOR_SYMBOLS.length;
 
 /** The four ways a stick can lie, in the order a clockwise quarter turn
  * visits them, named by where its *first* colour ends up:

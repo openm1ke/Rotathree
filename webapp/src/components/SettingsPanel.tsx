@@ -11,18 +11,29 @@ import {
   type Action,
   type ActionGroup,
 } from '../input/bindings';
+import { MAX_COLORS } from '../game/piece';
 import { defaultHandling } from '../input/keyboard';
-import { defaultGameOptions, type GameOptions, type Settings } from '../services/settingsStore';
+import { BLOCK_TONES } from '../render/theme';
+import {
+  defaultGameOptions,
+  defaultHudOptions,
+  defaultTurnMs,
+  type GameOptions,
+  type HudOptions,
+  type Settings,
+} from '../services/settingsStore';
 
 interface Props {
   settings: Settings;
+  /** False when the browser refuses to keep the settings. */
+  stored: boolean;
   /** True when opened over a running game: changing the rules restarts it. */
   inGame: boolean;
   onChange: (settings: Settings) => void;
   onClose: () => void;
 }
 
-type Tab = 'controls' | 'game';
+type Tab = 'controls' | 'game' | 'view';
 
 /** The key slot waiting for its new key. */
 interface Capture {
@@ -32,7 +43,18 @@ interface Capture {
 
 const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game'];
 
-export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
+const TABS: readonly (readonly [Tab, string])[] = [
+  ['controls', 'Управление'],
+  ['game', 'Игра'],
+  ['view', 'Интерфейс'],
+];
+
+const SHOWN: readonly (readonly [boolean, string])[] = [
+  [true, 'показывать'],
+  [false, 'скрыть'],
+];
+
+export function SettingsPanel({ settings, stored, inGame, onChange, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('controls');
   const [capture, setCapture] = useState<Capture | null>(null);
 
@@ -65,6 +87,8 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
 
   const setGame = (patch: Partial<GameOptions>) =>
     onChange({ ...settings, game: { ...settings.game, ...patch } });
+  const setHud = (patch: Partial<HudOptions>) =>
+    onChange({ ...settings, hud: { ...settings.hud, ...patch } });
 
   return (
     <div className="overlay overlay--top" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -72,27 +96,23 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
         <header className="settings__header">
           <h2 className="dialog__title">Настройки</h2>
           <div className="tabs">
-            <button
-              type="button"
-              className={`tabs__tab ${tab === 'controls' ? 'is-active' : ''}`}
-              onClick={() => setTab('controls')}
-            >
-              Управление
-            </button>
-            <button
-              type="button"
-              className={`tabs__tab ${tab === 'game' ? 'is-active' : ''}`}
-              onClick={() => setTab('game')}
-            >
-              Игра
-            </button>
+            {TABS.map(([id, title]) => (
+              <button
+                type="button"
+                key={id}
+                className={`tabs__tab ${tab === id ? 'is-active' : ''}`}
+                onClick={() => setTab(id)}
+              >
+                {title}
+              </button>
+            ))}
           </div>
           <button type="button" className="button button--ghost settings__close" onClick={onClose}>
             Закрыть
           </button>
         </header>
 
-        {tab === 'controls' ? (
+        {tab === 'controls' && (
           <div className="settings__body">
             <p className="settings__hint">
               Нажмите на клавишу, затем на новую. <kbd className="keycap">Esc</kbd> — отмена,{' '}
@@ -172,7 +192,9 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
               </button>
             </div>
           </div>
-        ) : (
+        )}
+
+        {tab === 'game' && (
           <div className="settings__body">
             {inGame && (
               <p className="settings__hint settings__hint--warn">
@@ -203,9 +225,23 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
                 onChange={(armLength) => setGame({ armLength })}
               />
               <Choice
+                label="Дополнительных стаканов"
+                note="кроме вашего: меньше стаканов — спокойнее игра"
+                value={settings.game.glassCount - 1}
+                options={[[1, '1'], [2, '2'], [3, '3']]}
+                onChange={(extra) => setGame({ glassCount: extra + 1 })}
+              />
+              <Choice
                 label="Цветов"
+                note={
+                  <span className="swatches">
+                    {BLOCK_TONES.slice(0, settings.game.numberOfColors).map((tones) => (
+                      <i key={tones.base} style={{ background: tones.base }} />
+                    ))}
+                  </span>
+                }
                 value={settings.game.numberOfColors}
-                options={[[3, '3'], [4, '4']]}
+                options={Array.from({ length: MAX_COLORS - 2 }, (_, i) => [i + 3, String(i + 3)] as const)}
                 onChange={(numberOfColors) => setGame({ numberOfColors })}
               />
             </section>
@@ -224,15 +260,6 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
                 onChange={(settleAfterBoardRotation) => setGame({ settleAfterBoardRotation })}
               />
             </section>
-            <section className="settings__group">
-              <h3>Эффекты</h3>
-              <Choice
-                label="Толчки и тряска поля"
-                value={settings.screenShake}
-                options={[[true, 'вкл'], [false, 'выкл']]}
-                onChange={(screenShake) => onChange({ ...settings, screenShake })}
-              />
-            </section>
             <div className="settings__footer">
               <button type="button" className="button" onClick={() => setGame({ ...defaultGameOptions })}>
                 Сбросить правила
@@ -240,6 +267,83 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
             </div>
           </div>
         )}
+
+        {tab === 'view' && (
+          <div className="settings__body">
+            <section className="settings__group">
+              <h3>Поворот поля</h3>
+              <Slider
+                label="Длительность поворота"
+                value={settings.turnMs}
+                min={0}
+                max={600}
+                step={20}
+                unit="мс"
+                note={settings.turnMs === 0 ? 'мгновенно' : undefined}
+                onChange={(turnMs) => onChange({ ...settings, turnMs })}
+              />
+              <Choice
+                label="Толчки и тряска поля"
+                value={settings.screenShake}
+                options={[[true, 'вкл'], [false, 'выкл']]}
+                onChange={(screenShake) => onChange({ ...settings, screenShake })}
+              />
+            </section>
+            <section className="settings__group">
+              <h3>Надписи на поле</h3>
+              <Choice
+                label="Подсказки клавиш"
+                value={settings.hud.keyHints}
+                options={SHOWN}
+                onChange={(keyHints) => setHud({ keyHints })}
+              />
+              <Choice
+                label="Очки и комбо"
+                note="слева сверху; в дзене — и уровень"
+                value={settings.hud.score}
+                options={SHOWN}
+                onChange={(score) => setHud({ score })}
+              />
+              <Choice
+                label="Время, фигуры, матчи"
+                value={settings.hud.stats}
+                options={SHOWN}
+                onChange={(stats) => setHud({ stats })}
+              />
+              <Slider
+                label="Непрозрачность надписей"
+                value={Math.round(settings.hud.opacity * 100)}
+                min={10}
+                max={100}
+                step={5}
+                unit="%"
+                onChange={(percent) => setHud({ opacity: percent / 100 })}
+              />
+            </section>
+            <div className="settings__footer">
+              <button
+                type="button"
+                className="button"
+                onClick={() =>
+                  onChange({
+                    ...settings,
+                    hud: { ...defaultHudOptions },
+                    turnMs: defaultTurnMs,
+                    screenShake: true,
+                  })
+                }
+              >
+                Сбросить интерфейс
+              </button>
+            </div>
+          </div>
+        )}
+
+        <p className={`settings__saved ${stored ? '' : 'settings__saved--off'}`}>
+          {stored
+            ? 'Настройки сохраняются в этом браузере сразу и остаются после закрытия вкладки.'
+            : 'Браузер не даёт сохранить настройки (приватный режим или запрет хранилища): после закрытия вкладки они сбросятся.'}
+        </p>
       </div>
     </div>
   );
@@ -247,18 +351,24 @@ export function SettingsPanel({ settings, inGame, onChange, onClose }: Props) {
 
 function Choice<T extends string | number | boolean>({
   label,
+  note,
   value,
   options,
   onChange,
 }: {
   label: string;
+  /** A line of small print, or a little picture, under the label. */
+  note?: React.ReactNode;
   value: T;
   options: readonly (readonly [T, string])[];
   onChange: (value: T) => void;
 }) {
   return (
     <div className="choice">
-      <span className="choice__label">{label}</span>
+      <span className="choice__label">
+        {label}
+        {note && <small>{note}</small>}
+      </span>
       <div className="choice__options">
         {options.map(([option, text]) => (
           <button

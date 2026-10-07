@@ -186,6 +186,10 @@ button {
   animation-delay: 80ms;
 }
 
+.mega:nth-child(3) {
+  animation-delay: 160ms;
+}
+
 .mega:hover,
 .mega:focus-visible {
   transform: translateX(0);
@@ -200,6 +204,11 @@ button {
 .mega--play {
   background: linear-gradient(95deg, #ff2e7e, #a53bff 70%);
   box-shadow: 0 10px 40px rgba(255, 46, 126, 0.3);
+}
+
+.mega--zen {
+  background: linear-gradient(95deg, #12b886, #2a6df4 75%);
+  box-shadow: 0 10px 40px rgba(18, 184, 134, 0.26);
 }
 
 .mega--config {
@@ -307,10 +316,23 @@ button {
 }
 
 .game__frame {
+  position: relative;
   height: 100%;
   padding: 6px;
   display: grid;
   place-items: center;
+}
+
+/* Zen: a wash of colour behind the field; its hue moves on with the level. */
+.game__aura {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(18, 184, 134, 0.2), transparent 58%),
+    radial-gradient(circle at 20% 85%, rgba(42, 109, 244, 0.14), transparent 45%);
+  transition: filter 1400ms ease-in-out;
+  animation: fade 900ms ease-out both;
 }
 
 .stage {
@@ -366,6 +388,25 @@ button {
   justify-content: flex-end;
   align-items: flex-end;
   gap: 0.9em;
+}
+
+/* The writing can be faded in the settings so that it does not pull the eye
+   away from the field; the two buttons stay findable. */
+.hud--tl,
+.hud--tr,
+.hud--bl,
+.hud__hints {
+  opacity: var(--hud-opacity, 1);
+}
+
+.hud__buttons {
+  opacity: max(0.4, var(--hud-opacity, 1));
+  transition: opacity 120ms;
+}
+
+.hud__buttons:hover,
+.hud__buttons:focus-within {
+  opacity: 1;
 }
 
 .hud__label {
@@ -439,22 +480,69 @@ button {
 }
 
 .hud__combo {
-  margin-bottom: 0.5em;
-  font-size: 2.3em;
+  margin-top: 0.15em;
+  font-size: 2.1em;
   font-weight: 900;
   font-style: italic;
-  line-height: 0.95;
+  line-height: 1;
+  white-space: nowrap;
   text-transform: uppercase;
   color: var(--warning);
   text-shadow: 0 0 0.5em rgba(255, 176, 59, 0.7);
-  transform-origin: left bottom;
+  transform-origin: left top;
   animation: combo-slam 1300ms var(--ease-back) both;
 }
 
 .hud__combo b {
-  display: block;
-  font-size: 2em;
+  font-size: 1.7em;
   color: #fff;
+}
+
+/* Zen: the level being played and how far along it is. */
+.level {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0.35em 0.8em;
+  width: min(100%, 17em);
+  margin-top: 0.7em;
+}
+
+.level__name {
+  font-size: 1.15em;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7df0c5;
+  animation: value-pop 420ms var(--ease-back);
+  transform-origin: left center;
+}
+
+.level__numbers {
+  justify-self: end;
+  font-size: 0.95em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.level__bar {
+  grid-column: 1 / -1;
+  order: 3;
+  height: 0.42em;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.level__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #12b886, #78cdff);
+  box-shadow: 0 0 0.8em rgba(18, 184, 134, 0.8);
+  transition: width 320ms var(--ease-snap);
 }
 
 @keyframes combo-slam {
@@ -495,6 +583,128 @@ button {
   display: flex;
   gap: 0.5em;
   pointer-events: auto;
+}
+
+/* ------------------------------------------------------------- level up */
+
+/* Zen: the game stands still for a moment while the new level is announced.
+   The whole thing lasts as long as LEVEL_UP_SECONDS in GameScreen. */
+.levelup {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  animation: levelup-veil 2400ms ease-in-out both;
+}
+
+.levelup__sweep {
+  position: absolute;
+  inset: -30% -60%;
+  background: linear-gradient(
+    105deg,
+    transparent 42%,
+    rgba(125, 240, 197, 0.16) 47%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(120, 205, 255, 0.16) 53%,
+    transparent 58%
+  );
+  animation: levelup-sweep 1100ms 80ms var(--ease-snap) both;
+}
+
+.levelup__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  padding: 1.4em 5em;
+  background: linear-gradient(90deg, transparent, rgba(7, 7, 12, 0.82) 22%, rgba(7, 7, 12, 0.82) 78%, transparent);
+  text-align: center;
+  animation: levelup-card 2400ms var(--ease-snap) both;
+}
+
+.levelup__label {
+  font-size: 1.3em;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #7df0c5;
+}
+
+.levelup__title {
+  font-size: 5.6em;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 0.95;
+  text-transform: uppercase;
+  text-shadow: 0 0 0.5em rgba(125, 240, 197, 0.55);
+  animation: levelup-title 620ms var(--ease-back) both;
+}
+
+.levelup__title b {
+  background: linear-gradient(100deg, #7df0c5, #78cdff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.levelup__goal {
+  font-size: 1.25em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+
+@keyframes levelup-veil {
+  0% {
+    background: rgba(7, 7, 12, 0);
+  }
+  12%,
+  80% {
+    background: rgba(7, 7, 12, 0.34);
+  }
+  100% {
+    background: rgba(7, 7, 12, 0);
+  }
+}
+
+@keyframes levelup-sweep {
+  from {
+    transform: translateX(-70%);
+  }
+  to {
+    transform: translateX(70%);
+  }
+}
+
+@keyframes levelup-card {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.2);
+  }
+  10% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  80% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(0.6) translateY(-0.6em);
+  }
+}
+
+@keyframes levelup-title {
+  from {
+    opacity: 0;
+    transform: scale(1.9);
+    letter-spacing: 0.3em;
+  }
 }
 
 /* -------------------------------------------------------------- controls */
@@ -833,7 +1043,28 @@ button {
 }
 
 .choice__label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   font-weight: 600;
+}
+
+.choice__label small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.swatches {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.swatches i {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
 }
 
 .choice__options {
@@ -876,6 +1107,19 @@ button {
   justify-content: flex-end;
 }
 
+.settings__saved {
+  margin: 0;
+  padding: 12px 26px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--text-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.settings__saved--off {
+  color: var(--warning);
+}
+
 /* Narrow windows: the menu stacks, the slabs stay on the right. */
 @media (max-width: 760px) {
   .menu {
@@ -902,7 +1146,9 @@ button {
   .menu__tagline,
   .menu__rules,
   .mega,
-  .stage {
+  .stage,
+  .levelup__sweep,
+  .levelup__title {
     animation: none;
   }
 }
