@@ -3,7 +3,9 @@ enum BlockColor {
   red('R'),
   blue('B'),
   yellow('Y'),
-  green('G');
+  green('G'),
+  purple('P'),
+  white('W');
 
   const BlockColor(this.symbol);
 

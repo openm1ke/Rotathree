@@ -6,11 +6,11 @@ import '../model/side.dart';
 import 'piece_generator.dart';
 import 'placement_engine.dart';
 
-/// Owns the four independent streams of falling pieces, one per glass.
+/// Owns the independent streams of falling pieces, one per glass in play.
 ///
 /// Every piece falls along its own glass — through the arm and on through the
 /// central square — one whole cell per step. Steps come quickly in the active
-/// glass and slowly in the other three. A piece whose next step is blocked
+/// glass and slowly in the others. A piece whose next step is blocked
 /// locks instead. Falling pieces do not collide with each other, only with
 /// settled blocks.
 class IncomingController {
@@ -26,23 +26,45 @@ class IncomingController {
 
   Map<Side, IncomingPiece> get pieces => _pieces;
 
+  /// While true, the active piece steps at the soft-drop rate as long as it
+  /// has room to fall.
+  bool softDrop = false;
+
   IncomingPiece? pieceAt(Side side) => _pieces[side];
 
   int get spawnColumn => config.spawnColumn ?? config.defaultSpawnColumn;
 
-  /// Seconds between two steps of the piece of [side] while [active] is the
-  /// glass on top.
-  double stepSeconds(Side side, Side active) =>
+  /// Seconds between two steps of a piece of [side] while [active] is the
+  /// glass on top, soft drop aside.
+  double baseStepSeconds(Side side, Side active) =>
       side == active ? config.activeStepSeconds : config.inactiveStepSeconds;
 
-  /// Starts a fresh game: one piece per glass, staggered so that TOP is the
-  /// furthest along and LEFT starts at the very end of its arm.
+  /// Seconds between two steps of [piece] right now.
+  double stepSeconds(IncomingPiece piece, Side active, Board board) {
+    if (piece.side != active) return config.inactiveStepSeconds;
+    // Soft drop only speeds up actual falling: a piece that has landed keeps
+    // its full step to be slid or turned before it locks.
+    if (softDrop &&
+        _placement.fits(
+            board, piece.side, piece.piece, piece.row + 1, piece.column)) {
+      return config.softDropStepSeconds < config.activeStepSeconds
+          ? config.softDropStepSeconds
+          : config.activeStepSeconds;
+    }
+    return config.activeStepSeconds;
+  }
+
+  /// Starts a fresh game: one piece per glass in play, staggered so that TOP
+  /// is the furthest along and the last glass starts at the very end of its
+  /// arm.
   void reset() {
     _pieces.clear();
-    for (final side in Side.values) {
-      final headStart = (Side.values.length - 1 - side.index) *
-          config.initialProgressStagger;
-      put(side, generator.next(), row: (headStart * config.armLength).round());
+    softDrop = false;
+    final sides = config.sides;
+    for (var i = 0; i < sides.length; i++) {
+      final headStart = (sides.length - 1 - i) * config.initialProgressStagger;
+      put(sides[i], generator.next(),
+          row: (headStart * config.armLength).round());
     }
   }
 
@@ -89,19 +111,20 @@ class IncomingController {
 
   /// Seconds until [piece] locks by itself if it is left alone and [active]
   /// stays on top: the steps down to where it rests, plus the one step it
-  /// then fails to take.
+  /// then fails to take. Soft drop is ignored — this is what the countdown
+  /// shows.
   double secondsToLock(IncomingPiece piece, Board board, Side active) {
     final stepsDown = restRow(piece, board) - piece.row;
     return (1 - piece.stepProgress + stepsDown) *
-        stepSeconds(piece.side, active);
+        baseStepSeconds(piece.side, active);
   }
 
   /// Seconds until the first piece is due to step; null if no glass holds a
   /// piece.
-  double? secondsToNextStep(Side active) {
+  double? secondsToNextStep(Side active, Board board) {
     double? best;
     for (final piece in _pieces.values) {
-      final left = (1 - piece.stepProgress) * stepSeconds(piece.side, active);
+      final left = (1 - piece.stepProgress) * stepSeconds(piece, active, board);
       if (best == null || left < best) best = left;
     }
     return best == null ? null : (best < 0 ? 0 : best);
@@ -119,11 +142,11 @@ class IncomingController {
 
   /// Lets [seconds] pass for every piece. Nothing moves here: a piece only
   /// becomes due for its next step (see [step]).
-  void advance(double seconds, Side active) {
+  void advance(double seconds, Side active, Board board) {
     if (seconds <= 0) return;
     for (final piece in _pieces.values) {
       final progress =
-          piece.stepProgress + seconds / stepSeconds(piece.side, active);
+          piece.stepProgress + seconds / stepSeconds(piece, active, board);
       piece.stepProgress = progress >= 1 - _epsilon ? 1 : progress;
     }
   }

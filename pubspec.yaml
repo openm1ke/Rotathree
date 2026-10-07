@@ -1,5 +1,5 @@
 name: rotathree
-description: "A new Flutter project."
+description: "Rotathree — four glasses around one centre, match three."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  shared_preferences: ^2.5.6
 
 dev_dependencies:
   flutter_test:
@@ -17,3 +18,33 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  fonts:
+    - family: Exo2
+      fonts:
+        - asset: assets/fonts/Exo2-Latin-400.ttf
+          weight: 400
+        - asset: assets/fonts/Exo2-Latin-600.ttf
+          weight: 600
+        - asset: assets/fonts/Exo2-Latin-800.ttf
+          weight: 800
+        - asset: assets/fonts/Exo2-Latin-800Italic.ttf
+          weight: 800
+          style: italic
+        - asset: assets/fonts/Exo2-Latin-900Italic.ttf
+          weight: 900
+          style: italic
+    - family: Exo2Cyrillic
+      fonts:
+        - asset: assets/fonts/Exo2-Cyrillic-400.ttf
+          weight: 400
+        - asset: assets/fonts/Exo2-Cyrillic-600.ttf
+          weight: 600
+        - asset: assets/fonts/Exo2-Cyrillic-800.ttf
+          weight: 800
+        - asset: assets/fonts/Exo2-Cyrillic-800Italic.ttf
+          weight: 800
+          style: italic
+        - asset: assets/fonts/Exo2-Cyrillic-900Italic.ttf
+          weight: 900
+          style: italic

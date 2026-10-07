@@ -277,7 +277,7 @@ class BotPlayer {
     value += 0.3 * placement.row;
 
     // A glass that fills up to its far end loses the game.
-    for (final side in Side.values) {
+    for (final side in engine.sides) {
       final room = _placement.headroom(
         board,
         side,

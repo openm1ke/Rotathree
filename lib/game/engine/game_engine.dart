@@ -18,9 +18,10 @@ import 'placement_engine.dart';
 ///
 /// Rules in short:
 ///  * the playfield is a cross: a central square and four arms. Each side
-///    owns a glass — its arm plus the central square — and the four glasses
-///    share the centre;
-///  * four pieces fall at the same time, one per glass, a whole cell per
+///    owns a glass — its arm plus the central square — and the glasses share
+///    the centre. Two to four of them are in play; the arms of the rest do
+///    not exist;
+///  * the pieces fall at the same time, one per glass, a whole cell per
 ///    step — once a second in the active glass, once every three seconds in
 ///    the others — through the arm and on through the centre. A piece whose
 ///    next step is blocked by the floor of its glass (the far wall of the
@@ -56,6 +57,9 @@ class GameEngine {
 
   late final IncomingController incoming;
   late GameState state;
+
+  /// The glasses in play, in the order TOP → RIGHT → BOTTOM → LEFT.
+  List<Side> get sides => config.sides;
 
   Board get board => state.board;
   Side get activeSide => state.activeSide;
@@ -127,7 +131,8 @@ class GameEngine {
 
   // ------------------------------------------------------------------ input
 
-  /// Turns the cross by [quarterTurns] steps of TOP → RIGHT → BOTTOM → LEFT.
+  /// Turns the cross: ±1 goes on round TOP → RIGHT → BOTTOM → LEFT to the
+  /// next glass in play, 2 goes to the glass opposite if there is one.
   void switchSide(int quarterTurns) => _submit(_Input.turn(quarterTurns));
 
   /// Makes [side] the active one, turning the short way round.
@@ -145,6 +150,9 @@ class GameEngine {
 
   /// Sends the active piece straight down to where it lands.
   void dropActive() => _submit(const _Input.drop());
+
+  /// Holds or releases soft drop: while held, the active piece steps fast.
+  void setSoftDrop(bool held) => incoming.softDrop = held;
 
   void _submit(_Input input) {
     if (isGameOver) return;
@@ -171,26 +179,53 @@ class GameEngine {
     final side = state.activeSide;
     switch (input.kind) {
       case _InputKind.turn:
-        _turn(input.value);
+        _turnTo(_sideAfter(side, input.value));
       case _InputKind.activate:
-        _turn(side.stepsTo(Side.values[input.value]));
+        final target = Side.values[input.value];
+        if (sides.contains(target)) _turnTo(target);
       case _InputKind.move:
+        final piece = incoming.pieceAt(side);
+        if (piece == null || input.value == 0) break;
+        final from = piece.column;
         incoming.move(side, input.value, state.board);
+        _events.add(PieceMoved(
+          side,
+          input.value.sign,
+          blocked: (piece.column - from).abs() < input.value.abs(),
+        ));
       case _InputKind.column:
         incoming.setColumn(side, input.value, state.board);
       case _InputKind.rotate:
-        incoming.rotate(side, state.board, clockwise: input.value > 0);
+        if (incoming.pieceAt(side) == null) break;
+        final turned =
+            incoming.rotate(side, state.board, clockwise: input.value > 0);
+        _events.add(PieceRotated(side, blocked: !turned));
       case _InputKind.drop:
         _beginDrop();
     }
   }
 
-  void _turn(int quarterTurns) {
+  /// The glass a turn of [quarterTurns] leads to from [side]. A single step
+  /// skips the sides that are not in play; any other turn only happens when
+  /// a glass is exactly there.
+  Side _sideAfter(Side side, int quarterTurns) {
+    if (quarterTurns.abs() != 1) {
+      final to = side.turned(quarterTurns);
+      return sides.contains(to) ? to : side;
+    }
+    var to = side.turned(quarterTurns);
+    while (!sides.contains(to)) {
+      to = to.turned(quarterTurns);
+    }
+    return to;
+  }
+
+  void _turnTo(Side to) {
     final from = state.activeSide;
-    final to = from.turned(quarterTurns);
     if (to == from) return;
     state.activeSide = to;
-    _events.add(SideSwitched(from, to, quarterTurns));
+    // The cross always turns the short way round.
+    _events.add(SideSwitched(from, to, from.stepsTo(to)));
 
     // By default the structure turns as one rigid body and nothing falls.
     if (!config.settleAfterBoardRotation) return;
@@ -207,7 +242,8 @@ class GameEngine {
     var left = seconds;
     while (left > _epsilon && !isGameOver) {
       if (state.phase == GamePhase.playing) {
-        final next = incoming.secondsToNextStep(state.activeSide);
+        final next =
+            incoming.secondsToNextStep(state.activeSide, state.board);
         if (next == null || next > left) {
           _advanceClock(left);
           left = 0;
@@ -231,7 +267,9 @@ class GameEngine {
 
   void _advanceClock(double seconds) {
     state.elapsedSeconds += seconds;
-    if (!incomingPaused) incoming.advance(seconds, state.activeSide);
+    if (!incomingPaused) {
+      incoming.advance(seconds, state.activeSide, state.board);
+    }
   }
 
   /// Every piece whose step is due moves one row down. The first one that

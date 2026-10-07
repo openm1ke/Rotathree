@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../model/side.dart';
 import 'score_rules.dart';
 
 /// Which blocks fall after a match has popped.
@@ -17,11 +18,13 @@ class GameConfig {
   const GameConfig({
     this.boardSize = 10,
     this.armLength = 9,
+    this.glassCount = 4,
     this.pieceLength = 3,
     this.numberOfColors = 3,
     this.minMatchLength = 3,
     this.activeStepSeconds = 1.0,
     this.inactiveStepSeconds = 3.0,
+    this.softDropStepSeconds = 0.05,
     this.initialProgressStagger = 0.15,
     this.spawnColumn,
     this.monoPieceKeepChance = 0.4,
@@ -45,7 +48,8 @@ class GameConfig {
     this.seed,
   })  : assert(boardSize >= pieceLength),
         assert(armLength >= pieceLength),
-        assert(numberOfColors >= 2 && numberOfColors <= 4),
+        assert(glassCount >= 2 && glassCount <= 4),
+        assert(numberOfColors >= 2 && numberOfColors <= 6),
         assert(activeStepSeconds > 0 && inactiveStepSeconds > 0),
         assert(animationSpeed > 0);
 
@@ -56,10 +60,14 @@ class GameConfig {
   /// square, so it is [glassDepth] cells deep.
   final int armLength;
 
+  /// How many of the four glasses are in play, 2 to 4: the one the game
+  /// starts in plus one to three more. The arms of the others do not exist.
+  final int glassCount;
+
   /// Number of squares in a stick.
   final int pieceLength;
 
-  /// How many of [BlockColor.values] are in play (3 or 4 in the prototype).
+  /// How many of [BlockColor.values] are in play, 3 to 6.
   final int numberOfColors;
 
   /// Shortest line of one colour that counts as a match.
@@ -73,6 +81,10 @@ class GameConfig {
   /// to think. A piece that cannot take its next step locks instead, so it
   /// always rests for one full step before it does.
   final double inactiveStepSeconds;
+
+  /// While soft drop is held, the active piece steps this often as long as
+  /// it has room to fall.
+  final double softDropStepSeconds;
 
   /// Head start, as a fraction of the arm, between the four pieces at the
   /// beginning of a game so they do not all start from the same row.
@@ -140,6 +152,14 @@ class GameConfig {
   /// Seed for the piece generator; null = non-deterministic.
   final int? seed;
 
+  /// The glasses in play. Two are neighbours, so that switching is a quarter
+  /// turn; three leave out the one opposite the starting glass.
+  List<Side> get sides => switch (glassCount) {
+        2 => const [Side.top, Side.right],
+        3 => const [Side.top, Side.right, Side.left],
+        _ => Side.values,
+      };
+
   /// Rows of one glass, from the far end of its arm to its floor (the far
   /// wall of the central square).
   int get glassDepth => armLength + boardSize;
@@ -169,6 +189,7 @@ class GameConfig {
   GameConfig copyWith({
     int? boardSize,
     int? armLength,
+    int? glassCount,
     int? pieceLength,
     int? numberOfColors,
     int? minMatchLength,
@@ -189,11 +210,13 @@ class GameConfig {
     return GameConfig(
       boardSize: boardSize ?? this.boardSize,
       armLength: armLength ?? this.armLength,
+      glassCount: glassCount ?? this.glassCount,
       pieceLength: pieceLength ?? this.pieceLength,
       numberOfColors: numberOfColors ?? this.numberOfColors,
       minMatchLength: minMatchLength ?? this.minMatchLength,
       activeStepSeconds: activeStepSeconds ?? this.activeStepSeconds,
       inactiveStepSeconds: inactiveStepSeconds ?? this.inactiveStepSeconds,
+      softDropStepSeconds: softDropStepSeconds,
       initialProgressStagger:
           initialProgressStagger ?? this.initialProgressStagger,
       spawnColumn: spawnColumn ?? this.spawnColumn,

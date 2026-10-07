@@ -20,6 +20,26 @@ class SideSwitched extends GameEvent {
   final int quarterTurns;
 }
 
+/// The player slid the active piece; [blocked] when a wall or a block
+/// stopped it short.
+class PieceMoved extends GameEvent {
+  const PieceMoved(this.side, this.direction, {required this.blocked});
+
+  final Side side;
+
+  /// -1 towards the left of its glass, 1 towards the right.
+  final int direction;
+  final bool blocked;
+}
+
+/// The player turned the active piece; [blocked] when it had no room.
+class PieceRotated extends GameEvent {
+  const PieceRotated(this.side, {required this.blocked});
+
+  final Side side;
+  final bool blocked;
+}
+
 /// The player hard-dropped the active piece.
 class PieceDropped extends GameEvent {
   const PieceDropped(this.side);

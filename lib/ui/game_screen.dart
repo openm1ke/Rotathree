@@ -1,129 +1,225 @@
-import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../game/config/zen_levels.dart';
 import '../game/engine/game_engine.dart';
 import '../game/engine/game_event.dart';
 import '../game/engine/rotation_transform.dart';
 import '../game/model/side.dart';
-import '../game/sim/bot_player.dart';
-import 'board_widget.dart';
-import 'control_pad.dart';
-import 'game_over_overlay.dart';
+import '../game/state/game_state.dart';
+import 'field/effects.dart';
+import 'field/field_painter.dart';
 import 'hud.dart';
-import 'lab_panel.dart';
-import 'start_overlay.dart';
-import 'theme.dart';
-import 'view_effects.dart';
+import 'input/dpad.dart';
+import 'input/pad_controller.dart';
+import 'level_up_banner.dart';
+import 'settings/pad_action.dart';
+import 'settings/settings.dart';
+import 'style.dart';
+import 'widgets/controls.dart';
 
-enum _Overlay { none, start, lab, gameOver }
+enum GameStatus { playing, paused, levelUp, over }
+
+/// What a finished game came to.
+class _Result {
+  const _Result(this.hud, this.slot);
+
+  final HudData hud;
+
+  /// Screen slot of the glass that overflowed.
+  final Side slot;
+}
 
 enum _PanMode { undecided, dragPiece, swipeSide, swipeDrop, done }
 
 /// The playable screen: owns the engine, runs it from a frame ticker and
-/// turns touches, buttons and keys into engine input.
+/// turns the two pads, touches on the field and keys into engine input.
 class GameScreen extends StatefulWidget {
   const GameScreen({
     super.key,
-    this.settings = const LabSettings(),
-    this.showIntro = true,
+    required this.mode,
+    required this.settings,
+    required this.blocked,
+    required this.onOpenSettings,
+    required this.onExit,
+    this.seed,
   });
 
-  final LabSettings settings;
-  final bool showIntro;
+  final GameMode mode;
+  final Settings settings;
+
+  /// True while the settings panel is on top: the game is frozen.
+  final bool blocked;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onExit;
+
+  /// Fixes the order of the pieces (tests).
+  final int? seed;
 
   @override
-  State<GameScreen> createState() => _GameScreenState();
+  State<GameScreen> createState() => GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen>
-    with SingleTickerProviderStateMixin {
+class GameScreenState extends State<GameScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver
+    implements PadSink {
   /// Longest frame the game will simulate in one go (hitches, backgrounding).
   static const _maxFrameSeconds = 0.05;
+
+  /// How long the game stands still while a new Zen level is announced.
+  static const levelUpSeconds = 2.4;
+
   static const _swipeDistance = 30.0;
   static const _dragSlop = 14.0;
 
-  late LabSettings _settings;
-  late GameEngine _engine;
-  late ViewEffects _fx;
-  BotPlayer? _bot;
+  static const _slotNames = {
+    Side.top: 'Верхний',
+    Side.right: 'Правый',
+    Side.bottom: 'Нижний',
+    Side.left: 'Левый',
+  };
 
+  late final GameEngine _engine;
+  late final Effects _fx;
+  late final PadController _pad;
   late final Ticker _ticker;
   Duration _lastTick = Duration.zero;
+
   final ValueNotifier<int> _frame = ValueNotifier<int>(0);
-  late final ValueNotifier<HudData> _hud;
+  final ValueNotifier<HudData> _hud = ValueNotifier<HudData>(const HudData());
+  final ValueNotifier<Callout?> _callout = ValueNotifier<Callout?>(null);
+  final FocusNode _focus = FocusNode(debugLabel: 'game');
 
-  late _Overlay _overlay;
+  GameStatus _status = GameStatus.playing;
+  _Result? _result;
 
-  /// Where the lab panel returns to when it is closed without applying.
-  _Overlay _overlayBeforeLab = _Overlay.none;
+  // Zen: the level being played, the seconds left of the pause that
+  // announces a new one, and the announcement itself.
+  int _level = 0;
+  double _levelUpLeft = 0;
+  int _levelUpId = 0;
+  int? _announcedLevel;
+  int _calloutId = 0;
 
   Offset _panOrigin = Offset.zero;
-  CrossZone _panZone = CrossZone.outside;
+  FieldZone _panZone = FieldZone.outside;
   _PanMode _panMode = _PanMode.done;
   int _panColumn = 0;
 
-  bool get _running => _overlay == _Overlay.none;
+  bool get _zen => widget.mode == GameMode.zen;
+  Settings get _settings => widget.settings;
+
+  /// The engine of the running game.
+  @visibleForTesting
+  GameEngine get engine => _engine;
+
+  GameStatus get status => _status;
+
+  bool get _acceptsInput =>
+      _status == GameStatus.playing && !widget.blocked && _levelUpLeft <= 0;
 
   @override
   void initState() {
     super.initState();
-    _overlay = widget.showIntro ? _Overlay.start : _Overlay.none;
-    _startGame(widget.settings);
-    _hud = ValueNotifier<HudData>(_snapshot());
+    _engine = GameEngine(config: _settings.game.toConfig(seed: widget.seed));
+    _fx = Effects()..reset(_engine.activeSide);
+    _pad = PadController(
+      sink: this,
+      dasMs: () => _settings.pads.dasMs,
+      arrMs: () => _settings.pads.arrMs,
+    );
+    _level = _zen ? 1 : 0;
+    _hud.value = _snapshot();
     _ticker = createTicker(_onTick)..start();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     _frame.dispose();
     _hud.dispose();
+    _callout.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  void _startGame(LabSettings settings) {
-    _settings = settings;
-    _engine = GameEngine(config: settings.config);
-    _fx = ViewEffects(rotationSeconds: settings.config.rotationSeconds)
-      ..reset(_engine.activeSide);
-    final profile = settings.bot;
-    _bot = profile == null ? null : BotPlayer(_engine, profile: profile);
-  }
-
-  /// Replaces the running game and shows the new one at once.
-  void _showNewGame(LabSettings settings) {
-    setState(() {
-      _startGame(settings);
-      _overlay = _Overlay.none;
-    });
-    _hud.value = _snapshot();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app pauses the game.
+    if (state != AppLifecycleState.resumed) pause();
   }
 
   HudData _snapshot() {
     final state = _engine.state;
     return HudData(
       score: state.score,
-      combo: state.combo,
       bestCombo: state.bestCombo,
       matches: state.matches,
+      pieces: state.piecesPlaced,
       seconds: state.elapsedSeconds.floor(),
-      activeSide: state.activeSide,
+      level: _level,
+      levelInto: _level > 0 ? ZenLevels.into(state.score, _level) : 0,
+      levelTarget: _level > 0 ? ZenLevels.target(_level) : 0,
     );
   }
 
+  // ------------------------------------------------------------- frame loop
+
   void _onTick(Duration elapsed) {
-    final frameSeconds =
+    final seconds =
         ((elapsed - _lastTick).inMicroseconds / Duration.microsecondsPerSecond)
             .clamp(0.0, _maxFrameSeconds);
     _lastTick = elapsed;
-    // Behind an overlay nothing moves, so nothing is simulated or repainted.
-    if (!_running) return;
-    final seconds = frameSeconds * _settings.config.timeScale;
-    _bot?.tick(seconds);
-    _engine.update(seconds);
-    _react(_fx.update(seconds, _engine));
+    final frozen = widget.blocked;
+    final running =
+        _status == GameStatus.playing && !frozen && _levelUpLeft <= 0;
+    if (frozen) _pad.releaseAll();
+    _fx
+      ..screenShake = _settings.screenShake
+      ..turnSeconds = _settings.turnMs / 1000;
+
+    if (running) {
+      _pad.update(seconds);
+      _engine.update(seconds);
+    }
+    final events = _engine.drainEvents();
+    _fx.consume(events, _engine);
+    // Effects keep playing out on the result screen, but not under a pause.
+    _fx.update(_status == GameStatus.paused || frozen ? 0 : seconds, _engine);
+    _react(events);
+
+    if (_levelUpLeft > 0) {
+      if (!frozen) _levelUpLeft -= seconds;
+      if (_levelUpLeft <= 0) {
+        _levelUpLeft = 0;
+        setState(() {
+          _announcedLevel = null;
+          if (_status == GameStatus.levelUp) _status = GameStatus.playing;
+        });
+      }
+    } else if (_zen && running && _engine.phase == GamePhase.playing) {
+      // The board is at rest, so a cascade that carried the score over the
+      // line has played out in full before the game stops to celebrate.
+      final reached = ZenLevels.levelOf(_engine.state.score);
+      if (reached > _level) {
+        _level = reached;
+        _levelUpLeft = levelUpSeconds;
+        _levelUpId++;
+        _pad.releaseAll();
+        _fx.celebrate(_engine.config.numberOfColors);
+        _buzz(HapticFeedback.heavyImpact);
+        setState(() {
+          _announcedLevel = reached;
+          _status = GameStatus.levelUp;
+        });
+      }
+    }
+
     _hud.value = _snapshot();
     _frame.value++;
   }
@@ -132,14 +228,24 @@ class _GameScreenState extends State<GameScreen>
     for (final event in events) {
       switch (event) {
         case SideSwitched():
-          HapticFeedback.selectionClick();
+          _buzz(HapticFeedback.selectionClick);
         case PieceLanded():
-          HapticFeedback.lightImpact();
+          if (event.dropped) _buzz(HapticFeedback.lightImpact);
         case MatchScored():
-          HapticFeedback.mediumImpact();
+          _buzz(HapticFeedback.mediumImpact);
+          _callout.value =
+              Callout(++_calloutId, score: event.score, combo: event.combo);
         case GameEnded():
-          HapticFeedback.heavyImpact();
-          setState(() => _overlay = _Overlay.gameOver);
+          _buzz(HapticFeedback.heavyImpact);
+          setState(() {
+            _result = _Result(
+              _snapshot(),
+              RotationTransform.slotOfSide(_engine.activeSide, event.info.side),
+            );
+            _status = GameStatus.over;
+          });
+        case PieceMoved():
+        case PieceRotated():
         case PieceDropped():
         case CellsPopped():
           break;
@@ -147,53 +253,140 @@ class _GameScreenState extends State<GameScreen>
     }
   }
 
+  void _buzz(Future<void> Function() feedback) {
+    if (_settings.pads.haptics) feedback();
+  }
+
+  // ------------------------------------------------------------------ state
+
+  void pause() {
+    if (_status != GameStatus.playing) return;
+    _pad.releaseAll();
+    setState(() => _status = GameStatus.paused);
+  }
+
+  void resume() {
+    if (_status == GameStatus.paused) setState(() => _status = GameStatus.playing);
+  }
+
+  void togglePause() => _status == GameStatus.paused ? resume() : pause();
+
+  void restart() {
+    _engine.restart();
+    _fx.reset(_engine.activeSide);
+    _pad.releaseAll();
+    _level = _zen ? 1 : 0;
+    _levelUpLeft = 0;
+    _callout.value = null;
+    _hud.value = _snapshot();
+    setState(() {
+      _result = null;
+      _announcedLevel = null;
+      _status = GameStatus.playing;
+    });
+  }
+
   // ------------------------------------------------------------------ input
 
-  bool get _acceptsInput => _running && _bot == null;
-
-  void _turn(int quarterTurns) {
-    if (_acceptsInput) _engine.switchSide(quarterTurns);
-  }
-
-  void _move(int delta) {
-    if (_acceptsInput) _engine.moveActive(delta);
-  }
-
-  void _rotate() {
-    if (_acceptsInput) _engine.rotateActive();
-  }
-
-  void _drop() {
-    if (_acceptsInput) _engine.dropActive();
-  }
-
-  void _onTapUp(TapUpDetails details, CrossGeometry geometry) {
+  @override
+  void move(int direction, {required bool toWall}) {
     if (!_acceptsInput) return;
-    Side sideAt(Side slot) =>
-        RotationTransform.sideAtSlot(_engine.activeSide, slot);
-    switch (geometry.zoneAt(details.localPosition)) {
-      case CrossZone.center:
-      case CrossZone.top:
+    _engine.moveActive(toWall ? direction * _engine.config.boardSize : direction);
+  }
+
+  @override
+  void softDrop({required bool held}) => _engine.setSoftDrop(held);
+
+  @override
+  void press(PadAction action) {
+    if (action == PadAction.pause) return togglePause();
+    if (!_acceptsInput) return;
+    switch (action) {
+      case PadAction.rotateCW:
         _engine.rotateActive();
-      case CrossZone.right:
-        _engine.activateSide(sideAt(Side.right));
-      case CrossZone.bottom:
-        _engine.activateSide(sideAt(Side.bottom));
-      case CrossZone.left:
-        _engine.activateSide(sideAt(Side.left));
-      case CrossZone.outside:
+      case PadAction.rotateCCW:
+        _engine.rotateActive(clockwise: false);
+      case PadAction.hardDrop:
+        _engine.dropActive();
+      case PadAction.glassLeft:
+        _engine.switchSide(-1);
+      case PadAction.glassRight:
+        _engine.switchSide(1);
+      case PadAction.glassOpposite:
+        _engine.switchSide(2);
+      case PadAction.none ||
+            PadAction.moveLeft ||
+            PadAction.moveRight ||
+            PadAction.softDrop ||
+            PadAction.pause:
         break;
     }
   }
 
-  void _onPanStart(DragStartDetails details, CrossGeometry geometry) {
+  void _padDown(PadAction action) {
+    if (action != PadAction.none) _buzz(HapticFeedback.selectionClick);
+    _pad.down(action);
+  }
+
+  static final _keys = <LogicalKeyboardKey, PadAction>{
+    LogicalKeyboardKey.arrowLeft: PadAction.moveLeft,
+    LogicalKeyboardKey.arrowRight: PadAction.moveRight,
+    LogicalKeyboardKey.arrowUp: PadAction.rotateCW,
+    LogicalKeyboardKey.keyX: PadAction.rotateCW,
+    LogicalKeyboardKey.keyZ: PadAction.rotateCCW,
+    LogicalKeyboardKey.arrowDown: PadAction.softDrop,
+    LogicalKeyboardKey.space: PadAction.hardDrop,
+    LogicalKeyboardKey.keyA: PadAction.glassLeft,
+    LogicalKeyboardKey.keyD: PadAction.glassRight,
+    LogicalKeyboardKey.keyS: PadAction.glassOpposite,
+    LogicalKeyboardKey.escape: PadAction.pause,
+    LogicalKeyboardKey.keyP: PadAction.pause,
+  };
+
+  /// A hardware keyboard works the way it does in the browser version.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (widget.blocked) return KeyEventResult.ignored;
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyR) {
+      restart();
+      return KeyEventResult.handled;
+    }
+    final action = _keys[event.logicalKey];
+    if (action == null) return KeyEventResult.ignored;
+    if (event is KeyDownEvent) {
+      _pad.down(action);
+    } else if (event is KeyUpEvent) {
+      _pad.up(action);
+    }
+    return KeyEventResult.handled;
+  }
+
+  /// Tapping a glass brings it to the top; with field gestures on, a tap on
+  /// the centre or the top glass turns the piece.
+  void _onTapUp(TapUpDetails details, FieldGeometry geometry) {
+    if (!_acceptsInput) return;
+    Side at(Side slot) => RotationTransform.sideAtSlot(_engine.activeSide, slot);
+    switch (geometry.zoneAt(details.localPosition)) {
+      case FieldZone.right:
+        _engine.activateSide(at(Side.right));
+      case FieldZone.bottom:
+        _engine.activateSide(at(Side.bottom));
+      case FieldZone.left:
+        _engine.activateSide(at(Side.left));
+      case FieldZone.center || FieldZone.top:
+        if (_settings.pads.fieldGestures) _engine.rotateActive();
+      case FieldZone.outside:
+        break;
+    }
+  }
+
+  void _onPanStart(DragStartDetails details, FieldGeometry geometry) {
     _panOrigin = details.localPosition;
     _panZone = geometry.zoneAt(details.localPosition);
     _panMode = _acceptsInput ? _PanMode.undecided : _PanMode.done;
     _panColumn = _engine.activePiece?.column ?? 0;
   }
 
-  void _onPanUpdate(DragUpdateDetails details, CrossGeometry geometry) {
+  void _onPanUpdate(DragUpdateDetails details, FieldGeometry geometry) {
     if (_panMode == _PanMode.done || !_acceptsInput) return;
     final delta = details.localPosition - _panOrigin;
 
@@ -202,7 +395,7 @@ class _GameScreenState extends State<GameScreen>
       if (delta.dx.abs() >= delta.dy.abs()) {
         // Sideways in the top glass grabs the stick; anywhere else it turns
         // the whole cross.
-        _panMode = _panZone == CrossZone.top
+        _panMode = _panZone == FieldZone.top
             ? _PanMode.dragPiece
             : _PanMode.swipeSide;
       } else {
@@ -213,7 +406,7 @@ class _GameScreenState extends State<GameScreen>
     switch (_panMode) {
       case _PanMode.dragPiece:
         _engine.setActiveColumn(
-          _panColumn + (delta.dx / geometry.cell).round(),
+          _panColumn + (delta.dx / geometry.drawnCell).round(),
         );
       case _PanMode.swipeSide:
         if (delta.dx.abs() >= _swipeDistance) {
@@ -226,127 +419,209 @@ class _GameScreenState extends State<GameScreen>
           _engine.dropActive();
           _panMode = _PanMode.done;
         }
-      case _PanMode.undecided:
-      case _PanMode.done:
+      case _PanMode.undecided || _PanMode.done:
         break;
     }
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyUpEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.arrowLeft) {
-      _move(-1);
-    } else if (key == LogicalKeyboardKey.arrowRight) {
-      _move(1);
-    } else if (key == LogicalKeyboardKey.arrowUp) {
-      _rotate();
-    } else if (key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.space) {
-      _drop();
-    } else if (key == LogicalKeyboardKey.keyA ||
-        key == LogicalKeyboardKey.keyQ) {
-      _turn(-1);
-    } else if (key == LogicalKeyboardKey.keyD ||
-        key == LogicalKeyboardKey.keyE) {
-      _turn(1);
-    } else {
-      return KeyEventResult.ignored;
-    }
-    return KeyEventResult.handled;
-  }
-
-  // --------------------------------------------------------------- overlays
-
-  void _openLab() {
-    setState(() {
-      _overlayBeforeLab = _overlay;
-      _overlay = _Overlay.lab;
-    });
-  }
-
-  void _applyLab(LabSettings settings) => _showNewGame(settings);
-
-  void _restart() => _showNewGame(_settings);
+  // ------------------------------------------------------------------ build
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: NeonPalette.background,
-      body: Focus(
-        autofocus: true,
-        onKeyEvent: _onKey,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, -0.15),
-                  radius: 0.95,
-                  colors: [NeonPalette.backgroundGlow, NeonPalette.background],
-                ),
-              ),
-            ),
-            SafeArea(
-              child: Column(
-                children: [
-                  Hud(data: _hud, onOpenLab: _openLab),
-                  Expanded(
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final geometry = CrossGeometry(
-                              constraints.biggest,
-                              _settings.config,
-                            );
-                            return GestureDetector(
-                              key: const ValueKey('field'),
-                              behavior: HitTestBehavior.opaque,
-                              onTapUp: (d) => _onTapUp(d, geometry),
-                              onPanStart: (d) => _onPanStart(d, geometry),
-                              onPanUpdate: (d) => _onPanUpdate(d, geometry),
-                              child: CrossBoard(
-                                engine: _engine,
-                                fx: _fx,
-                                repaint: _frame,
-                              ),
-                            );
-                          },
-                        ),
+    final pads = _settings.pads;
+    return Focus(
+      focusNode: _focus,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_zen) _Aura(level: math.max(1, _level)),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // Two pads side by side with a gap between and around them.
+                final padSize = math.min(
+                  168.0 * pads.scale,
+                  math.min((box.maxWidth - 36) / 2, box.maxHeight * 0.3),
+                );
+                return Column(
+                  children: [
+                    Expanded(child: Center(child: _buildStage())),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          DPad(
+                            key: const ValueKey('pad-left'),
+                            layout: pads.left,
+                            size: padSize,
+                            showLabels: _settings.hud.padLabels,
+                            opacity: pads.opacity,
+                            onDown: _padDown,
+                            onUp: _pad.up,
+                          ),
+                          DPad(
+                            key: const ValueKey('pad-right'),
+                            layout: pads.right,
+                            size: padSize,
+                            showLabels: _settings.hud.padLabels,
+                            opacity: pads.opacity,
+                            onDown: _padDown,
+                            onUp: _pad.up,
+                          ),
+                        ],
                       ),
                     ),
+                  ],
+                );
+              },
+            ),
+          ),
+          if (_status == GameStatus.paused && !widget.blocked) _buildPause(),
+          if (_status == GameStatus.over && _result != null && !widget.blocked)
+            _buildGameOver(_result!),
+        ],
+      ),
+    );
+  }
+
+  /// The square field with the HUD in its corners.
+  Widget _buildStage() {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final geometry = FieldGeometry(box.maxWidth, _engine.config);
+          final gestures = _settings.pads.fieldGestures;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              GestureDetector(
+                key: const ValueKey('field'),
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) => _onTapUp(details, geometry),
+                onPanStart:
+                    gestures ? (details) => _onPanStart(details, geometry) : null,
+                onPanUpdate:
+                    gestures ? (details) => _onPanUpdate(details, geometry) : null,
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: FieldPainter(engine: _engine, fx: _fx, repaint: _frame),
                   ),
-                  _StatusLine(hud: _hud, summary: _settings.summary),
-                  ControlPad(
-                    onTurn: _turn,
-                    onMove: _move,
-                    onRotate: _rotate,
-                    onDrop: _drop,
+                ),
+              ),
+              Hud(
+                data: _hud,
+                callout: _callout,
+                options: _settings.hud,
+                corner: box.maxWidth * geometry.cornerFraction,
+                onPause: pause,
+                onOpenSettings: widget.onOpenSettings,
+              ),
+              if (_announcedLevel != null)
+                IgnorePointer(
+                  child: LevelUpBanner(
+                    key: ValueKey(_levelUpId),
+                    level: _announcedLevel!,
+                    seconds: levelUpSeconds,
+                    em: box.maxWidth / 34,
                   ),
-                ],
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPause() {
+    return Scrim(
+      child: DialogCard(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('ПАУЗА', style: Type.display(30)),
+            if (_zen)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Дзен · уровень $_level',
+                  style: Type.body(13, color: Palette.textDim),
+                ),
+              ),
+            const SizedBox(height: 20),
+            GameButton(
+              label: 'Продолжить',
+              kind: ButtonKind.primary,
+              onPressed: resume,
+            ),
+            const SizedBox(height: 10),
+            GameButton(
+              label: _zen ? 'Начать заново' : 'Заново',
+              onPressed: restart,
+            ),
+            const SizedBox(height: 10),
+            GameButton(label: 'Настройки', onPressed: widget.onOpenSettings),
+            const SizedBox(height: 4),
+            GameButton(
+              label: 'В меню',
+              kind: ButtonKind.ghost,
+              onPressed: widget.onExit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGameOver(_Result result) {
+    final hud = result.hud;
+    return Scrim(
+      child: DialogCard(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'ИГРА ОКОНЧЕНА',
+              style: Type.display(
+                28,
+                color: Palette.danger,
+                shadows: Type.glow(Palette.danger.withValues(alpha: 0.55), 22),
               ),
             ),
-            switch (_overlay) {
-              _Overlay.none => const SizedBox.shrink(),
-              _Overlay.start => StartOverlay(
-                  onPlay: () => setState(() => _overlay = _Overlay.none),
-                  onOpenLab: _openLab,
-                ),
-              _Overlay.lab => LabPanel(
-                  settings: _settings,
-                  canResume: _overlayBeforeLab == _Overlay.none,
-                  onResume: () => setState(() => _overlay = _Overlay.none),
-                  onApply: _applyLab,
-                ),
-              _Overlay.gameOver => GameOverOverlay(
-                  state: _engine.state,
-                  onRestart: _restart,
-                  onOpenLab: _openLab,
-                ),
-            },
+            const SizedBox(height: 10),
+            Text(
+              '${_slotNames[result.slot]} стакан заполнился до конца рукава.'
+              '${_zen ? ' Начнёте заново с первого уровня?' : ''}',
+              style: Type.body(13, color: Palette.textDim),
+            ),
+            const SizedBox(height: 12),
+            if (_zen) _StatRow('Уровень', '${hud.level}', main: true),
+            _StatRow('Счёт', formatScore(hud.score), main: !_zen),
+            _StatRow('Лучшее комбо', '×${hud.bestCombo}'),
+            _StatRow('Матчи', '${hud.matches}'),
+            _StatRow('Фигуры', '${hud.pieces}'),
+            _StatRow('Время', formatClock(hud.seconds)),
+            const SizedBox(height: 18),
+            GameButton(
+              label: _zen ? 'Начать заново' : 'Заново',
+              kind: ButtonKind.primary,
+              onPressed: restart,
+            ),
+            const SizedBox(height: 10),
+            GameButton(label: 'Настройки', onPressed: widget.onOpenSettings),
+            const SizedBox(height: 4),
+            GameButton(
+              label: 'В меню',
+              kind: ButtonKind.ghost,
+              onPressed: widget.onExit,
+            ),
           ],
         ),
       ),
@@ -354,50 +629,60 @@ class _GameScreenState extends State<GameScreen>
   }
 }
 
-class _StatusLine extends StatelessWidget {
-  const _StatusLine({required this.hud, required this.summary});
+class _StatRow extends StatelessWidget {
+  const _StatRow(this.label, this.value, {this.main = false});
 
-  final ValueListenable<HudData> hud;
-  final String summary;
+  final String label;
+  final String value;
+  final bool main;
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(
-      color: NeonPalette.textDim,
-      fontSize: 10.5,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1.2,
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Palette.line)),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          ValueListenableBuilder<HudData>(
-            valueListenable: hud,
-            builder: (context, data, _) => Text.rich(
-              TextSpan(
-                text: 'ACTIVE GLASS  ',
-                children: [
-                  TextSpan(
-                    text: data.activeSide.name.toUpperCase(),
-                    style: const TextStyle(color: NeonPalette.outline),
-                  ),
-                ],
-              ),
-              style: style,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              summary.toUpperCase(),
-              style: style,
-              maxLines: 1,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Expanded(child: Text(label.toUpperCase(), style: Type.label(11))),
+          Text(
+            value,
+            style: Type.display(main ? 32 : 20, color: main ? Palette.accent : Palette.text),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Zen: a wash of colour behind the field that moves on with every level.
+class _Aura extends StatelessWidget {
+  const _Aura({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final hue = (158 + (level - 1) * 47) % 360;
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: hue.toDouble()),
+        duration: const Duration(milliseconds: 1400),
+        curve: Curves.easeInOut,
+        builder: (context, value, _) => DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(0, -0.25),
+              radius: 0.9,
+              colors: [
+                HSLColor.fromAHSL(0.2, value % 360, 0.82, 0.4).toColor(),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

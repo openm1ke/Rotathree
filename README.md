@@ -25,13 +25,21 @@ the architecture, test and playtest results.
 flutter run
 ```
 
-Controls: swipe the field left / right or tap a glass to switch, drag the stick
-in the top glass (or MOVE) to aim, tap to rotate, swipe down (or DROP) to drop.
-With a hardware keyboard: ← → move, ↑ rotate, ↓ / space drop, A / D switch.
+The app opens on a menu: **Играть** (one run for survival), **Дзен** (the same
+game through levels — reach a level's score, watch it celebrated, play on) and
+**Настройки**.
 
-The slider icon in the top-right corner opens the **LAB** panel: step interval
-in the active glass and in the others, arm length, 3 or 4 colours, rule
-variants, slow motion and a bot that plays by itself.
+Controls are two on-screen D-pads in the bottom corners. By default the left
+one steers the piece (left / right, soft drop down, hard drop up) and the
+right one turns things (rotate up / down, switch glass left / right, the glass
+opposite in the middle). What every button does is chosen in the settings.
+Tapping a glass on the field also brings it to the top. With a hardware
+keyboard: ← → move, ↑ / X and Z rotate, ↓ soft drop, space drop, A / D / S
+switch glass, Esc pause.
+
+Settings (saved on the device): the pads and auto-repeat; step intervals, arm
+length, 1–3 extra glasses, 3–6 colours and rule variants; turn duration, shake
+and what is written on the field.
 
 ## Checks
 
@@ -45,8 +53,11 @@ dart run tool/balance_sim.dart        # bot balance simulation
 
 - `lib/game` — the engine, pure Dart, no Flutter imports
   (`config`, `model`, `engine`, `state`, `sim`)
-- `lib/ui` — the Flutter screen that draws the engine state and feeds it input
-- `test/game` — engine unit tests; `test/widget_test.dart` — screen smoke tests
+- `lib/ui` — the Flutter app: menu, game screen, settings, the field painter
+  and its effects, the pads; styled like the browser version (Exo 2 from
+  `assets/fonts`)
+- `test/game` — engine unit tests; `test/ui` — pads, settings, effects;
+  `test/widget_test.dart` — the app driven through its screens
 - `tool/balance_sim.dart` — seeded bot games for comparing configurations
 - `webapp/` — the browser version (Vite + TypeScript + React), with its own
   port of the engine and its own tests
