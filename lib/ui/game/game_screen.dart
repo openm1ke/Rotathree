@@ -22,6 +22,7 @@ import '../format.dart';
 import '../input/dpad.dart';
 import '../input/game_action.dart';
 import '../input/pad_controller.dart';
+import '../style.dart';
 import '../widgets/controls.dart';
 import 'hud.dart';
 import 'level_banner.dart';
@@ -133,6 +134,7 @@ class GameScreenState extends State<GameScreen>
   GameEngine get engine => _engine;
   late final PadController _pads;
   final Effects _fx = Effects();
+  final FieldAssets _assets = FieldAssets();
   final _Repaint _repaint = _Repaint();
   final ValueNotifier<HudState> _hud = ValueNotifier(HudState.empty);
   late Progress _progressNow;
@@ -153,6 +155,11 @@ class GameScreenState extends State<GameScreen>
   Callout? _callout;
   int _calloutId = 0;
   Duration _last = Duration.zero;
+
+  /// Frames in a row whose picture could not have changed.
+  int _still = 0;
+  int _drawnPalette = -1;
+  double _pixelRatio = 1;
 
   bool get _isCampaign => widget.session is CampaignSession;
 
@@ -210,6 +217,7 @@ class GameScreenState extends State<GameScreen>
     _ticker.dispose();
     _hud.dispose();
     _repaint.dispose();
+    _assets.dispose();
     super.dispose();
   }
 
@@ -456,7 +464,8 @@ class GameScreenState extends State<GameScreen>
   /// Tapping a glass brings it to the top.
   void _onTapStage(TapUpDetails details, double side) {
     if (_status != _Status.playing) return;
-    final zone = FieldGeometry(side, _engine.config).zoneAt(details.localPosition);
+    final zone = FieldGeometry(side, _engine.config, devicePixelRatio: _pixelRatio)
+        .zoneAt(details.localPosition);
     final slot = switch (zone) {
       FieldZone.right => Side.right,
       FieldZone.bottom => Side.bottom,
@@ -524,7 +533,17 @@ class GameScreenState extends State<GameScreen>
     }
 
     _hud.value = _currentHud();
-    _repaint.touch();
+
+    // A picture that cannot have changed is not drawn again: under a pause,
+    // or once a game that stands still has played out its effects. Nothing
+    // is rastered then, and the device can rest.
+    final engineRunning = _status == _Status.playing && !holding;
+    final effectsRunning = _status != _Status.paused && !frozen;
+    _still = !engineRunning && (!effectsRunning || _fx.settled) ? _still + 1 : 0;
+    if (_still <= 2 || _drawnPalette != BlockTones.revision) {
+      _drawnPalette = BlockTones.revision;
+      _repaint.touch();
+    }
   }
 
   // ------------------------------------------------------------------- build
@@ -532,6 +551,9 @@ class GameScreenState extends State<GameScreen>
   @override
   Widget build(BuildContext context) {
     final settings = widget.settings;
+    _pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    // Whatever made this build happen may have changed the picture too.
+    _still = 0;
     return Focus(
       focusNode: _focus,
       autofocus: true,
@@ -547,29 +569,46 @@ class GameScreenState extends State<GameScreen>
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, box) {
-                          final side = math.min(box.maxWidth, box.maxHeight);
-                          return Center(child: SizedBox.square(dimension: side, child: _stage(side)));
+                          // A whole number of physical pixels, set on a whole
+                          // pixel: the field is then drawn pixel for pixel.
+                          final ratio = _pixelRatio;
+                          double snap(double logical) => (logical * ratio).floorToDouble() / ratio;
+                          final side = snap(math.min(box.maxWidth, box.maxHeight));
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              left: snap((box.maxWidth - side) / 2),
+                              top: snap((box.maxHeight - side) / 2),
+                            ),
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: SizedBox.square(dimension: side, child: _stage(side)),
+                            ),
+                          );
                         },
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          DPad(
-                            layout: settings.leftPad,
-                            size: padSize,
-                            onDown: _pads.down,
-                            onUp: _pads.up,
-                          ),
-                          DPad(
-                            layout: settings.rightPad,
-                            size: padSize,
-                            onDown: _pads.down,
-                            onUp: _pads.up,
-                          ),
-                        ],
+                    // The pads are a layer of their own: the field is drawn
+                    // again every frame, and they need not be.
+                    RepaintBoundary(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            DPad(
+                              layout: settings.leftPad,
+                              size: padSize,
+                              onDown: _pads.down,
+                              onUp: _pads.up,
+                            ),
+                            DPad(
+                              layout: settings.rightPad,
+                              size: padSize,
+                              onDown: _pads.down,
+                              onUp: _pads.up,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -596,24 +635,36 @@ class GameScreenState extends State<GameScreen>
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTapUp: (details) => _onTapStage(details, side),
-            child: CustomPaint(
-              painter: FieldPainter(engine: _engine, fx: _fx, repaint: _repaint),
-              size: Size.square(side),
+            // The field changes every frame and nothing round it does: with a
+            // layer of its own, only the field is recorded again.
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: FieldPainter(
+                  engine: _engine,
+                  fx: _fx,
+                  assets: _assets,
+                  devicePixelRatio: _pixelRatio,
+                  repaint: _repaint,
+                ),
+                size: Size.square(side),
+              ),
             ),
           ),
         ),
         Positioned.fill(
-          child: ValueListenableBuilder<HudState>(
-            valueListenable: _hud,
-            builder: (context, hud, _) => Hud(
-              hud: hud,
-              callout: _callout,
-              bindings: widget.settings.bindings,
-              options: widget.settings.hud,
-              corner: corner,
-              base: base,
-              onPause: _togglePause,
-              onOpenSettings: widget.onSettings,
+          child: RepaintBoundary(
+            child: ValueListenableBuilder<HudState>(
+              valueListenable: _hud,
+              builder: (context, hud, _) => Hud(
+                hud: hud,
+                callout: _callout,
+                bindings: widget.settings.bindings,
+                options: widget.settings.hud,
+                corner: corner,
+                base: base,
+                onPause: _togglePause,
+                onOpenSettings: widget.onSettings,
+              ),
             ),
           ),
         ),

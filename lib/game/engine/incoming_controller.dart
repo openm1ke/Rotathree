@@ -24,6 +24,10 @@ class IncomingController {
   final PlacementEngine _placement = const PlacementEngine();
   final Map<Side, IncomingPiece> _pieces = {};
 
+  /// The last landing row worked out for each glass, and what it was worked
+  /// out from. It is asked for several times a frame and changes once a step.
+  final Map<Side, _RestRow> _rest = {};
+
   /// While true, the active piece steps at the soft-drop rate as long as it
   /// has room to fall.
   bool softDrop = false;
@@ -95,15 +99,27 @@ class IncomingController {
   IncomingPiece? take(Side side) => _pieces.remove(side);
 
   /// The row where [piece] will come to rest if nothing changes.
-  int restRow(IncomingPiece piece, Board board) =>
-      _placement.landingRow(
-        board,
-        piece.side,
-        piece.piece,
-        piece.column,
-        fromRow: piece.row,
-      ) ??
-      piece.row;
+  int restRow(IncomingPiece piece, Board board) {
+    final known = _rest[piece.side];
+    if (known != null &&
+        identical(known.board, board) &&
+        known.version == board.version &&
+        identical(known.piece, piece.piece) &&
+        known.row == piece.row &&
+        known.column == piece.column) {
+      return known.value;
+    }
+    final value = _placement.landingRow(
+          board,
+          piece.side,
+          piece.piece,
+          piece.column,
+          fromRow: piece.row,
+        ) ??
+        piece.row;
+    _rest[piece.side] = _RestRow(board, board.version, piece.piece, piece.row, piece.column, value);
+    return value;
+  }
 
   /// Seconds until [piece] locks by itself if it is left alone.
   double secondsToLock(IncomingPiece piece, Board board, Side active) {
@@ -252,4 +268,16 @@ class IncomingController {
     }
     return crushed;
   }
+}
+
+/// A landing row and everything it depends on.
+class _RestRow {
+  const _RestRow(this.board, this.version, this.piece, this.row, this.column, this.value);
+
+  final Board board;
+  final int version;
+  final Piece piece;
+  final int row;
+  final int column;
+  final int value;
 }

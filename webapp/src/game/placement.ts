@@ -1,5 +1,5 @@
 import type { Board } from './board';
-import { GlassView } from './glass';
+import { GlassView, glassIsFree } from './glass';
 import { pieceOffsets, type BlockColor, type Piece } from './piece';
 import type { Side } from './side';
 
@@ -28,8 +28,15 @@ export interface Placement {
  * arm of S and moves away from it, through the arm and on through the
  * central square, until the next step would hit the floor or a block. */
 export function fits(board: Board, side: Side, piece: Piece, row: number, column: number): boolean {
-  const glass = new GlassView(board, side);
-  return pieceOffsets(piece).every((offset) => glass.isFree(row + offset.row, column + offset.col));
+  // Which square holds which colour does not matter here, only the cells the
+  // stick covers: a lying stick runs along its row, a standing one down its lane.
+  const length = piece.colors.length;
+  if (piece.orientation % 2 === 0) {
+    for (let i = 0; i < length; i++) if (!glassIsFree(board, side, row, column + i)) return false;
+  } else {
+    for (let i = 0; i < length; i++) if (!glassIsFree(board, side, row + i, column)) return false;
+  }
+  return true;
 }
 
 /** The row where `piece`, falling straight down from `fromRow`, comes to

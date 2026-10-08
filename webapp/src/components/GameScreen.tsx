@@ -9,11 +9,13 @@ import type { Side } from '../game/side';
 import { KeyboardController } from '../input/keyboard';
 import type { Action } from '../input/bindings';
 import { Effects } from '../render/effects';
+import { AdaptiveQuality } from '../render/quality';
 import { GameRenderer } from '../render/renderer';
+import { paletteRevision } from '../render/theme';
 import type { Palettes, Progress, RunRecord, Settings } from '../services/storage';
 import { Hud } from './Hud';
 import { LevelBanner, type BannerData } from './LevelBanner';
-import { EMPTY_HUD, formatScore, sameHud, type Callout, type HudState } from './hudState';
+import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { Button, Overlay } from './ui';
 import { formatDuration, formatNumber } from './format';
 
@@ -53,6 +55,14 @@ interface Props {
 
 /** Longest frame the game will simulate in one go (hitches, tab switches). */
 const MAX_FRAME_SECONDS = 0.05;
+
+/** Browsers refuse, or silently shrink, canvases much beyond this many
+ * device pixels a side. */
+const MAX_CANVAS_PIXELS = 4096;
+
+/** The resolution the field is drawn at. Kept for the whole visit: a machine
+ * that needed fewer pixels in one game needs them in the next. */
+const quality = new AdaptiveQuality();
 
 const SLOT_NAMES = ['Верхний', 'Правый', 'Нижний', 'Левый'] as const;
 
@@ -104,10 +114,17 @@ export function GameScreen(props: Props) {
     fx.reset(engine.activeSide);
     const renderer = new GameRenderer(canvas);
     rendererRef.current = renderer;
+    // Development only: lets a benchmark draw frames on demand.
+    if (import.meta.env.DEV) Object.assign(window, { __rotathreeView: { renderer, fx } });
+    /** Set when the picture has to be drawn even though nothing moved. */
+    let dirty = true;
     const measure = () => {
       const next = Math.floor(Math.min(frame.clientWidth, frame.clientHeight));
       setSize(next);
-      renderer.resize(next, window.devicePixelRatio || 1);
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PIXELS / Math.max(1, next));
+      renderer.resize(next, dpr * quality.scale);
+      quality.restart();
+      dirty = true;
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -319,8 +336,12 @@ export function GameScreen(props: Props) {
 
     let raf = 0;
     let last = performance.now();
+    /** Frames in a row whose picture could not have changed. */
+    let still = 0;
+    let drawnPalette = -1;
     const tick = (now: number) => {
-      const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, (now - last) / 1000));
+      const frameMs = now - last;
+      const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
       last = now;
       const s = live.current.settings;
       const frozen = live.current.blocked;
@@ -365,26 +386,64 @@ export function GameScreen(props: Props) {
         if (engine.state.score - levelBase >= CAMPAIGN[campaignLevel].target) completeLevel();
       }
 
-      renderer.draw(engine, fx);
+      // A picture that cannot have changed is not drawn again: under a pause,
+      // or once a game that stands still has played out its effects. The
+      // browser then has nothing to composite either.
+      const engineRunning = current === 'playing' && !holding;
+      const effectsRunning = current !== 'paused' && !frozen;
+      still = !engineRunning && (!effectsRunning || fx.settled) ? still + 1 : 0;
+      if (still <= 2 || dirty || drawnPalette !== paletteRevision()) {
+        renderer.draw(engine, fx);
+        dirty = false;
+        drawnPalette = paletteRevision();
+      }
+      // On a machine that cannot keep up, fewer pixels are drawn.
+      if (engineRunning && quality.sample(frameMs)) measure();
 
-      const t = totals();
-      const next: HudState = {
-        score: t.score,
-        combo: engine.state.combo,
-        bestCombo: t.bestCombo,
-        matches: t.matches,
-        pieces: t.pieces,
-        seconds: Math.floor(t.seconds),
-        level: campaign ? campaignLevel + 1 : 0,
-        into: campaign ? engine.state.score - levelBase : 0,
-        target: campaign ? CAMPAIGN[campaignLevel].target : 0,
-        colours: campaign ? CAMPAIGN[campaignLevel].colours : engine.config.numberOfColors,
-        glasses: engine.sides.length,
-        speed: plan.ramp ? engine.state.speedLevel + 1 : 0,
-      };
-      if (!sameHud(next, shown)) {
-        shown = next;
-        setHud(next);
+      // The numbers in the corners, compared one by one so that a frame in
+      // which none of them changed creates nothing.
+      const state = engine.state;
+      const playing = campaign ? CAMPAIGN[campaignLevel] : undefined;
+      const score = carry.score + state.score;
+      const bestCombo = Math.max(carry.bestCombo, state.bestCombo);
+      const matches = carry.matches + state.matches;
+      const pieces = carry.pieces + state.piecesPlaced;
+      const clock = Math.floor(carry.seconds + state.elapsedSeconds);
+      const level = campaign ? campaignLevel + 1 : 0;
+      const into = campaign ? state.score - levelBase : 0;
+      const target = playing?.target ?? 0;
+      const colours = playing?.colours ?? engine.config.numberOfColors;
+      const glasses = engine.sides.length;
+      const speed = plan.ramp ? state.speedLevel + 1 : 0;
+      if (
+        score !== shown.score ||
+        state.combo !== shown.combo ||
+        bestCombo !== shown.bestCombo ||
+        matches !== shown.matches ||
+        pieces !== shown.pieces ||
+        clock !== shown.seconds ||
+        level !== shown.level ||
+        into !== shown.into ||
+        target !== shown.target ||
+        colours !== shown.colours ||
+        glasses !== shown.glasses ||
+        speed !== shown.speed
+      ) {
+        shown = {
+          score,
+          combo: state.combo,
+          bestCombo,
+          matches,
+          pieces,
+          seconds: clock,
+          level,
+          into,
+          target,
+          colours,
+          glasses,
+          speed,
+        };
+        setHud(shown);
       }
       raf = requestAnimationFrame(tick);
     };

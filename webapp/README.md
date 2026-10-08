@@ -76,7 +76,8 @@ npm run check
 src/
   game/        движок: config, board, glass, piece, placement, matchDetector,
                gravity, cascade, generator, incoming, engine; campaign, modes, session — уровни, режимы, сессии
-  render/      canvas: renderer (поле, блоки), effects (толчки, частицы), theme
+  render/      canvas: renderer (поле, блоки), effects (толчки, частицы), theme,
+               quality (разрешение по возможностям машины)
   input/       bindings (привязки клавиш), keyboard (автоповтор DAS/ARR)
   services/    settingsStore (localStorage)
   components/  MainMenu, CampaignScreen, CustomScreen, StatisticsScreen,
@@ -84,6 +85,25 @@ src/
   styles/      tokens.css, global.css
   tests/       model, engine, progression, campaign, input, effects, storage, theme
 ```
+
+## Скорость отрисовки
+
+Кадр рисуется целиком каждый раз, поэтому в нём нет ничего дорогого:
+
+- клетка — целое число пикселей экрана, центр креста стоит на границе
+  пикселя, так что блоки копируются на холст один в один, без пересчёта;
+- свечения (активный стакан, ореол фигуры, предупреждение) нарисованы один
+  раз в картинки: тени canvas (`shadowBlur`) во время игры не используются;
+- линии сетки — готовые `Path2D`, градиенты создаются один раз;
+- место приземления фигуры считается раз за шаг, а не несколько раз за кадр;
+- под паузой и на итоговом экране неизменившаяся картинка не перерисовывается;
+- фон — обычные градиенты без `filter: blur`;
+- если машина всё равно не успевает (в среднем меньше ~45 кадров в секунду),
+  поле рисуется в меньшем разрешении — см. `render/quality.ts`. Если это не
+  помогло (браузер сам ограничивает частоту), разрешение возвращается.
+
+В режиме разработки `window.__rotathree` — движок, `window.__rotathreeView` —
+отрисовщик и эффекты: ими удобно мерить стоимость кадра.
 
 ## Настройки
 

@@ -380,9 +380,22 @@ class Effects {
     kickX += _kickVx * seconds;
     kickY += _kickVy * seconds;
     _shake *= math.exp(-14 * seconds);
+    punch *= math.exp(-9 * seconds);
+    // Everything comes to a dead stop instead of creeping towards it for
+    // ever: a field at rest is drawn on whole pixels, and a field that is
+    // known to be at rest need not be drawn again.
+    if (_shake < 1e-4) _shake = 0;
+    if (punch < 1e-5) punch = 0;
+    if (kickX.abs() < 1e-4 && _kickVx.abs() < 1e-3) {
+      kickX = 0;
+      _kickVx = 0;
+    }
+    if (kickY.abs() < 1e-4 && _kickVy.abs() < 1e-3) {
+      kickY = 0;
+      _kickVy = 0;
+    }
     shakeX = (_random.nextDouble() * 2 - 1) * _shake;
     shakeY = (_random.nextDouble() * 2 - 1) * _shake;
-    punch *= math.exp(-9 * seconds);
 
     final drag = math.max(0.0, 1 - 3.4 * seconds);
     for (final particle in particles) {
@@ -417,9 +430,31 @@ class Effects {
     final rate = math.min(1.0, seconds * 18);
     for (final side in Side.values) {
       final target = side == engine.activeSide ? 1.0 : 0.0;
-      activeness[side.index] += (target - activeness[side.index]) * rate;
+      final next = activeness[side.index] + (target - activeness[side.index]) * rate;
+      activeness[side.index] = (target - next).abs() < 0.002 ? target : next;
     }
   }
+
+  /// True when nothing is animating: no turn, no shake, no particles. Two
+  /// frames drawn while this holds look the same unless the game moved.
+  bool get settled =>
+      particles.isEmpty &&
+      rings.isEmpty &&
+      beams.isEmpty &&
+      landings.isEmpty &&
+      flashes.isEmpty &&
+      veils.isEmpty &&
+      kickX == 0 &&
+      kickY == 0 &&
+      _shake == 0 &&
+      punch == 0 &&
+      _turnProgress >= 1 &&
+      activeness.every((lit) => lit == 0 || lit == 1);
+
+  /// What is left of the current turn, in radians: 0 once the cross has
+  /// arrived. Blocks are drawn upright at the end of the turn, so until then
+  /// each of them is turned by this much.
+  double get turnLeft => viewAngle - _toTurns * _quarter;
 
   void _kick(double x, double y) {
     if (!screenShake) return;

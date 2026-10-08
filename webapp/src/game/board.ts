@@ -10,6 +10,9 @@ export const EMPTY = -1;
 export class Board {
   /** Side of the enclosing grid. */
   readonly size: number;
+  /** Grows with every write, so that anything worked out from the board (a
+   * landing row, a drawn layer) can tell when it is out of date. */
+  version = 0;
   private readonly cells: Int8Array;
 
   constructor(
@@ -53,6 +56,7 @@ export class Board {
 
   set(row: number, col: number, color: number): void {
     this.cells[row * this.size + col] = color;
+    this.version++;
   }
 
   isFree(row: number, col: number): boolean {

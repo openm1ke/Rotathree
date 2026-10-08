@@ -51,6 +51,24 @@ class RotationTransform {
       };
 }
 
+/// Whether cell ([row], [lane]) of the glass of [side] exists and is empty. The
+/// same answer as [GlassView.isFree], without creating anything: this is asked
+/// thousands of times a second while pieces fall.
+bool glassIsFree(Board board, Side side, int row, int lane) {
+  if (lane < 0 || lane >= board.center || row < 0 || row >= board.arm + board.center) {
+    return false;
+  }
+  final col = board.arm + lane;
+  final last = board.size - 1;
+  return switch (side) {
+        Side.top => board.at(row, col),
+        Side.right => board.at(col, last - row),
+        Side.bottom => board.at(last - row, last - col),
+        Side.left => board.at(last - col, row),
+      } ==
+      null;
+}
+
 /// One glass: the arm of [side] plus the central square, seen with that side
 /// on top. Row 0 is the far end of the arm, the last row is the floor — the
 /// far wall of the central square. Lanes run across the glass, 0 on the left.

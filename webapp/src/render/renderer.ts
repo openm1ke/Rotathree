@@ -3,52 +3,144 @@ import { fallSeconds, gridSize, type GameConfig } from '../game/config';
 import type { GameEngine, GameState } from '../game/engine';
 import { worldToView } from '../game/glass';
 import type { IncomingPiece } from '../game/incoming';
-import { pieceDepth, pieceOffsets, pieceWidth, type BlockColor } from '../game/piece';
+import { isHorizontal, pieceDepth, pieceWidth, type BlockColor, type Piece } from '../game/piece';
 import { SIDES, type Side } from '../game/side';
 import type { Effects } from './effects';
 import { THEME, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
 
 const QUARTER = Math.PI / 2;
 
+/** Cosine and sine of 0, 1, 2 and 3 quarter turns, exactly. `Math.cos` of a
+ * quarter turn is 6e-17, not 0, and that is enough to push every block off
+ * the pixel grid. */
+const QUARTER_COS = [1, 0, -1, 0] as const;
+const QUARTER_SIN = [0, 1, 0, -1] as const;
+
 /** The cross is drawn a touch smaller than its canvas so that glows and the
  * recoil of a hard drop are not clipped at the edges. */
 const FIT = 0.965;
+
+/** Blur of the glow round the active glass and round a piece, in device
+ * pixels. Canvas shadows are slow, so each glow is drawn once into an image
+ * and that image is drawn every frame. */
+const WELL_BLUR = 18;
+const HALO_BLUR = 14;
+
+const ARM_FILL = 'rgba(255, 255, 255, 0.022)';
+const ARM_GRID = 'rgba(255, 255, 255, 0.045)';
+const CENTRE_FILL = 'rgba(255, 255, 255, 0.05)';
+const CENTRE_GRID = 'rgba(255, 255, 255, 0.07)';
+const OUTLINE = 'rgba(255, 255, 255, 0.16)';
+const CENTRE_OUTLINE = 'rgba(255, 255, 255, 0.22)';
+const ICE = '240, 250, 255';
 
 /** Where a click landed, in the turned view: a screen slot (0 = the active
  * arm on top, then clockwise), the centre, or nothing. */
 export type ClickZone = Side | 'center' | null;
 
+/** A glow drawn once and reused. */
+interface Glow {
+  image: HTMLCanvasElement;
+  /** Device pixels between the edge of the image and the origin of its shape. */
+  pad: number;
+}
+
+type Landing = Effects['landings'][number];
+
 /** Draws the whole playfield on a 2D canvas: four glasses sharing the
  * central square, their falling pieces, settled blocks and every effect.
  *
- * Everything is drawn in cell units, in the world frame of the cross, and
- * turned as a whole by the view angle. The game model itself never rotates. */
+ * Everything is laid out in cell units, in the world frame of the cross, and
+ * turned as a whole by the view angle. The game model itself never rotates.
+ *
+ * Two things keep a frame cheap. A cell is a whole number of device pixels and
+ * the centre of the cross sits on a pixel boundary, so a field at rest is
+ * copied block by block with no resampling. And nothing uses a canvas shadow
+ * while playing: the glows are images made once (see `Glow`). */
 export class GameRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private cssSize = 0;
-  private dpr = 1;
+  /** Side of the canvas in device pixels; always even. */
+  private pixels = 0;
+
   private sprites: HTMLCanvasElement[] = [];
   private spriteSize = 0;
   private spriteRevision = -1;
+
+  private glowKey = '';
+  private well: Glow | null = null;
+  private warning: Glow | null = null;
+  private readonly halos = new Map<string, Glow>();
+
+  private pathKey = '';
+  private armGrid!: Path2D;
+  private centreGrid!: Path2D;
+  private armOutline!: Path2D;
+  private wallOutline!: Path2D;
+  private beamFill: CanvasGradient | null = null;
+  private laneFill: CanvasGradient | null = null;
+
+  private fontSize = -1;
+  private fontCalm = '';
+  private fontUrgent = '';
+
+  // Reused by the pass that has to know which cells are in motion.
+  private readonly moving = new Set<number>();
+  private readonly landing = new Map<number, Landing>();
+
+  // ------------------------------------------------ the frame being drawn
+  private n = 0;
+  private arm = 0;
+  private half = 0;
+  private reach = 0;
+  private grid = 0;
+  /** Device pixels to a cell while the cross is at rest; a whole number. */
+  private unit = 1;
+  /** One CSS pixel, in cells. */
+  private px = 1;
+  /** Scale and origin of the cross on the canvas, in device pixels. */
+  private s = 1;
+  private tx = 0;
+  private ty = 0;
+  /** True once a turn is over: frames are then at whole quarter turns. */
+  private atRest = true;
+  /** The quarter turn the cross is settling on, 0..3. */
+  private turnsQ = 0;
+  /** Cosine and sine of each glass's frame on the screen. */
+  private readonly cos = [1, 0, -1, 0];
+  private readonly sin = [0, 1, 0, -1];
+  /** What is left of the turn: blocks stay upright at the end of it. */
+  private dcos = 1;
+  private dsin = 0;
+  /** Whether the canvas is in the transform of `base()` right now. */
+  private based = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
   }
 
-  /** Sets the square canvas to `cssSize` logical pixels. */
+  /** Sets the square canvas to `cssSize` logical pixels, drawn at `dpr`
+   * device pixels each. */
   resize(cssSize: number, dpr: number): void {
     this.cssSize = cssSize;
-    this.dpr = dpr;
-    const pixels = Math.max(1, Math.round(cssSize * dpr));
+    // An even number keeps the centre of the cross on a pixel boundary.
+    const pixels = Math.max(2, 2 * Math.round((cssSize * dpr) / 2));
     if (this.canvas.width !== pixels) this.canvas.width = pixels;
     if (this.canvas.height !== pixels) this.canvas.height = pixels;
+    this.pixels = pixels;
+  }
+
+  private unitFor(grid: number): number {
+    return Math.max(1, Math.floor((this.pixels * FIT) / grid));
   }
 
   /** Which part of the cross is under a point of the canvas (CSS pixels). */
   zoneAt(x: number, y: number, config: GameConfig): ClickZone {
-    const cell = (this.cssSize / gridSize(config)) * FIT;
-    const cx = (x - this.cssSize / 2) / cell;
-    const cy = (y - this.cssSize / 2) / cell;
+    if (this.cssSize <= 0) return null;
+    const unit = this.unitFor(gridSize(config));
+    const scale = this.pixels / this.cssSize;
+    const cx = (x * scale - this.pixels / 2) / unit;
+    const cy = (y * scale - this.pixels / 2) / unit;
     const half = config.boardSize / 2;
     const reach = half + config.armLength;
     if (Math.abs(cx) <= half && Math.abs(cy) <= half) return 'center';
@@ -58,54 +150,104 @@ export class GameRenderer {
   }
 
   draw(engine: GameEngine, fx: Effects): void {
-    const { ctx } = this;
+    const { ctx, pixels } = this;
+    if (pixels < 2 || this.cssSize <= 0) return;
     const config = engine.config;
     const state = engine.state;
-    const cell = this.cssSize / gridSize(config);
-    if (cell <= 0) return;
-    this.ensureSprites(Math.round(cell * this.dpr));
+    const grid = gridSize(config);
+    const unit = this.unitFor(grid);
+    const scale = pixels / this.cssSize;
 
-    const view: View = {
-      n: config.boardSize,
-      arm: config.armLength,
-      half: config.boardSize / 2,
-      reach: config.boardSize / 2 + config.armLength,
-      grid: gridSize(config),
-      px: 1 / (cell * FIT),
-      turns: fx.targetTurns,
-    };
+    this.n = config.boardSize;
+    this.arm = config.armLength;
+    this.half = this.n / 2;
+    this.reach = this.half + this.arm;
+    this.grid = grid;
+    this.unit = unit;
+    this.px = scale / unit;
+    this.ensureSprites(unit);
+    this.ensureGlows(scale);
+    this.ensurePaths();
 
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.cssSize, this.cssSize);
-    ctx.save();
-    ctx.translate(
-      this.cssSize / 2 + (fx.kickX + fx.shakeX) * cell,
-      this.cssSize / 2 + (fx.kickY + fx.shakeY) * cell,
-    );
-    const scale = cell * FIT * viewScale(view, fx);
-    ctx.scale(scale, scale);
-    ctx.rotate(fx.viewAngle);
+    // Where each glass's frame points on the screen. At rest that is a whole
+    // number of quarter turns, and it is written down exactly.
+    const delta = fx.viewAngle - fx.targetTurns * QUARTER;
+    const atRest = Math.abs(delta) < 1e-7;
+    this.atRest = atRest;
+    this.turnsQ = ((Math.round(fx.targetTurns) % 4) + 4) % 4;
+    for (let frame = 0; frame < 4; frame++) {
+      if (atRest) {
+        const q = (this.turnsQ + frame) & 3;
+        this.cos[frame] = QUARTER_COS[q];
+        this.sin[frame] = QUARTER_SIN[q];
+      } else {
+        const angle = fx.viewAngle + frame * QUARTER;
+        this.cos[frame] = Math.cos(angle);
+        this.sin[frame] = Math.sin(angle);
+      }
+    }
+    this.dcos = atRest ? 1 : Math.cos(delta);
+    this.dsin = atRest ? 0 : Math.sin(delta);
 
-    this.drawField(view, engine.sides, 1 - 0.7 * fx.turnMotion, state);
-    this.drawActiveGlass(view, fx);
-    for (const side of SIDES) this.drawCrowdedWarning(view, engine, fx, side);
-    for (const beam of fx.beams) this.drawBeam(view, beam);
-    for (const piece of state.incoming.values()) this.drawAim(view, engine, fx, piece);
-    this.drawSettled(view, engine, fx);
-    this.drawRings(view, fx);
-    this.drawFlashes(view, fx);
+    // Turned off its axes, the corners of the arms reach further out than
+    // the canvas is wide, so mid-turn the cross shrinks by exactly as much as
+    // it takes to keep them in — and not a bit more, because a field that
+    // pumps in and out is tiring to watch.
+    let zoom = 1;
+    if (!atRest) {
+      const cos = Math.abs(this.cos[0]);
+      const sin = Math.abs(this.sin[0]);
+      const extent = Math.max(this.reach * cos + this.half * sin, this.reach * sin + this.half * cos);
+      zoom = Math.min(1, (pixels / 2 / unit - 0.25) / extent);
+    }
+    this.s = unit * (zoom + fx.punch);
+    const nudge = pixels / grid;
+    this.tx = pixels / 2 + (fx.kickX + fx.shakeX) * nudge;
+    this.ty = pixels / 2 + (fx.kickY + fx.shakeY) * nudge;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.based = false;
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, pixels, pixels);
+
+    this.drawField(engine.sides, 1 - 0.7 * fx.turnMotion, state);
+    this.drawActiveGlass(fx);
+    for (const side of SIDES) this.drawCrowdedWarning(engine, fx, side);
+    for (const beam of fx.beams) this.drawBeam(beam);
+    for (const piece of state.incoming.values()) this.drawAim(engine, fx, piece);
+    this.drawSettled(engine, fx);
+    this.frame(0);
+    this.drawRings(fx);
+    this.drawFlashes(fx);
     this.drawParticles(fx);
-    for (const piece of state.incoming.values()) this.drawIncoming(view, engine, fx, piece);
-    this.drawDrop(view, state);
-    ctx.restore();
+    for (const piece of state.incoming.values()) this.drawIncoming(engine, fx, piece);
+    this.drawDrop(state);
 
-    for (const piece of state.incoming.values()) this.drawCountdown(view, engine, fx, piece, cell);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const piece of state.incoming.values()) this.drawCountdown(engine, fx, piece, scale);
+  }
+
+  // ----------------------------------------------------------- transforms
+
+  /** Draws in the frame of glass `frame`: its arm on top, cells as units. */
+  private frame(frame: number): void {
+    const { s } = this;
+    const c = this.cos[frame];
+    const n = this.sin[frame];
+    this.ctx.setTransform(s * c, s * n, -s * n, s * c, this.tx, this.ty);
+    this.based = false;
+  }
+
+  /** Draws in screen axes, cells as units: what plain blocks are copied in. */
+  private base(): void {
+    this.ctx.setTransform(this.s, 0, 0, this.s, this.tx, this.ty);
+    this.based = true;
   }
 
   // ------------------------------------------------------------- sprites
 
-  /** One pre-rendered block per colour: flat, with a lit top edge and a
-   * shaded bottom one. */
+  /** One pre-rendered block per colour, exactly a cell big: flat, with a lit
+   * top edge and a shaded bottom one. */
   private ensureSprites(size: number): void {
     if (size === this.spriteSize && this.spriteRevision === paletteRevision()) return;
     this.spriteSize = size;
@@ -144,292 +286,427 @@ export class GameRenderer {
     });
   }
 
-  /** Draws one block centred at (`x`, `y`). `quarter` is the extra turn of
-   * the canvas at this point, so the block's lit edge ends up facing the top
-   * of the screen however the cross is turned. */
+  /** Draws one block centred at (`x`, `y`) of the frame of glass `frame`
+   * (0 is the world frame). Its lit edge faces the top of the screen however
+   * the cross is turned, and `scaleX`/`scaleY` stretch it along that frame's
+   * axes. Sets the transform it needs. */
   private block(
-    view: View,
     color: BlockColor,
     x: number,
     y: number,
-    quarter: number,
-    options: { scaleX?: number; scaleY?: number; alpha?: number; flash?: number } = {},
+    frame: number,
+    scaleX = 1,
+    scaleY = 1,
+    flash = 0,
   ): void {
     const { ctx } = this;
-    const { scaleX = 1, scaleY = 1, alpha = 1, flash = 0 } = options;
-    ctx.save();
-    ctx.translate(x, y);
-    if (scaleX !== 1 || scaleY !== 1) ctx.scale(scaleX, scaleY);
-    ctx.rotate(-(view.turns + quarter) * QUARTER);
-    ctx.globalAlpha = alpha;
+    const c = this.cos[frame];
+    const n = this.sin[frame];
+    const px = c * x - n * y;
+    const py = n * x + c * y;
+    if (this.atRest && scaleX === 1 && scaleY === 1 && flash <= 0) {
+      // The common case: a plain copy, on whole pixels when nothing shakes.
+      if (!this.based) this.base();
+      ctx.drawImage(this.sprites[color], px - 0.5, py - 0.5, 1, 1);
+      return;
+    }
+    // Stretching happens along the frame's axes, which on the screen are
+    // swapped when the frame ends up a quarter turn from upright.
+    const swapped = ((this.turnsQ + frame) & 1) === 1;
+    const sx = this.s * (swapped ? scaleY : scaleX);
+    const sy = this.s * (swapped ? scaleX : scaleY);
+    ctx.setTransform(
+      this.dcos * sx,
+      this.dsin * sx,
+      -this.dsin * sy,
+      this.dcos * sy,
+      this.tx + this.s * px,
+      this.ty + this.s * py,
+    );
     ctx.drawImage(this.sprites[color], -0.5, -0.5, 1, 1);
     if (flash > 0) {
-      ctx.globalAlpha = Math.min(1, flash) * alpha;
+      ctx.globalAlpha = Math.min(1, flash);
       ctx.fillStyle = '#ffffff';
       roundedRect(ctx, -0.455, -0.455, 0.91, 0.91, 0.15);
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
-    ctx.restore();
+    this.based = false;
+  }
+
+  // --------------------------------------------------------------- glows
+
+  private ensureGlows(scale: number): void {
+    const key = `${this.unit}:${scale}:${this.n}:${this.arm}`;
+    if (key === this.glowKey) return;
+    this.glowKey = key;
+    this.halos.clear();
+    const { unit, px, n } = this;
+    const depth = this.arm + n;
+
+    // The active glass: one tall well — its arm and the central square —
+    // open at the top, with bright walls and a heavy floor.
+    this.well = makeGlow(n, depth, unit, WELL_BLUR, (g) => {
+      const fill = g.createLinearGradient(0, 0, 0, depth);
+      fill.addColorStop(0, rgba(THEME.accent, 0.13));
+      fill.addColorStop(1, rgba(THEME.accent, 0.035));
+      g.fillStyle = fill;
+      g.fillRect(0, 0, n, depth);
+
+      g.shadowColor = rgba(THEME.accent, 0.9);
+      g.shadowBlur = WELL_BLUR;
+      g.strokeStyle = rgba(ICE, 0.95);
+      g.lineJoin = 'round';
+      g.lineWidth = 2.2 * px;
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.lineTo(0, depth);
+      g.lineTo(n, depth);
+      g.lineTo(n, 0);
+      g.stroke();
+      g.lineWidth = 4.5 * px;
+      g.beginPath();
+      g.moveTo(0, depth);
+      g.lineTo(n, depth);
+      g.stroke();
+    });
+
+    // The far end of a glass that is nearly full.
+    this.warning = makeGlow(n, 0, unit, HALO_BLUR, (g) => {
+      g.shadowColor = rgba(THEME.danger, 1);
+      g.shadowBlur = HALO_BLUR;
+      g.strokeStyle = rgba(THEME.danger, 1);
+      g.lineWidth = 3 * px;
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.lineTo(n, 0);
+      g.stroke();
+    });
+  }
+
+  /** The halo round a piece `width` by `depth` cells, in colour `rgb`. */
+  private halo(width: number, depth: number, rgb: string): Glow {
+    const key = `${width}x${depth}:${rgb}`;
+    let halo = this.halos.get(key);
+    if (halo === undefined) {
+      const { px } = this;
+      halo = makeGlow(width, depth, this.unit, HALO_BLUR, (g) => {
+        g.shadowColor = rgba(rgb, 0.9);
+        g.shadowBlur = HALO_BLUR;
+        g.strokeStyle = rgba(rgb, 0.95);
+        g.lineWidth = 1.8 * px;
+        roundedRect(g, -0.03, -0.03, width + 0.06, depth + 0.06, 0.2);
+        g.stroke();
+      });
+      this.halos.set(key, halo);
+    }
+    return halo;
+  }
+
+  /** Draws a glow with its shape's origin at (`x`, `y`) of the current frame. */
+  private glow(glow: Glow, x: number, y: number, alpha: number): void {
+    const { ctx, unit } = this;
+    const { image, pad } = glow;
+    ctx.globalAlpha = Math.min(1, alpha);
+    ctx.drawImage(image, x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
+    ctx.globalAlpha = 1;
   }
 
   // ------------------------------------------------------------- playfield
 
+  /** The lines of the field never change while the board keeps its shape. */
+  private ensurePaths(): void {
+    const key = `${this.n}:${this.arm}`;
+    if (key === this.pathKey) return;
+    this.pathKey = key;
+    const { n, arm, half, reach } = this;
+
+    this.armGrid = new Path2D();
+    for (let i = 1; i < n; i++) {
+      this.armGrid.moveTo(-half + i, -reach);
+      this.armGrid.lineTo(-half + i, -half);
+    }
+    for (let j = 1; j < arm; j++) {
+      this.armGrid.moveTo(-half, -reach + j);
+      this.armGrid.lineTo(half, -reach + j);
+    }
+
+    this.centreGrid = new Path2D();
+    for (let i = 1; i < n; i++) {
+      this.centreGrid.moveTo(-half + i, -half);
+      this.centreGrid.lineTo(-half + i, half);
+      this.centreGrid.moveTo(-half, -half + i);
+      this.centreGrid.lineTo(half, -half + i);
+    }
+
+    this.armOutline = new Path2D();
+    this.armOutline.moveTo(-half, -half);
+    this.armOutline.lineTo(-half, -reach);
+    this.armOutline.lineTo(half, -reach);
+    this.armOutline.lineTo(half, -half);
+
+    this.wallOutline = new Path2D();
+    this.wallOutline.moveTo(-half, -half);
+    this.wallOutline.lineTo(half, -half);
+  }
+
   /** The cross: the central square and the arm of every glass in play. A
    * glass being built grows out of the centre. `lines` fades the grid while
    * the cross is turning. */
-  private drawField(view: View, sides: readonly Side[], lines: number, state: GameState): void {
-    const { ctx } = this;
-    const { n, arm, half, reach, px } = view;
+  private drawField(sides: readonly Side[], lines: number, state: GameState): void {
+    const { ctx, n, arm, half, reach, px } = this;
     const building = state.phase === 'building' ? state.buildingSide : null;
-    const grow = building === null ? 1 : easeOut(state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1);
-    const reachOf = (side: Side) => half + arm * (side === building ? grow : 1);
+    const grow =
+      building === null ? 1 : easeOut(state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1);
+    const far = half + arm * grow;
 
-    for (const side of sides) {
-      const far = reachOf(side);
-      ctx.save();
-      ctx.rotate(side * QUARTER);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.022)';
-      ctx.fillRect(-half, -far, n, far - half);
-      ctx.beginPath();
-      for (let i = 1; i < n; i++) {
-        ctx.moveTo(-half + i, -far);
-        ctx.lineTo(-half + i, -half);
-      }
-      for (let j = 1; j < arm; j++) {
-        const y = -reach + j;
-        if (y < -far) continue;
-        ctx.moveTo(-half, y);
-        ctx.lineTo(half, y);
-      }
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.045 * lines})`;
-      ctx.lineWidth = px;
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.fillRect(-half, -half, n, n);
-    ctx.beginPath();
-    for (let i = 1; i < n; i++) {
-      ctx.moveTo(-half + i, -half);
-      ctx.lineTo(-half + i, half);
-      ctx.moveTo(-half, -half + i);
-      ctx.lineTo(half, -half + i);
-    }
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.07 * lines})`;
     ctx.lineWidth = px;
-    ctx.stroke();
+    for (const side of sides) {
+      this.frame(side);
+      ctx.fillStyle = ARM_FILL;
+      ctx.strokeStyle = ARM_GRID;
+      if (side !== building) {
+        ctx.fillRect(-half, -reach, n, arm);
+        ctx.globalAlpha = lines;
+        ctx.stroke(this.armGrid);
+      } else {
+        ctx.fillRect(-half, -far, n, far - half);
+        ctx.globalAlpha = lines;
+        ctx.beginPath();
+        for (let i = 1; i < n; i++) {
+          ctx.moveTo(-half + i, -far);
+          ctx.lineTo(-half + i, -half);
+        }
+        for (let j = 1; j < arm; j++) {
+          const y = -reach + j;
+          if (y < -far) continue;
+          ctx.moveTo(-half, y);
+          ctx.lineTo(half, y);
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    this.frame(0);
+    ctx.fillStyle = CENTRE_FILL;
+    ctx.fillRect(-half, -half, n, n);
+    ctx.globalAlpha = lines;
+    ctx.strokeStyle = CENTRE_GRID;
+    ctx.stroke(this.centreGrid);
+    ctx.globalAlpha = 1;
 
     // Outline of the whole cross — an arm where a glass is in play, the wall
     // of the centre where there is none — and of the centre, brighter.
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.strokeStyle = OUTLINE;
     ctx.lineWidth = 1.5 * px;
     ctx.lineJoin = 'round';
     for (const side of SIDES) {
-      ctx.save();
-      ctx.rotate(side * QUARTER);
-      ctx.beginPath();
-      if (sides.includes(side)) {
-        const far = reachOf(side);
+      this.frame(side);
+      if (!sides.includes(side)) {
+        ctx.stroke(this.wallOutline);
+      } else if (side !== building) {
+        ctx.stroke(this.armOutline);
+      } else {
+        ctx.beginPath();
         ctx.moveTo(-half, -half);
         ctx.lineTo(-half, -far);
         ctx.lineTo(half, -far);
         ctx.lineTo(half, -half);
-      } else {
-        ctx.moveTo(-half, -half);
-        ctx.lineTo(half, -half);
+        ctx.stroke();
       }
-      ctx.stroke();
-      ctx.restore();
     }
     if (building !== null) {
       // The leading edge of the glass that is growing.
-      ctx.save();
-      ctx.rotate(building * QUARTER);
-      ctx.strokeStyle = `rgba(120, 205, 255, ${0.9 * (1 - grow)})`;
+      this.frame(building);
+      ctx.strokeStyle = rgba(THEME.accent, 0.9 * (1 - grow));
       ctx.lineWidth = 3 * px;
       ctx.beginPath();
-      ctx.moveTo(-half, -reachOf(building));
-      ctx.lineTo(half, -reachOf(building));
+      ctx.moveTo(-half, -far);
+      ctx.lineTo(half, -far);
       ctx.stroke();
-      ctx.restore();
+      ctx.lineWidth = 1.5 * px;
     }
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    this.frame(0);
+    ctx.strokeStyle = CENTRE_OUTLINE;
     ctx.strokeRect(-half, -half, n, n);
   }
 
   /** Bars of light over the popped lines, and the wash of a triple clear. */
-  private drawFlashes(view: View, fx: Effects): void {
-    const { ctx } = this;
+  private drawFlashes(fx: Effects): void {
+    const { ctx, grid } = this;
     for (const flash of fx.flashes) {
-      const alpha = 0.85 * (1 - flash.age / flash.life);
-      ctx.fillStyle = rgba(flash.rgb, alpha);
+      ctx.globalAlpha = 0.85 * (1 - flash.age / flash.life);
+      ctx.fillStyle = flash.color;
       ctx.fillRect(flash.x0, flash.y0, flash.x1 - flash.x0, flash.y1 - flash.y0);
     }
+    ctx.fillStyle = '#ffffff';
     for (const veil of fx.veils) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.22 * (1 - veil.age / veil.life)})`;
-      ctx.fillRect(-view.grid, -view.grid, view.grid * 2, view.grid * 2);
+      ctx.globalAlpha = 0.22 * (1 - veil.age / veil.life);
+      ctx.fillRect(-grid, -grid, grid * 2, grid * 2);
     }
+    ctx.globalAlpha = 1;
   }
 
-  /** The active glass is one tall well — its arm and the central square —
-   * open at the top, with bright walls and a heavy floor. */
-  private drawActiveGlass(view: View, fx: Effects): void {
-    const { ctx } = this;
-    const { n, arm, half, reach, px } = view;
+  /** The glass being steered glows; the glow moves over as the cross turns. */
+  private drawActiveGlass(fx: Effects): void {
+    const well = this.well;
+    if (well === null) return;
     for (const side of SIDES) {
       const lit = fx.activeness[side];
       if (lit < 0.01) continue;
-      ctx.save();
-      ctx.rotate(side * QUARTER);
-
-      const fill = ctx.createLinearGradient(0, -reach, 0, half);
-      fill.addColorStop(0, rgba(THEME.accent, 0.13 * lit));
-      fill.addColorStop(1, rgba(THEME.accent, 0.035 * lit));
-      ctx.fillStyle = fill;
-      ctx.fillRect(-half, -reach, n, arm + n);
-
-      ctx.shadowColor = rgba(THEME.accent, 0.9 * lit);
-      ctx.shadowBlur = 18;
-      ctx.strokeStyle = `rgba(240, 250, 255, ${0.95 * lit})`;
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = 2.2 * px;
-      ctx.beginPath();
-      ctx.moveTo(-half, -reach);
-      ctx.lineTo(-half, half);
-      ctx.lineTo(half, half);
-      ctx.lineTo(half, -reach);
-      ctx.stroke();
-      ctx.lineWidth = 4.5 * px;
-      ctx.beginPath();
-      ctx.moveTo(-half, half);
-      ctx.lineTo(half, half);
-      ctx.stroke();
-      ctx.restore();
+      this.frame(side);
+      this.glow(well, -this.half, -this.reach, lit);
     }
   }
 
   /** A glass that is nearly full up to its far end pulses red there. */
-  private drawCrowdedWarning(view: View, engine: GameEngine, fx: Effects, side: Side): void {
+  private drawCrowdedWarning(engine: GameEngine, fx: Effects, side: Side): void {
     if (engine.isGameOver ? engine.state.gameOverSide !== side : !engine.isCrowded(side)) return;
-    const { ctx } = this;
-    const { n, arm, half, reach, px } = view;
+    const { ctx, n, arm, half, reach } = this;
     const pulse = engine.isGameOver ? 1 : 0.5 + 0.5 * Math.sin(fx.clock * 9);
-    ctx.save();
-    ctx.rotate(side * QUARTER);
+    this.frame(side);
     const wash = ctx.createLinearGradient(0, -reach, 0, -half);
     wash.addColorStop(0, rgba(THEME.danger, 0.1 + 0.2 * pulse));
     wash.addColorStop(1, rgba(THEME.danger, 0.02));
     ctx.fillStyle = wash;
     ctx.fillRect(-half, -reach, n, arm);
-    ctx.shadowColor = rgba(THEME.danger, 1);
-    ctx.shadowBlur = 14;
-    ctx.strokeStyle = rgba(THEME.danger, 0.5 + 0.5 * pulse);
-    ctx.lineWidth = 3 * px;
-    ctx.beginPath();
-    ctx.moveTo(-half, -reach);
-    ctx.lineTo(half, -reach);
-    ctx.stroke();
-    ctx.restore();
+    if (this.warning !== null) this.glow(this.warning, -half, -reach, 0.5 + 0.5 * pulse);
   }
 
   /** The streak a hard drop leaves down its lane. */
-  private drawBeam(view: View, beam: Effects['beams'][number]): void {
-    const { ctx } = this;
-    const { half, reach } = view;
+  private drawBeam(beam: Effects['beams'][number]): void {
+    const { ctx, half, reach } = this;
     const t = beam.age / beam.life;
     const fade = (1 - t) * (1 - t);
     const left = -half + beam.column;
     const top = -reach + beam.fromRow;
     const bottom = -reach + beam.toRow;
     if (bottom <= top) return;
-    ctx.save();
-    ctx.rotate(beam.side * QUARTER);
-    const streak = ctx.createLinearGradient(0, top, 0, bottom);
-    streak.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    streak.addColorStop(1, `rgba(255, 255, 255, ${0.34 * fade})`);
-    ctx.fillStyle = streak;
-    ctx.fillRect(left, top, beam.width, bottom - top);
-    ctx.restore();
+    this.beamFill ??= unitGradient(ctx, 0, 0.34);
+    this.fillStretched(this.beamFill, beam.side, left, top, beam.width, bottom - top, fade);
+  }
+
+  /** Fills a rectangle of glass `frame` with a gradient made for a unit
+   * square, so that one gradient serves every size and never has to be made
+   * again. */
+  private fillStretched(
+    fill: CanvasGradient,
+    frame: number,
+    left: number,
+    top: number,
+    width: number,
+    height: number,
+    alpha: number,
+  ): void {
+    const { ctx } = this;
+    this.frame(frame);
+    ctx.transform(width, 0, 0, height, left, top);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = fill;
+    ctx.fillRect(0, 0, 1, 1);
+    ctx.globalAlpha = 1;
   }
 
   /** Where a piece will land: the lane of the active one, and an outline of
    * its resting place. Pieces nobody is steering only show theirs when they
    * are about to lock. */
-  private drawAim(view: View, engine: GameEngine, fx: Effects, piece: IncomingPiece): void {
-    const placement = engine.previewDrop(piece.side);
-    if (!placement || placement.row === piece.row || engine.isGameOver) return;
+  private drawAim(engine: GameEngine, fx: Effects, piece: IncomingPiece): void {
+    const rest = engine.restRow(piece.side);
+    if (rest === null || rest === piece.row || engine.isGameOver) return;
     const lit = fx.activeness[piece.side];
     const urgent = (engine.secondsToLock(piece.side) ?? 99) < 6;
     const strength = Math.max(lit, urgent ? 0.4 : 0.16);
 
-    const { ctx } = this;
-    const { half, reach, px } = view;
+    const { ctx, half, reach, px } = this;
+    const stick = piece.piece;
     const left = -half + piece.column;
-    const width = pieceWidth(piece.piece);
-    const top = -reach + piece.row - fx.slideLeft(piece) + pieceDepth(piece.piece);
-    const bottom = -reach + placement.row;
+    const width = pieceWidth(stick);
+    const top = -reach + piece.row - fx.slideLeft(piece) + pieceDepth(stick);
+    const bottom = -reach + rest;
 
-    ctx.save();
-    ctx.rotate(piece.side * QUARTER);
     if (lit > 0.05 && bottom > top) {
-      const lane = ctx.createLinearGradient(0, top, 0, bottom);
-      lane.addColorStop(0, `rgba(255, 255, 255, ${0.02 * lit})`);
-      lane.addColorStop(1, `rgba(255, 255, 255, ${0.085 * lit})`);
-      ctx.fillStyle = lane;
-      ctx.fillRect(left, top, width, bottom - top);
+      this.laneFill ??= unitGradient(ctx, 0.02, 0.085);
+      this.fillStretched(this.laneFill, piece.side, left, top, width, bottom - top, lit);
     }
-    const offsets = pieceOffsets(piece.piece);
-    offsets.forEach((offset, i) => {
-      const tones = tonesOf(piece.piece.colors[i]);
-      const x = left + offset.col + 0.07;
-      const y = -reach + placement.row + offset.row + 0.07;
-      roundedRect(ctx, x, y, 0.86, 0.86, 0.14);
-      ctx.fillStyle = rgba(tones.rgb, 0.14 * strength);
+    this.frame(piece.side);
+    const count = stick.colors.length;
+    const lying = isHorizontal(stick);
+    ctx.lineWidth = 1.6 * px;
+    for (let i = 0; i < count; i++) {
+      // The outline is the same whichever end the first colour is at, but
+      // each square keeps its own colour.
+      const along = stick.orientation >= 2 ? count - 1 - i : i;
+      const tone = tonesOf(stick.colors[i]).base;
+      roundedRect(
+        ctx,
+        left + (lying ? along : 0) + 0.07,
+        -reach + rest + (lying ? 0 : along) + 0.07,
+        0.86,
+        0.86,
+        0.14,
+      );
+      ctx.globalAlpha = 0.14 * strength;
+      ctx.fillStyle = tone;
       ctx.fill();
-      ctx.strokeStyle = rgba(tones.rgb, 0.9 * strength);
-      ctx.lineWidth = 1.6 * px;
+      ctx.globalAlpha = 0.9 * strength;
+      ctx.strokeStyle = tone;
       ctx.stroke();
-    });
-    ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ----------------------------------------------------------------- blocks
 
-  private drawSettled(view: View, engine: GameEngine, fx: Effects): void {
-    const { ctx } = this;
+  private drawSettled(engine: GameEngine, fx: Effects): void {
     const state = engine.state;
     const board = state.board;
-    const origin = -view.grid / 2;
+    const size = board.size;
+    // Centre of the cell in the top left corner of the grid.
+    const origin = -this.grid / 2 + 0.5;
     const matched = state.activeMatch?.cells;
-    const moving = new Set(state.moves.map((move) => board.index(move.to.row, move.to.col)));
 
-    // Cells still reacting to a landing are drawn in their own pass.
-    const landing = new Map<number, Effects['landings'][number]>();
-    for (const effect of fx.landings) {
-      for (const cell of effect.placement.cells) {
-        const index = board.index(cell.row, cell.col);
-        if (board.atIndex(index) === cell.color && !matched?.has(index) && !moving.has(index)) {
-          landing.set(index, effect);
+    if (state.moves.length === 0 && fx.landings.length === 0) {
+      // Nothing is falling or landing: every block is where the board says.
+      for (let row = 0, index = 0; row < size; row++) {
+        for (let col = 0; col < size; col++, index++) {
+          const color = board.atIndex(index);
+          if (color === EMPTY || (matched !== undefined && matched.has(index))) continue;
+          this.block(color as BlockColor, origin + col, origin + row, 0);
         }
       }
-    }
+    } else {
+      const moving = this.moving;
+      moving.clear();
+      for (const move of state.moves) moving.add(board.index(move.to.row, move.to.col));
 
-    board.forEachBlock((row, col, color) => {
-      const index = board.index(row, col);
-      if (matched?.has(index) || moving.has(index) || landing.has(index)) return;
-      this.block(view, color, origin + col + 0.5, origin + row + 0.5, 0);
-    });
+      // Cells still reacting to a landing are drawn in their own pass.
+      const landing = this.landing;
+      landing.clear();
+      for (const effect of fx.landings) {
+        for (const cell of effect.placement.cells) {
+          const index = board.index(cell.row, cell.col);
+          if (board.atIndex(index) === cell.color && !matched?.has(index) && !moving.has(index)) {
+            landing.set(index, effect);
+          }
+        }
+      }
 
-    // Falling: each block accelerates over its own distance, so short falls
-    // land first, and wobbles once when it arrives.
-    if (state.moves.length > 0) {
+      for (let row = 0, index = 0; row < size; row++) {
+        for (let col = 0; col < size; col++, index++) {
+          const color = board.atIndex(index);
+          if (color === EMPTY) continue;
+          if (matched?.has(index) || moving.has(index) || landing.has(index)) continue;
+          this.block(color as BlockColor, origin + col, origin + row, 0);
+        }
+      }
+
+      // Falling: each block accelerates over its own distance, so short
+      // falls land first, and wobbles once when it arrives.
       const side = state.activeSide;
-      ctx.save();
-      ctx.rotate(side * QUARTER);
       for (const move of state.moves) {
-        const from = worldToView(move.from.row, move.from.col, side, board.size);
-        const to = worldToView(move.to.row, move.to.col, side, board.size);
+        const from = worldToView(move.from.row, move.from.col, side, size);
+        const to = worldToView(move.to.row, move.to.col, side, size);
         const flight = fallSeconds(engine.config, move.distance);
         const t = Math.min(1, state.phaseElapsed / flight);
         const row = from.row + (to.row - from.row) * t * t;
@@ -442,19 +719,40 @@ export class GameRenderer {
           scaleX = 1 + 0.16 * wave;
         }
         this.block(
-          view,
           move.color,
-          origin + to.col + 0.5,
-          origin + row + 0.5 + 0.44 * (1 - Math.min(scaleY, 1)),
+          origin + to.col,
+          origin + row + 0.44 * (1 - Math.min(scaleY, 1)),
           side,
-          { scaleX, scaleY },
+          scaleX,
+          scaleY,
         );
       }
-      ctx.restore();
+
+      // Landing: a white flash, and after a hard drop a squash along the fall.
+      for (const effect of fx.landings) {
+        const u = effect.age / effect.life;
+        const wave = effect.dropped ? Math.sin(u * Math.PI * 2) * (1 - u) : 0;
+        const scaleY = 1 - 0.26 * wave;
+        const scaleX = 1 + 0.15 * wave;
+        const frame = effect.placement.side;
+        for (const cell of effect.placement.cells) {
+          if (landing.get(board.index(cell.row, cell.col)) !== effect) continue;
+          const local = worldToView(cell.row, cell.col, frame, size);
+          this.block(
+            cell.color,
+            origin + local.col,
+            origin + local.row + 0.44 * (1 - Math.min(scaleY, 1)),
+            frame,
+            scaleX,
+            scaleY,
+            0.85 * (1 - u) * (1 - u),
+          );
+        }
+      }
     }
 
     // Match: flash to white and swell, then collapse while shards fly off.
-    if (matched && matched.size > 0) {
+    if (matched !== undefined && matched.size > 0) {
       const t = state.phaseDuration > 0 ? Math.min(1, state.phaseElapsed / state.phaseDuration) : 1;
       const popping = state.phase === 'clearing';
       const scale = popping ? 1.22 * Math.max(0, 1 - t * 1.7) : 1 + 0.22 * (1 - (1 - t) * (1 - t));
@@ -463,192 +761,176 @@ export class GameRenderer {
         for (const index of matched) {
           const color = board.atIndex(index);
           if (color === EMPTY) continue;
-          const row = Math.floor(index / board.size);
-          const col = index % board.size;
-          this.block(view, color as BlockColor, origin + col + 0.5, origin + row + 0.5, 0, {
-            scaleX: scale,
-            scaleY: scale,
-            flash,
-          });
+          const row = Math.floor(index / size);
+          this.block(color as BlockColor, origin + (index - row * size), origin + row, 0, scale, scale, flash);
         }
       }
     }
-
-    // Landing: a white flash, and after a hard drop a squash along the fall.
-    for (const effect of fx.landings) {
-      const u = effect.age / effect.life;
-      const wave = effect.dropped ? Math.sin(u * Math.PI * 2) * (1 - u) : 0;
-      const scaleY = 1 - 0.26 * wave;
-      const scaleX = 1 + 0.15 * wave;
-      const side = effect.placement.side;
-      ctx.save();
-      ctx.rotate(side * QUARTER);
-      for (const cell of effect.placement.cells) {
-        if (landing.get(board.index(cell.row, cell.col)) !== effect) continue;
-        const local = worldToView(cell.row, cell.col, side, board.size);
-        this.block(
-          view,
-          cell.color,
-          origin + local.col + 0.5,
-          origin + local.row + 0.5 + 0.44 * (1 - Math.min(scaleY, 1)),
-          side,
-          { scaleX, scaleY, flash: 0.85 * (1 - u) * (1 - u) },
-        );
-      }
-      ctx.restore();
-    }
   }
 
-  private drawRings(view: View, fx: Effects): void {
-    const { ctx } = this;
+  private drawRings(fx: Effects): void {
+    const { ctx, px } = this;
     for (const ring of fx.rings) {
       if (ring.age < 0) continue;
       const t = ring.age / ring.life;
       const eased = 1 - (1 - t) * (1 - t);
       ctx.beginPath();
       ctx.arc(ring.x, ring.y, 0.3 + ring.reach * eased, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba(ring.color, 0.75 * (1 - t));
-      ctx.lineWidth = Math.max(view.px, 0.16 * (1 - t));
+      ctx.globalAlpha = 0.75 * (1 - t);
+      ctx.strokeStyle = ring.color;
+      ctx.lineWidth = Math.max(px, 0.16 * (1 - t));
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
   }
 
   private drawParticles(fx: Effects): void {
     const { ctx } = this;
+    let color = '';
     for (const particle of fx.particles) {
       const strength = 1 - particle.age / particle.life;
       const size = particle.size * (0.4 + 0.6 * strength);
       ctx.globalAlpha = strength;
-      ctx.fillStyle = particle.color;
+      if (particle.color !== color) {
+        color = particle.color;
+        ctx.fillStyle = color;
+      }
       ctx.fillRect(particle.x - size / 2, particle.y - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
 
-  private drawIncoming(view: View, engine: GameEngine, fx: Effects, piece: IncomingPiece): void {
-    const { ctx } = this;
-    const { half, reach, px } = view;
+  private drawIncoming(engine: GameEngine, fx: Effects, piece: IncomingPiece): void {
+    const { half, reach } = this;
     const side = piece.side;
+    const stick = piece.piece;
     const lit = fx.activeness[side];
     const secondsLeft = engine.secondsToLock(side) ?? 0;
     const urgent = secondsLeft < 3;
 
     const top = -reach + piece.row - fx.slideLeft(piece);
     const left = -half + piece.column;
-    const width = pieceWidth(piece.piece);
-    const depth = pieceDepth(piece.piece);
-
-    ctx.save();
-    ctx.rotate(side * QUARTER);
 
     // Halo: white for the piece being steered, coloured when time runs out.
     const strength = Math.max(lit, urgent ? 0.85 : 0);
     if (strength > 0.02) {
-      const color = urgent && lit < 0.5 ? urgencyColor(secondsLeft) : '240, 250, 255';
-      const pulse = urgent && lit < 0.5 ? 0.6 + 0.4 * Math.sin(fx.clock * 10) : 1;
-      ctx.shadowColor = rgba(color, 0.9 * strength);
-      ctx.shadowBlur = 14;
-      ctx.strokeStyle = rgba(color, 0.95 * strength * pulse);
-      ctx.lineWidth = 1.8 * px;
-      roundedRect(ctx, left - 0.03, top - 0.03, width + 0.06, depth + 0.06, 0.2);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      const warn = urgent && lit < 0.5;
+      const pulse = warn ? 0.6 + 0.4 * Math.sin(fx.clock * 10) : 1;
+      const halo = this.halo(pieceWidth(stick), pieceDepth(stick), warn ? urgencyColor(secondsLeft) : ICE);
+      this.frame(side);
+      this.glow(halo, left, top, strength * pulse);
     }
 
-    pieceOffsets(piece.piece).forEach((offset, i) => {
-      this.block(view, piece.piece.colors[i], left + offset.col + 0.5, top + offset.row + 0.5, side);
-    });
-    ctx.restore();
+    this.stick(stick, left, top, side);
+  }
+
+  /** The squares of a stick whose top left cell is at (`left`, `top`) of the
+   * frame of glass `frame`. */
+  private stick(piece: Piece, left: number, top: number, frame: number, scaleY = 1, flash = 0): void {
+    const count = piece.colors.length;
+    const lying = isHorizontal(piece);
+    const flipped = piece.orientation >= 2;
+    for (let i = 0; i < count; i++) {
+      const along = flipped ? count - 1 - i : i;
+      this.block(
+        piece.colors[i],
+        left + (lying ? along : 0) + 0.5,
+        top + (lying ? 0 : along) + 0.5,
+        frame,
+        1,
+        scaleY,
+        flash,
+      );
+    }
   }
 
   /** A hard-dropped piece streaking down to where it lands. */
-  private drawDrop(view: View, state: GameState): void {
+  private drawDrop(state: GameState): void {
     const drop = state.drop;
     if (!drop) return;
-    const { ctx } = this;
-    const { half, reach } = view;
     const t = state.phaseDuration > 0 ? Math.min(1, state.phaseElapsed / state.phaseDuration) : 1;
     const row = drop.startRow + (drop.placement.row - drop.startRow) * t * t;
-    const piece = drop.placement.piece;
-    const side = drop.placement.side;
-    const left = -half + drop.placement.column;
-    const top = -reach + row;
-
-    ctx.save();
-    ctx.rotate(side * QUARTER);
-    pieceOffsets(piece).forEach((offset, i) => {
-      this.block(view, piece.colors[i], left + offset.col + 0.5, top + offset.row + 0.5, side, {
-        scaleY: 1 + 0.18 * t,
-        flash: 0.25 * t,
-      });
-    });
-    ctx.restore();
+    this.stick(
+      drop.placement.piece,
+      -this.half + drop.placement.column,
+      -this.reach + row,
+      drop.placement.side,
+      1 + 0.18 * t,
+      0.25 * t,
+    );
   }
 
-  /** Seconds until a piece locks by itself, written upright beside it. */
-  private drawCountdown(
-    view: View,
-    engine: GameEngine,
-    fx: Effects,
-    piece: IncomingPiece,
-    cell: number,
-  ): void {
+  /** Seconds until a piece locks by itself, written upright beside it. Drawn
+   * straight in device pixels, after everything else. */
+  private drawCountdown(engine: GameEngine, fx: Effects, piece: IncomingPiece, scale: number): void {
     if (engine.isGameOver) return;
     const secondsLeft = engine.secondsToLock(piece.side) ?? 0;
     const lit = fx.activeness[piece.side];
     // The piece being steered only needs its timer when it is about to lock.
     if (lit > 0.5 && secondsLeft >= 3) return;
 
-    // A point just beyond the left end of the piece, in its glass's frame…
-    const localX = -view.half + piece.column - 0.75;
-    const localY = -view.reach + piece.row - fx.slideLeft(piece) + pieceDepth(piece.piece) / 2;
-    // …turned with its glass and with the cross into screen pixels.
-    const angle = fx.viewAngle + piece.side * QUARTER;
-    const scale = cell * FIT * viewScale(view, fx);
-    const x = this.cssSize / 2 + (fx.kickX + fx.shakeX) * cell +
-      (localX * Math.cos(angle) - localY * Math.sin(angle)) * scale;
-    const y = this.cssSize / 2 + (fx.kickY + fx.shakeY) * cell +
-      (localX * Math.sin(angle) + localY * Math.cos(angle)) * scale;
+    // A point just beyond the left end of the piece, in its glass's frame,
+    // turned with its glass and with the cross.
+    const localX = -this.half + piece.column - 0.75;
+    const localY = -this.reach + piece.row - fx.slideLeft(piece) + pieceDepth(piece.piece) / 2;
+    const c = this.cos[piece.side];
+    const n = this.sin[piece.side];
+    const x = this.tx + (localX * c - localY * n) * this.s;
+    const y = this.ty + (localX * n + localY * c) * this.s;
 
+    const size = Math.max(10, (this.cssSize / this.grid) * 0.72) * scale;
+    if (size !== this.fontSize) {
+      this.fontSize = size;
+      this.fontCalm = `600 ${size}px "Exo 2", system-ui, sans-serif`;
+      this.fontUrgent = `800 ${size}px "Exo 2", system-ui, sans-serif`;
+    }
     const { ctx } = this;
     const urgent = secondsLeft < 3;
-    ctx.font = `${urgent ? 800 : 600} ${Math.max(10, cell * 0.72)}px "Exo 2", system-ui, sans-serif`;
+    ctx.font = urgent ? this.fontUrgent : this.fontCalm;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = urgent ? rgba(urgencyColor(secondsLeft), 1) : rgba(THEME.text, 0.42);
+    ctx.fillStyle = !urgent ? CALM_TEXT : secondsLeft < 1.5 ? DANGER_TEXT : WARNING_TEXT;
     ctx.fillText(secondsLeft < 10 ? secondsLeft.toFixed(1) : String(Math.round(secondsLeft)), x, y);
   }
 }
 
-/** Measurements shared by the drawing passes, in cells. */
-interface View {
-  n: number;
-  arm: number;
-  half: number;
-  reach: number;
-  grid: number;
-  /** One CSS pixel. */
-  px: number;
-  /** The quarter turn the cross is settling on. */
-  turns: number;
-}
+const CALM_TEXT = rgba(THEME.text, 0.42);
+const WARNING_TEXT = rgba(THEME.warning, 1);
+const DANGER_TEXT = rgba(THEME.danger, 1);
 
-/** Zoom of the cross. Turned off its axes, the corners of the arms reach
- * further out than the canvas is wide, so mid-turn the cross shrinks by
- * exactly as much as it takes to keep them in — and not a bit more, because
- * a field that pumps in and out is tiring to watch. */
-function viewScale(view: View, fx: Effects): number {
-  const cos = Math.abs(Math.cos(fx.viewAngle));
-  const sin = Math.abs(Math.sin(fx.viewAngle));
-  const extent = Math.max(view.reach * cos + view.half * sin, view.reach * sin + view.half * cos);
-  const room = view.grid / 2 / FIT - 0.25;
-  return Math.min(1, room / extent) + fx.punch;
+/** White, from `top` to `bottom` opacity down a unit square. */
+function unitGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number): CanvasGradient {
+  const gradient = ctx.createLinearGradient(0, 0, 0, 1);
+  gradient.addColorStop(0, `rgba(255, 255, 255, ${top})`);
+  gradient.addColorStop(1, `rgba(255, 255, 255, ${bottom})`);
+  return gradient;
 }
 
 const easeOut = (t: number): number => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
 
 const urgencyColor = (secondsLeft: number): string =>
   secondsLeft < 1.5 ? THEME.danger : THEME.warning;
+
+/** Draws a glowing shape once, into an image with room for its glow. `draw`
+ * works in cells, with the origin of the shape at (0, 0); the shape is
+ * `width` by `height` cells. */
+function makeGlow(
+  width: number,
+  height: number,
+  unit: number,
+  blur: number,
+  draw: (g: CanvasRenderingContext2D) => void,
+): Glow {
+  const pad = blur * 2 + 12;
+  const image = document.createElement('canvas');
+  image.width = Math.ceil(width * unit) + pad * 2;
+  image.height = Math.ceil(height * unit) + pad * 2;
+  const g = image.getContext('2d')!;
+  g.translate(pad, pad);
+  g.scale(unit, unit);
+  draw(g);
+  return { image, pad };
+}
 
 function roundedRect(
   ctx: CanvasRenderingContext2D,

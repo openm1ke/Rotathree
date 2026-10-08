@@ -23,6 +23,10 @@ class Board {
   /// Side of the enclosing grid.
   final int size;
 
+  /// Grows with every write, so that anything worked out from the board (a
+  /// landing row, a drawn layer) can tell when it is out of date.
+  int version = 0;
+
   final List<BlockColor?> _cells;
 
   bool _inCentralBand(int index) => index >= arm && index < arm + center;
@@ -43,6 +47,7 @@ class Board {
   void set(int row, int col, BlockColor? color) {
     assert(isInside(row, col), 'cell ($row,$col) is outside the cross');
     _cells[row * size + col] = color;
+    version++;
   }
 
   bool isFree(int row, int col) => isInside(row, col) && at(row, col) == null;
@@ -66,10 +71,16 @@ class Board {
     return other;
   }
 
-  void clear() => _cells.fillRange(0, _cells.length, null);
+  void clear() {
+    _cells.fillRange(0, _cells.length, null);
+    version++;
+  }
 
   /// Overwrites this board with the contents of [other] (same shape).
-  void copyFrom(Board other) => _cells.setAll(0, other._cells);
+  void copyFrom(Board other) {
+    _cells.setAll(0, other._cells);
+    version++;
+  }
 
   bool sameAs(Board other) {
     if (other.size != size || other.arm != arm) return false;

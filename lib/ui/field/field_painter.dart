@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
@@ -8,11 +9,28 @@ import '../../game/engine/game_engine.dart';
 import '../../game/engine/rotation_transform.dart';
 import '../../game/model/color.dart';
 import '../../game/model/incoming_piece.dart';
+import '../../game/model/piece.dart';
 import '../../game/model/position.dart';
 import '../../game/model/side.dart';
 import '../../game/state/game_state.dart';
 import '../style.dart';
 import 'effects.dart';
+
+const _quarter = math.pi / 2;
+
+/// Cosine and sine of 0, 1, 2 and 3 quarter turns, exactly: `cos` of a
+/// quarter turn is 6e-17, not 0, which is enough to nudge a block off the
+/// pixel grid.
+const _quarterCos = [1.0, 0.0, -1.0, 0.0];
+const _quarterSin = [0.0, 1.0, 0.0, -1.0];
+
+const _accent = Color(0xFF78CDFF);
+const _ice = Color(0xFFF0FAFF);
+const _white = Color(0xFFFFFFFF);
+
+/// Colours of the halo round a piece: being steered, running out of time,
+/// about to lock.
+const _haloColors = [_ice, Palette.warning, Palette.danger];
 
 /// Where a touch landed, in the turned view.
 enum FieldZone { center, top, right, bottom, left, outside }
@@ -20,10 +38,10 @@ enum FieldZone { center, top, right, bottom, left, outside }
 /// Measurements of the cross on a square canvas. Everything inside is drawn
 /// in cell units.
 class FieldGeometry {
-  FieldGeometry(this.size, GameConfig config)
-      : n = config.boardSize,
-        arm = config.armLength,
-        grid = config.gridSize;
+  FieldGeometry(this.size, GameConfig config, {this.devicePixelRatio = 1})
+    : n = config.boardSize,
+      arm = config.armLength,
+      grid = config.gridSize;
 
   /// The cross is drawn a touch smaller than its canvas so that glows and
   /// the recoil of a hard drop are not clipped at the edges.
@@ -31,6 +49,7 @@ class FieldGeometry {
 
   /// Side of the square canvas, in logical pixels.
   final double size;
+  final double devicePixelRatio;
   final int n;
   final int arm;
   final int grid;
@@ -41,8 +60,12 @@ class FieldGeometry {
   /// A cell of the grid the canvas is divided into.
   double get cell => size / grid;
 
-  /// A cell as drawn at rest.
-  double get drawnCell => cell * fit;
+  /// Physical pixels to a cell while the cross is at rest. A whole number, so
+  /// that a block is copied to the screen pixel for pixel.
+  int get unit => math.max(1, (size * devicePixelRatio * fit / grid).floor());
+
+  /// A cell as drawn at rest, in logical pixels.
+  double get drawnCell => unit / devicePixelRatio;
 
   /// The corner squares the cross leaves free, as a fraction of the canvas.
   double get cornerFraction => arm / grid;
@@ -62,344 +85,739 @@ class FieldGeometry {
   }
 }
 
-/// Draws the whole playfield: the glasses sharing the central square, their
-/// falling pieces, settled blocks and every effect.
-///
-/// Everything is drawn in cell units, in the world frame of the cross, and
-/// turned as a whole by the view angle. The game model itself never rotates.
-class FieldPainter extends CustomPainter {
-  FieldPainter({
-    required this.engine,
-    required this.fx,
-    required Listenable repaint,
-  }) : super(repaint: repaint);
+/// A glow drawn once into an image: a blur costs far more than the copy of
+/// its result does.
+class _Glow {
+  _Glow(this.image, this.pad, this.unit)
+    : source = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
 
-  final GameEngine engine;
-  final Effects fx;
+  final ui.Image image;
 
-  static const _quarter = math.pi / 2;
-  static const _accent = Color(0xFF78CDFF);
-  static const _ice = Color(0xFFF0FAFF);
-  static const _white = Color(0xFFFFFFFF);
+  /// Physical pixels between the edge of the image and the origin of its shape.
+  final int pad;
+  final int unit;
+  final Rect source;
 
-  static final Map<BlockColor, ui.Picture> _sprites = {};
+  /// Where the image goes when its shape's origin is at ([x], [y]), in cells.
+  Rect at(double x, double y) =>
+      Rect.fromLTWH(x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
+}
 
-  @override
-  bool shouldRepaint(FieldPainter oldDelegate) =>
-      oldDelegate.engine != engine || oldDelegate.fx != fx;
+/// The seconds written beside a piece, laid out once for each text.
+class _Label {
+  String text = '';
+  int tone = -1;
+  double size = 0;
+  TextPainter? painter;
+}
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final config = engine.config;
-    final state = engine.state;
-    final g = FieldGeometry(size.width, config);
-    if (g.cell <= 0) return;
-    final px = 1 / g.drawnCell;
-    final scale = g.drawnCell * _viewScale(g);
-    final origin = Offset(
-      size.width / 2 + (fx.kickX + fx.shakeX) * g.cell,
-      size.height / 2 + (fx.kickY + fx.shakeY) * g.cell,
+/// Sprites of one image drawn in a single call.
+class _Batch {
+  Float32List _transforms = Float32List(1024);
+  Float32List _sources = Float32List(1024);
+  Int32List _tints = Int32List(256);
+  int _count = 0;
+
+  void add(double scos, double ssin, double tx, double ty, Rect source, [int tint = 0]) {
+    if (_count == _tints.length) {
+      _transforms = Float32List(_count * 8)..setAll(0, _transforms);
+      _sources = Float32List(_count * 8)..setAll(0, _sources);
+      _tints = Int32List(_count * 2)..setAll(0, _tints);
+    }
+    final i = _count * 4;
+    _transforms[i] = scos;
+    _transforms[i + 1] = ssin;
+    _transforms[i + 2] = tx;
+    _transforms[i + 3] = ty;
+    _sources[i] = source.left;
+    _sources[i + 1] = source.top;
+    _sources[i + 2] = source.right;
+    _sources[i + 3] = source.bottom;
+    _tints[_count] = tint;
+    _count++;
+  }
+
+  /// Draws what was added and empties the batch. With [tinted], each sprite
+  /// is multiplied by its own colour.
+  void draw(Canvas canvas, ui.Image atlas, Paint paint, {bool tinted = false}) {
+    if (_count == 0) return;
+    canvas.drawRawAtlas(
+      atlas,
+      Float32List.sublistView(_transforms, 0, _count * 4),
+      Float32List.sublistView(_sources, 0, _count * 4),
+      tinted ? Int32List.sublistView(_tints, 0, _count) : null,
+      tinted ? BlendMode.modulate : null,
+      null,
+      paint,
     );
-
-    canvas.save();
-    canvas.translate(origin.dx, origin.dy);
-    canvas.scale(scale);
-    canvas.rotate(fx.viewAngle);
-
-    final building = state.phase == GamePhase.building ? state.buildingSide : null;
-    final grow = building == null ? 1.0 : 1 - math.pow(1 - state.phaseProgress, 3).toDouble();
-    _drawField(
-      canvas,
-      g,
-      px,
-      engine.sides,
-      1 - 0.7 * fx.turnMotion,
-      growing: building,
-      grow: grow,
-    );
-    _drawActiveGlass(canvas, g, px);
-    for (final side in engine.sides) {
-      _drawCrowdedWarning(canvas, g, px, side);
-    }
-    for (final beam in fx.beams) {
-      _drawBeam(canvas, g, beam);
-    }
-    for (final piece in state.incoming.values) {
-      _drawAim(canvas, g, px, piece);
-    }
-    _drawSettled(canvas, g, state);
-    _drawFlashes(canvas, g);
-    _drawRings(canvas, px);
-    _drawParticles(canvas);
-    for (final piece in state.incoming.values) {
-      _drawIncoming(canvas, g, px, piece);
-    }
-    _drawDrop(canvas, g, state);
-    canvas.restore();
-
-    for (final piece in state.incoming.values) {
-      _drawCountdown(canvas, g, origin, scale, piece);
-    }
+    _count = 0;
   }
+}
 
-  /// Zoom of the cross. Turned off its axes, the corners of the arms reach
-  /// further out than the canvas is wide, so mid-turn the cross shrinks by
-  /// exactly as much as it takes to keep them in — and not a bit more,
-  /// because a field that pumps in and out is tiring to watch.
-  double _viewScale(FieldGeometry g) {
-    final cos = math.cos(fx.viewAngle).abs();
-    final sin = math.sin(fx.viewAngle).abs();
-    final extent = math.max(g.reach * cos + g.half * sin, g.reach * sin + g.half * cos);
-    final room = g.grid / 2 / FieldGeometry.fit - 0.25;
-    return math.min(1.0, room / extent) + fx.punch;
-  }
+/// What the field is drawn from, made once and reused every frame: the
+/// blocks as an image, the glows as images, the lines as paths. Owned by the
+/// game screen, which disposes of it.
+class FieldAssets {
+  /// Transparent pixels round each block of the atlas, so that neighbours do
+  /// not bleed into one another when a block is drawn turned.
+  static const _gutter = 1;
 
-  // ---------------------------------------------------------------- sprites
+  /// Side of the white square that particles are tinted copies of.
+  static const _patch = 4;
 
-  /// One recorded block per colour: flat, with a lit top edge and a shaded
-  /// bottom one, a cell wide and centred on the origin.
-  static int _spriteRevision = -1;
-
-  static ui.Picture _sprite(BlockColor color) {
-    if (_spriteRevision != BlockTones.revision) {
-      _sprites.clear();
-      _spriteRevision = BlockTones.revision;
-    }
-    return _sprites.putIfAbsent(color, () {
-        final tones = BlockTones.of(color);
-        final recorder = ui.PictureRecorder();
-        final g = Canvas(recorder);
-        const pad = 0.045;
-        const radius = 0.16;
-        const inset = 0.16;
-        final body = Rect.fromLTRB(-0.5 + pad, -0.5 + pad, 0.5 - pad, 0.5 - pad);
-        g.drawRRect(
-          RRect.fromRectAndRadius(body, const Radius.circular(radius)),
-          Paint()
-            ..shader = ui.Gradient.linear(
-              body.topCenter,
-              body.bottomCenter,
-              [tones.light, tones.base, tones.dark],
-              const [0, 0.3, 1],
-            ),
-        );
-        // A flat face set into the bevel, with a soft highlight across its top.
-        final face = RRect.fromRectAndRadius(
-          Rect.fromLTRB(-0.5 + inset, -0.5 + inset, 0.5 - inset, 0.5 - inset),
-          const Radius.circular(radius * 0.6),
-        );
-        g.drawRRect(face, Paint()..color = tones.base);
-        g.drawRRect(
-          face,
-          Paint()
-            ..shader = ui.Gradient.linear(
-              face.outerRect.topCenter,
-              face.outerRect.center,
-              const [Color(0x61FFFFFF), Color(0x00FFFFFF)],
-            ),
-        );
-        return recorder.endRecording();
-    });
-  }
-
+  static final _blockShape = RRect.fromRectAndRadius(
+    const Rect.fromLTRB(-0.455, -0.455, 0.455, 0.455),
+    const Radius.circular(0.16),
+  );
+  static final _faceShape = RRect.fromRectAndRadius(
+    const Rect.fromLTRB(-0.34, -0.34, 0.34, 0.34),
+    const Radius.circular(0.096),
+  );
   static final _flashShape = RRect.fromRectAndRadius(
     const Rect.fromLTRB(-0.455, -0.455, 0.455, 0.455),
     const Radius.circular(0.15),
   );
+  static const _unitRect = Rect.fromLTRB(-0.5, -0.5, 0.5, 0.5);
 
-  /// Draws one block centred at ([x], [y]). [quarter] is the extra turn of
-  /// the canvas at this point, so the block's lit edge ends up facing the top
-  /// of the screen however the cross is turned.
-  void _block(
-    Canvas canvas,
-    BlockColor color,
-    double x,
-    double y,
-    int quarter, {
-    double scaleX = 1,
-    double scaleY = 1,
-    double flash = 0,
-  }) {
-    canvas.save();
-    canvas.translate(x, y);
-    if (scaleX != 1 || scaleY != 1) canvas.scale(scaleX, scaleY);
-    canvas.rotate(-(fx.targetTurns + quarter) * _quarter);
-    canvas.drawPicture(_sprite(color));
-    if (flash > 0) {
-      canvas.drawRRect(
-        _flashShape,
-        Paint()..color = _white.withValues(alpha: math.min(1.0, flash)),
-      );
+  /// White, fading in down a unit square: stretched over an aiming lane.
+  static final ui.Shader _laneShader = ui.Gradient.linear(Offset.zero, const Offset(0, 1), const [
+    Color(0x05FFFFFF),
+    Color(0x16FFFFFF),
+  ]);
+
+  ui.Image? _atlas;
+  int _unit = 0;
+  int _revision = -1;
+  final List<Rect> _blocks = [];
+  Rect _whitePatch = Rect.zero;
+
+  String _glowKey = '';
+  _Glow? _well;
+  _Glow? _warning;
+  final Map<int, _Glow> _halos = {};
+
+  int _pathN = -1;
+  int _pathArm = -1;
+  Path _armGrid = Path();
+  Path _centreGrid = Path();
+  Path _armOutline = Path();
+  Path _wallOutline = Path();
+
+  final Map<Side, _Label> _labels = {};
+  final _Batch _batch = _Batch();
+  final Paint _imagePaint = Paint()..filterQuality = FilterQuality.low;
+  final Paint _glowPaint = Paint()..filterQuality = FilterQuality.low;
+  final Paint _flashPaint = Paint();
+  final Float64List _matrix = Float64List(16)
+    ..[10] = 1
+    ..[15] = 1;
+
+  // Reused by the pass that has to know which cells are in motion.
+  final Set<CellPosition> _moving = {};
+  final Map<CellPosition, Landing> _landing = {};
+
+  void dispose() {
+    _atlas?.dispose();
+    _atlas = null;
+    _disposeGlows();
+    for (final label in _labels.values) {
+      label.painter?.dispose();
     }
-    canvas.restore();
+    _labels.clear();
   }
 
-  // -------------------------------------------------------------- playfield
+  void _disposeGlows() {
+    _well?.image.dispose();
+    _warning?.image.dispose();
+    for (final halo in _halos.values) {
+      halo.image.dispose();
+    }
+    _well = null;
+    _warning = null;
+    _halos.clear();
+    _glowKey = '';
+  }
 
-  /// The cross: the central square and the arm of every glass in play.
-  /// [lines] fades the grid while the cross is turning.
-  void _drawField(
-    Canvas canvas,
-    FieldGeometry g,
-    double px,
-    List<Side> sides,
-    double lines, {
-    Side? growing,
-    double grow = 1,
-  }) {
-    final half = g.half;
-    final reach = g.reach;
-    final n = g.n.toDouble();
-    final arm = g.arm.toDouble();
+  /// Makes sure everything fits the canvas, the board and the palette.
+  void _prepare(FieldGeometry g) {
+    final unit = g.unit;
+    if (_atlas == null || unit != _unit || _revision != BlockTones.revision) {
+      _unit = unit;
+      _revision = BlockTones.revision;
+      _makeAtlas(unit);
+    }
+    final glowKey = '$unit:${g.devicePixelRatio}:${g.n}:${g.arm}';
+    if (glowKey != _glowKey) {
+      _disposeGlows();
+      _glowKey = glowKey;
+      _makeGlows(g);
+    }
+    if (g.n != _pathN || g.arm != _pathArm) {
+      _pathN = g.n;
+      _pathArm = g.arm;
+      _makePaths(g);
+    }
+  }
 
-    final armFill = Paint()..color = const Color(0x06FFFFFF);
-    final armGrid = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = px
-      ..color = _white.withValues(alpha: 0.045 * lines);
-    for (final side in sides) {
-      // A glass being built grows out of the centre.
-      final length = side == growing ? arm * grow : arm;
-      final armRect = Rect.fromLTWH(-half, -half - length, n, length);
+  /// One block per colour, exactly a cell big — flat, with a lit top edge and
+  /// a shaded bottom one — and a white square for the particles.
+  void _makeAtlas(int unit) {
+    _atlas?.dispose();
+    final pitch = unit + 2 * _gutter;
+    final count = BlockColor.values.length;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    _blocks.clear();
+    for (final color in BlockColor.values) {
+      final left = (color.index * pitch + _gutter).toDouble();
+      final top = _gutter.toDouble();
+      _blocks.add(Rect.fromLTWH(left, top, unit.toDouble(), unit.toDouble()));
       canvas.save();
-      canvas.rotate(side.index * _quarter);
-      canvas.drawRect(armRect, armFill);
-      canvas.save();
-      canvas.clipRect(armRect);
-      final path = Path();
-      for (var i = 1; i < g.n; i++) {
-        path
-          ..moveTo(-half + i, -reach)
-          ..lineTo(-half + i, -half);
-      }
-      for (var j = 1; j < g.arm; j++) {
-        path
-          ..moveTo(-half, -reach + j)
-          ..lineTo(half, -reach + j);
-      }
-      canvas.drawPath(path, armGrid);
-      canvas.restore();
+      canvas.translate(left + unit / 2, top + unit / 2);
+      canvas.scale(unit.toDouble());
+      _paintBlock(canvas, BlockTones.of(color));
       canvas.restore();
     }
-    if (growing != null && grow < 1) {
-      // The leading edge of the glass that is growing.
-      canvas.save();
-      canvas.rotate(growing.index * _quarter);
-      final edge = -half - arm * grow;
-      canvas.drawLine(
-        Offset(-half, edge),
-        Offset(half, edge),
+    final patchLeft = (count * pitch).toDouble();
+    canvas.drawRect(
+      Rect.fromLTWH(patchLeft, 0, _patch.toDouble(), _patch.toDouble()),
+      Paint()..color = _white,
+    );
+    _whitePatch = Rect.fromLTWH(patchLeft + 1, 1, 2, 2);
+    final picture = recorder.endRecording();
+    _atlas = picture.toImageSync(count * pitch + _patch, math.max(pitch, _patch));
+    picture.dispose();
+  }
+
+  /// A block a cell wide, centred on the origin.
+  static void _paintBlock(Canvas canvas, BlockTones tones) {
+    final body = _blockShape.outerRect;
+    canvas.drawRRect(
+      _blockShape,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          body.topCenter,
+          body.bottomCenter,
+          [tones.light, tones.base, tones.dark],
+          const [0, 0.3, 1],
+        ),
+    );
+    // A flat face set into the bevel, with a soft highlight across its top.
+    canvas.drawRRect(_faceShape, Paint()..color = tones.base);
+    canvas.drawRRect(
+      _faceShape,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          _faceShape.outerRect.topCenter,
+          _faceShape.outerRect.center,
+          const [Color(0x61FFFFFF), Color(0x00FFFFFF)],
+        ),
+    );
+  }
+
+  void _makeGlows(FieldGeometry g) {
+    final px = g.devicePixelRatio / g.unit;
+    final n = g.n.toDouble();
+    final depth = (g.arm + g.n).toDouble();
+
+    // The active glass: one tall well — its arm and the central square —
+    // open at the top, with bright walls and a heavy floor.
+    _well = _makeGlow(n, depth, g, 20, (canvas) {
+      final well = Rect.fromLTWH(0, 0, n, depth);
+      canvas.drawRect(
+        well,
+        Paint()
+          ..shader = ui.Gradient.linear(well.topCenter, well.bottomCenter, [
+            _accent.withValues(alpha: 0.13),
+            _accent.withValues(alpha: 0.035),
+          ]),
+      );
+      final walls = Path()
+        ..moveTo(0, 0)
+        ..lineTo(0, depth)
+        ..lineTo(n, depth)
+        ..lineTo(n, 0);
+      final floor = Path()
+        ..moveTo(0, depth)
+        ..lineTo(n, depth);
+      // A soft halo first, then the crisp lines on top of it.
+      canvas.drawPath(
+        walls,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2 * px
-          ..color = _accent.withValues(alpha: 0.9 * (1 - grow)),
+          ..strokeJoin = StrokeJoin.round
+          ..strokeWidth = 5 * px
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 * px)
+          ..color = _accent.withValues(alpha: 0.6),
       );
-      canvas.restore();
-    }
+      final line = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round
+        ..strokeWidth = 2.2 * px
+        ..color = _ice.withValues(alpha: 0.95);
+      canvas.drawPath(walls, line);
+      canvas.drawPath(floor, line..strokeWidth = 4.5 * px);
+    });
 
-    canvas.drawRect(
-      Rect.fromLTWH(-half, -half, n, n),
-      Paint()..color = const Color(0x0DFFFFFF),
+    // The far end of a glass that is nearly full.
+    _warning = _makeGlow(n, 0, g, 16, (canvas) {
+      canvas.drawLine(
+        Offset.zero,
+        Offset(n, 0),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6 * px
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * px)
+          ..color = Palette.danger.withValues(alpha: 0.8),
+      );
+    });
+  }
+
+  /// The soft halo round a piece [width] by [depth] cells; [tone] indexes
+  /// [_haloColors].
+  _Glow _halo(int width, int depth, int tone, FieldGeometry g) {
+    return _halos[width * 100 + depth * 10 + tone] ??= _makeGlow(
+      width.toDouble(),
+      depth.toDouble(),
+      g,
+      16,
+      (canvas) {
+        final px = g.devicePixelRatio / g.unit;
+        canvas.drawRRect(
+          _haloShape(0, 0, width, depth),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4 * px
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * px)
+            ..color = _haloColors[tone].withValues(alpha: 0.7),
+        );
+      },
     );
-    final centre = Path();
+  }
+
+  static RRect _haloShape(double left, double top, int width, int depth) => RRect.fromRectAndRadius(
+    Rect.fromLTWH(left - 0.03, top - 0.03, width + 0.06, depth + 0.06),
+    const Radius.circular(0.2),
+  );
+
+  /// Draws a glowing shape once, into an image with room for its glow.
+  /// [draw] works in cells with the origin of the shape at (0, 0); [reach]
+  /// is how far the glow spreads, in logical pixels.
+  static _Glow _makeGlow(
+    double width,
+    double height,
+    FieldGeometry g,
+    double reach,
+    void Function(Canvas canvas) draw,
+  ) {
+    final unit = g.unit;
+    final pad = (reach * g.devicePixelRatio).ceil() + 2;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.translate(pad.toDouble(), pad.toDouble());
+    canvas.scale(unit.toDouble());
+    draw(canvas);
+    final picture = recorder.endRecording();
+    final image = picture.toImageSync(
+      (width * unit).ceil() + pad * 2,
+      (height * unit).ceil() + pad * 2,
+    );
+    picture.dispose();
+    return _Glow(image, pad, unit);
+  }
+
+  /// The lines of the field never change while the board keeps its shape.
+  void _makePaths(FieldGeometry g) {
+    final half = g.half;
+    final reach = g.reach;
+    _armGrid = Path();
     for (var i = 1; i < g.n; i++) {
-      centre
+      _armGrid
+        ..moveTo(-half + i, -reach)
+        ..lineTo(-half + i, -half);
+    }
+    for (var j = 1; j < g.arm; j++) {
+      _armGrid
+        ..moveTo(-half, -reach + j)
+        ..lineTo(half, -reach + j);
+    }
+    _centreGrid = Path();
+    for (var i = 1; i < g.n; i++) {
+      _centreGrid
         ..moveTo(-half + i, -half)
         ..lineTo(-half + i, half)
         ..moveTo(-half, -half + i)
         ..lineTo(half, -half + i);
     }
-    canvas.drawPath(
-      centre,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = px
-        ..color = _white.withValues(alpha: 0.07 * lines),
+    _armOutline = Path()
+      ..moveTo(-half, -half)
+      ..lineTo(-half, -reach)
+      ..lineTo(half, -reach)
+      ..lineTo(half, -half);
+    _wallOutline = Path()
+      ..moveTo(-half, -half)
+      ..lineTo(half, -half);
+  }
+
+  /// The text of a countdown, laid out again only when it changes.
+  TextPainter _label(Side side, String text, int tone, double size) {
+    final label = _labels[side] ??= _Label();
+    if (label.painter == null || label.text != text || label.tone != tone || label.size != size) {
+      label.painter?.dispose();
+      label
+        ..text = text
+        ..tone = tone
+        ..size = size
+        ..painter = (TextPainter(
+          text: TextSpan(
+            text: text,
+            style: Type.body(
+              size,
+              weight: tone == 0 ? FontWeight.w600 : FontWeight.w800,
+              color: tone == 0 ? Palette.text.withValues(alpha: 0.42) : _haloColors[tone],
+              height: 1,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout());
+    }
+    return label.painter!;
+  }
+}
+
+/// Draws the whole playfield: the glasses sharing the central square, their
+/// falling pieces, settled blocks and every effect.
+///
+/// Everything is laid out in cell units, in the world frame of the cross, and
+/// turned as a whole by the view angle. The game model itself never rotates.
+///
+/// Two things keep a frame cheap without changing a pixel of it. The blocks
+/// are one image — a cell is a whole number of physical pixels, so at rest
+/// they are copied exactly — and all of them go to the GPU in one call. And
+/// nothing is blurred while playing: the glows are images made once.
+class FieldPainter extends CustomPainter {
+  FieldPainter({
+    required this.engine,
+    required this.fx,
+    required this.assets,
+    required this.devicePixelRatio,
+    required Listenable repaint,
+  }) : super(repaint: repaint);
+
+  final GameEngine engine;
+  final Effects fx;
+  final FieldAssets assets;
+  final double devicePixelRatio;
+
+  // ------------------------------------------------ the frame being drawn
+  /// One logical pixel, in cells.
+  double _px = 1;
+
+  /// True once a turn is over: frames are then at whole quarter turns.
+  bool _atRest = true;
+
+  /// The quarter turn the cross is settling on, 0..3.
+  int _turnsQ = 0;
+
+  /// Cosine and sine of each glass's frame on the screen.
+  final Float64List _cos = Float64List(4);
+  final Float64List _sin = Float64List(4);
+
+  /// What is left of the turn: blocks stay upright at the end of it.
+  double _left = 0;
+  double _leftCos = 1;
+  double _leftSin = 0;
+
+  @override
+  bool shouldRepaint(FieldPainter oldDelegate) =>
+      oldDelegate.engine != engine ||
+      oldDelegate.fx != fx ||
+      oldDelegate.devicePixelRatio != devicePixelRatio;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final state = engine.state;
+    final g = FieldGeometry(size.width, engine.config, devicePixelRatio: devicePixelRatio);
+    if (g.cell <= 0) return;
+    assets._prepare(g);
+    _px = devicePixelRatio / g.unit;
+
+    // Where each glass's frame points on the screen. At rest that is a whole
+    // number of quarter turns, and it is written down exactly.
+    _left = fx.turnLeft;
+    _atRest = _left.abs() < 1e-7;
+    _turnsQ = fx.targetTurns.round() % 4;
+    for (var frame = 0; frame < 4; frame++) {
+      if (_atRest) {
+        final q = (_turnsQ + frame) & 3;
+        _cos[frame] = _quarterCos[q];
+        _sin[frame] = _quarterSin[q];
+      } else {
+        final angle = fx.viewAngle + frame * _quarter;
+        _cos[frame] = math.cos(angle);
+        _sin[frame] = math.sin(angle);
+      }
+    }
+    _leftCos = _atRest ? 1 : math.cos(_left);
+    _leftSin = _atRest ? 0 : math.sin(_left);
+
+    // Turned off its axes, the corners of the arms reach further out than
+    // the canvas is wide, so mid-turn the cross shrinks by exactly as much as
+    // it takes to keep them in — and not a bit more, because a field that
+    // pumps in and out is tiring to watch.
+    var zoom = 1.0;
+    if (!_atRest) {
+      final cos = _cos[0].abs();
+      final sin = _sin[0].abs();
+      final extent = math.max(g.reach * cos + g.half * sin, g.reach * sin + g.half * cos);
+      zoom = math.min(1.0, (size.width / 2 / g.drawnCell - 0.25) / extent);
+    }
+    final scale = g.drawnCell * (zoom + fx.punch);
+    // The centre of the cross sits on a physical pixel boundary.
+    final centre = (size.width * devicePixelRatio / 2).roundToDouble() / devicePixelRatio;
+    final ox = centre + (fx.kickX + fx.shakeX) * g.cell;
+    final oy = centre + (fx.kickY + fx.shakeY) * g.cell;
+
+    canvas.save();
+    canvas.translate(ox, oy);
+    canvas.scale(scale);
+
+    final building = state.phase == GamePhase.building ? state.buildingSide : null;
+    final grow = building == null ? 1.0 : 1 - math.pow(1 - state.phaseProgress, 3).toDouble();
+    _drawField(canvas, g, engine.sides, 1 - 0.7 * fx.turnMotion, building, grow);
+    _drawActiveGlass(canvas, g);
+    for (final side in engine.sides) {
+      _drawCrowdedWarning(canvas, g, side);
+    }
+    for (final beam in fx.beams) {
+      _drawBeam(canvas, g, beam);
+    }
+    for (final piece in state.incoming.values) {
+      _drawAim(canvas, g, piece);
+    }
+    _drawSettled(canvas, g, state);
+    _enter(canvas, 0);
+    _drawFlashes(canvas, g);
+    _drawRings(canvas);
+    canvas.restore();
+    _drawParticles(canvas);
+    for (final piece in state.incoming.values) {
+      _drawIncoming(canvas, g, piece);
+    }
+    _drawDrop(canvas, g, state);
+    canvas.restore();
+
+    for (final piece in state.incoming.values) {
+      _drawCountdown(canvas, g, ox, oy, scale, piece);
+    }
+  }
+
+  // ----------------------------------------------------------- transforms
+
+  /// Starts drawing in the frame of glass [frame]: its arm on top. Undone by
+  /// `canvas.restore()`.
+  void _enter(Canvas canvas, int frame) {
+    final m = assets._matrix;
+    m[0] = _cos[frame];
+    m[1] = _sin[frame];
+    m[4] = -_sin[frame];
+    m[5] = _cos[frame];
+    canvas.save();
+    canvas.transform(m);
+  }
+
+  // ------------------------------------------------------------- blocks
+
+  /// Adds a plain block centred at ([x], [y]) of the frame of glass [frame]
+  /// to the batch. Its lit edge faces the top of the screen however the cross
+  /// is turned.
+  void _add(BlockColor color, double x, double y, int frame) {
+    final c = _cos[frame];
+    final s = _sin[frame];
+    final unit = assets._unit;
+    // The sprite is `unit` pixels wide and a cell big; mid-turn it is turned
+    // by what is left of the turn, about its centre.
+    assets._batch.add(
+      _leftCos / unit,
+      _leftSin / unit,
+      c * x - s * y - (_leftCos - _leftSin) / 2,
+      s * x + c * y - (_leftSin + _leftCos) / 2,
+      assets._blocks[color.index],
     );
+  }
+
+  void _flush(Canvas canvas) => assets._batch.draw(canvas, assets._atlas!, assets._imagePaint);
+
+  /// Draws one block stretched along the axes of its frame, and lit by
+  /// [flash] of white.
+  void _stretched(
+    Canvas canvas,
+    BlockColor color,
+    double x,
+    double y,
+    int frame,
+    double scaleX,
+    double scaleY,
+    double flash,
+  ) {
+    final c = _cos[frame];
+    final s = _sin[frame];
+    // On the screen the frame's axes are swapped when it ends up a quarter
+    // turn from upright.
+    final swapped = ((_turnsQ + frame) & 1) == 1;
+    canvas.save();
+    canvas.translate(c * x - s * y, s * x + c * y);
+    if (!_atRest) canvas.rotate(_left);
+    canvas.scale(swapped ? scaleY : scaleX, swapped ? scaleX : scaleY);
+    canvas.drawImageRect(
+      assets._atlas!,
+      assets._blocks[color.index],
+      FieldAssets._unitRect,
+      assets._imagePaint,
+    );
+    if (flash > 0) {
+      canvas.drawRRect(
+        FieldAssets._flashShape,
+        assets._flashPaint..color = _white.withValues(alpha: math.min(1.0, flash)),
+      );
+    }
+    canvas.restore();
+  }
+
+  /// The squares of a stick whose top left cell is at ([left], [top]) of the
+  /// frame of glass [frame].
+  void _stick(
+    Canvas canvas,
+    Piece piece,
+    double left,
+    double top,
+    int frame, {
+    double scaleY = 1,
+    double flash = 0,
+  }) {
+    final count = piece.length;
+    final lying = piece.isHorizontal;
+    final flipped = piece.orientation.isFlipped;
+    final plain = scaleY == 1 && flash <= 0;
+    for (var i = 0; i < count; i++) {
+      final along = flipped ? count - 1 - i : i;
+      final x = left + (lying ? along : 0) + 0.5;
+      final y = top + (lying ? 0 : along) + 0.5;
+      if (plain) {
+        _add(piece.colors[i], x, y, frame);
+      } else {
+        _stretched(canvas, piece.colors[i], x, y, frame, 1, scaleY, flash);
+      }
+    }
+    if (plain) _flush(canvas);
+  }
+
+  // -------------------------------------------------------------- playfield
+
+  /// The cross: the central square and the arm of every glass in play. A
+  /// glass being built grows out of the centre. [lines] fades the grid while
+  /// the cross is turning.
+  void _drawField(
+    Canvas canvas,
+    FieldGeometry g,
+    List<Side> sides,
+    double lines,
+    Side? growing,
+    double grow,
+  ) {
+    final a = assets;
+    final half = g.half;
+    final n = g.n.toDouble();
+    final arm = g.arm.toDouble();
+    final far = half + arm * grow;
+
+    final armFill = Paint()..color = const Color(0x06FFFFFF);
+    final grid = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _px
+      ..color = _white.withValues(alpha: 0.045 * lines);
+    for (final side in sides) {
+      _enter(canvas, side.index);
+      if (side != growing) {
+        canvas.drawRect(Rect.fromLTWH(-half, -g.reach, n, arm), armFill);
+        canvas.drawPath(a._armGrid, grid);
+      } else {
+        final grown = Rect.fromLTRB(-half, -far, half, -half);
+        canvas.drawRect(grown, armFill);
+        canvas.save();
+        canvas.clipRect(grown);
+        canvas.drawPath(a._armGrid, grid);
+        canvas.restore();
+      }
+      canvas.restore();
+    }
+
+    final centre = Rect.fromLTWH(-half, -half, n, n);
+    canvas.drawRect(centre, armFill..color = const Color(0x0DFFFFFF));
+    canvas.drawPath(a._centreGrid, grid..color = _white.withValues(alpha: 0.07 * lines));
 
     // Outline of the whole cross — an arm where a glass is in play, the wall
     // of the centre where there is none — and of the centre, brighter.
     final outline = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5 * px
+      ..strokeWidth = 1.5 * _px
       ..strokeJoin = StrokeJoin.round
       ..color = const Color(0x29FFFFFF);
     for (final side in Side.values) {
-      canvas.save();
-      canvas.rotate(side.index * _quarter);
-      final path = Path()..moveTo(-half, -half);
-      if (sides.contains(side)) {
-        final top = side == growing ? -half - arm * grow : -reach;
-        path
-          ..lineTo(-half, top)
-          ..lineTo(half, top)
-          ..lineTo(half, -half);
+      _enter(canvas, side.index);
+      if (!sides.contains(side)) {
+        canvas.drawPath(a._wallOutline, outline);
+      } else if (side != growing) {
+        canvas.drawPath(a._armOutline, outline);
       } else {
-        path.lineTo(half, -half);
+        canvas.drawPath(
+          Path()
+            ..moveTo(-half, -half)
+            ..lineTo(-half, -far)
+            ..lineTo(half, -far)
+            ..lineTo(half, -half),
+          outline,
+        );
+        // The leading edge of the glass that is growing.
+        canvas.drawLine(
+          Offset(-half, -far),
+          Offset(half, -far),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2 * _px
+            ..color = _accent.withValues(alpha: 0.9 * (1 - grow)),
+        );
       }
-      canvas.drawPath(path, outline);
       canvas.restore();
     }
-    canvas.drawRect(
-      Rect.fromLTWH(-half, -half, n, n),
-      outline..color = const Color(0x38FFFFFF),
-    );
+    canvas.drawRect(centre, outline..color = const Color(0x38FFFFFF));
   }
 
-  /// The active glass is one tall well — its arm and the central square —
-  /// open at the top, with bright walls and a heavy floor.
-  void _drawActiveGlass(Canvas canvas, FieldGeometry g, double px) {
-    final half = g.half;
-    final reach = g.reach;
+  /// The glass being steered glows; the glow moves over as the cross turns.
+  void _drawActiveGlass(Canvas canvas, FieldGeometry g) {
+    final well = assets._well;
+    if (well == null) return;
     for (final side in Side.values) {
       final lit = fx.activeness[side.index];
       if (lit < 0.01) continue;
-      canvas.save();
-      canvas.rotate(side.index * _quarter);
-
-      final well = Rect.fromLTRB(-half, -reach, half, half);
-      canvas.drawRect(
-        well,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            well.topCenter,
-            well.bottomCenter,
-            [
-              _accent.withValues(alpha: 0.13 * lit),
-              _accent.withValues(alpha: 0.035 * lit),
-            ],
-          ),
-      );
-
-      final walls = Path()
-        ..moveTo(-half, -reach)
-        ..lineTo(-half, half)
-        ..lineTo(half, half)
-        ..lineTo(half, -reach);
-      final floor = Path()
-        ..moveTo(-half, half)
-        ..lineTo(half, half);
-      // A soft halo first, then the crisp lines on top of it.
-      final glow = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = 5 * px
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 * px)
-        ..color = _accent.withValues(alpha: 0.6 * lit);
-      canvas.drawPath(walls, glow);
-      final line = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = 2.2 * px
-        ..color = _ice.withValues(alpha: 0.95 * lit);
-      canvas.drawPath(walls, line);
-      canvas.drawPath(floor, line..strokeWidth = 4.5 * px);
+      _enter(canvas, side.index);
+      _glow(canvas, well, -g.half, -g.reach, lit);
       canvas.restore();
     }
   }
 
+  /// Draws a glow with its shape's origin at ([x], [y]) of the current frame.
+  void _glow(Canvas canvas, _Glow glow, double x, double y, double alpha) {
+    canvas.drawImageRect(
+      glow.image,
+      glow.source,
+      glow.at(x, y),
+      assets._glowPaint..color = _white.withValues(alpha: alpha.clamp(0.0, 1.0)),
+    );
+  }
+
   /// A glass that is nearly full up to its far end pulses red there.
-  void _drawCrowdedWarning(Canvas canvas, FieldGeometry g, double px, Side side) {
+  void _drawCrowdedWarning(Canvas canvas, FieldGeometry g, Side side) {
     final over = engine.isGameOver;
     if (over ? engine.state.gameOverSide != side : !engine.isCrowded(side)) {
       return;
@@ -407,37 +825,24 @@ class FieldPainter extends CustomPainter {
     final half = g.half;
     final reach = g.reach;
     final pulse = over ? 1.0 : 0.5 + 0.5 * math.sin(fx.clock * 9);
-    canvas.save();
-    canvas.rotate(side.index * _quarter);
+    _enter(canvas, side.index);
     final wash = Rect.fromLTRB(-half, -reach, half, -half);
     canvas.drawRect(
       wash,
       Paint()
-        ..shader = ui.Gradient.linear(
-          wash.topCenter,
-          wash.bottomCenter,
-          [
-            Palette.danger.withValues(alpha: 0.1 + 0.2 * pulse),
-            Palette.danger.withValues(alpha: 0.02),
-          ],
-        ),
+        ..shader = ui.Gradient.linear(wash.topCenter, wash.bottomCenter, [
+          Palette.danger.withValues(alpha: 0.1 + 0.2 * pulse),
+          Palette.danger.withValues(alpha: 0.02),
+        ]),
     );
-    final edge = Path()
-      ..moveTo(-half, -reach)
-      ..lineTo(half, -reach);
-    canvas.drawPath(
-      edge,
+    final warning = assets._warning;
+    if (warning != null) _glow(canvas, warning, -half, -reach, 1);
+    canvas.drawLine(
+      Offset(-half, -reach),
+      Offset(half, -reach),
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 6 * px
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * px)
-        ..color = Palette.danger.withValues(alpha: 0.8),
-    );
-    canvas.drawPath(
-      edge,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3 * px
+        ..strokeWidth = 3 * _px
         ..color = Palette.danger.withValues(alpha: 0.5 + 0.5 * pulse),
     );
     canvas.restore();
@@ -454,16 +859,14 @@ class FieldPainter extends CustomPainter {
       -g.reach + beam.toRow,
     );
     if (rect.height <= 0) return;
-    canvas.save();
-    canvas.rotate(beam.side.index * _quarter);
+    _enter(canvas, beam.side.index);
     canvas.drawRect(
       rect,
       Paint()
-        ..shader = ui.Gradient.linear(
-          rect.topCenter,
-          rect.bottomCenter,
-          [const Color(0x00FFFFFF), _white.withValues(alpha: 0.34 * fade)],
-        ),
+        ..shader = ui.Gradient.linear(rect.topCenter, rect.bottomCenter, [
+          const Color(0x00FFFFFF),
+          _white.withValues(alpha: 0.34 * fade),
+        ]),
     );
     canvas.restore();
   }
@@ -471,98 +874,114 @@ class FieldPainter extends CustomPainter {
   /// Where a piece will land: the lane of the active one, and an outline of
   /// its resting place. Pieces nobody is steering only show theirs faintly
   /// until they are about to lock.
-  void _drawAim(Canvas canvas, FieldGeometry g, double px, IncomingPiece piece) {
-    final placement = engine.previewDrop(piece.side);
-    if (placement == null || placement.row == piece.row || engine.isGameOver) {
-      return;
-    }
+  void _drawAim(Canvas canvas, FieldGeometry g, IncomingPiece piece) {
+    final rest = engine.restRow(piece.side);
+    if (rest == null || rest == piece.row || engine.isGameOver) return;
     final lit = fx.activeness[piece.side.index];
     final urgent = (engine.secondsToLock(piece.side) ?? 99) < 6;
     final strength = math.max(lit, urgent ? 0.4 : 0.16);
 
+    final stick = piece.piece;
     final left = -g.half + piece.column;
-    final top = -g.reach + piece.row - fx.slideLeft(piece) + piece.piece.depth;
-    final bottom = -g.reach + placement.row;
+    final top = -g.reach + piece.row - fx.slideLeft(piece) + stick.depth;
+    final bottom = -g.reach + rest;
 
-    canvas.save();
-    canvas.rotate(piece.side.index * _quarter);
+    _enter(canvas, piece.side.index);
     if (lit > 0.05 && bottom > top) {
-      final lane = Rect.fromLTRB(left, top, left + piece.piece.width, bottom);
+      // One gradient, made for a unit square and stretched over the lane.
+      canvas.save();
+      canvas.translate(left, top);
+      canvas.scale(stick.width.toDouble(), bottom - top);
       canvas.drawRect(
-        lane,
+        const Rect.fromLTWH(0, 0, 1, 1),
         Paint()
-          ..shader = ui.Gradient.linear(
-            lane.topCenter,
-            lane.bottomCenter,
-            [
-              _white.withValues(alpha: 0.02 * lit),
-              _white.withValues(alpha: 0.085 * lit),
-            ],
-          ),
+          ..shader = FieldAssets._laneShader
+          ..color = _white.withValues(alpha: lit),
       );
+      canvas.restore();
     }
-    final offsets = piece.piece.offsets;
-    for (var i = 0; i < offsets.length; i++) {
-      final tone = BlockTones.of(piece.piece.colors[i]).base;
+    final count = stick.length;
+    final lying = stick.isHorizontal;
+    final flipped = stick.orientation.isFlipped;
+    final fill = Paint();
+    final edge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6 * _px;
+    for (var i = 0; i < count; i++) {
+      final along = flipped ? count - 1 - i : i;
+      final tone = BlockTones.of(stick.colors[i]).base;
       final shape = RRect.fromRectAndRadius(
         Rect.fromLTWH(
-          left + offsets[i].col + 0.07,
-          -g.reach + placement.row + offsets[i].row + 0.07,
+          left + (lying ? along : 0) + 0.07,
+          -g.reach + rest + (lying ? 0 : along) + 0.07,
           0.86,
           0.86,
         ),
         const Radius.circular(0.14),
       );
-      canvas.drawRRect(shape, Paint()..color = tone.withValues(alpha: 0.14 * strength));
-      canvas.drawRRect(
-        shape,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.6 * px
-          ..color = tone.withValues(alpha: 0.9 * strength),
-      );
+      canvas.drawRRect(shape, fill..color = tone.withValues(alpha: 0.14 * strength));
+      canvas.drawRRect(shape, edge..color = tone.withValues(alpha: 0.9 * strength));
     }
     canvas.restore();
   }
 
-  // ------------------------------------------------------------------ blocks
-
   void _drawSettled(Canvas canvas, FieldGeometry g, GameState state) {
+    final a = assets;
     final board = state.board;
-    final origin = -g.grid / 2;
-    final matched = state.activeMatch?.cells ?? const <CellPosition>{};
-    final moving = {for (final move in state.moves) move.to};
+    final size = board.size;
+    // Centre of the cell in the top left corner of the grid.
+    final origin = -g.grid / 2 + 0.5;
+    final matched = state.activeMatch?.cells;
 
-    // Cells still reacting to a landing are drawn in their own pass.
-    final landing = <CellPosition, Landing>{};
-    for (final effect in fx.landings) {
-      for (final cell in effect.placement.cells) {
-        if (board.colorAt(cell.position) == cell.color &&
-            !matched.contains(cell.position) &&
-            !moving.contains(cell.position)) {
-          landing[cell.position] = effect;
+    if (state.moves.isEmpty && fx.landings.isEmpty) {
+      // Nothing is falling or landing: every block is where the board says.
+      for (var row = 0; row < size; row++) {
+        for (var col = 0; col < size; col++) {
+          final color = board.at(row, col);
+          if (color == null) continue;
+          if (matched != null && matched.contains(CellPosition(row, col))) continue;
+          _add(color, origin + col, origin + row, 0);
         }
       }
-    }
-
-    for (final block in board.blocks) {
-      final at = block.position;
-      if (matched.contains(at) || moving.contains(at) || landing.containsKey(at)) {
-        continue;
+      _flush(canvas);
+    } else {
+      final moving = a._moving..clear();
+      for (final move in state.moves) {
+        moving.add(move.to);
       }
-      _block(canvas, block.color, origin + at.col + 0.5, origin + at.row + 0.5, 0);
-    }
+      // Cells still reacting to a landing are drawn in their own pass.
+      final landing = a._landing..clear();
+      for (final effect in fx.landings) {
+        for (final cell in effect.placement.cells) {
+          final at = cell.position;
+          if (board.colorAt(at) == cell.color &&
+              !(matched?.contains(at) ?? false) &&
+              !moving.contains(at)) {
+            landing[at] = effect;
+          }
+        }
+      }
 
-    // Falling: each block accelerates over its own distance, so short falls
-    // land first, and wobbles once when it arrives.
-    if (state.moves.isNotEmpty) {
+      for (var row = 0; row < size; row++) {
+        for (var col = 0; col < size; col++) {
+          final color = board.at(row, col);
+          if (color == null) continue;
+          final at = CellPosition(row, col);
+          if ((matched?.contains(at) ?? false) || moving.contains(at) || landing.containsKey(at)) {
+            continue;
+          }
+          _add(color, origin + col, origin + row, 0);
+        }
+      }
+      _flush(canvas);
+
+      // Falling: each block accelerates over its own distance, so short
+      // falls land first, and wobbles once when it arrives.
       final side = state.activeSide;
       final bounce = engine.config.fallBounceSeconds / engine.config.animationSpeed;
-      canvas.save();
-      canvas.rotate(side.index * _quarter);
       for (final move in state.moves) {
-        final from = RotationTransform.worldToView(move.from, side, board.size);
-        final to = RotationTransform.worldToView(move.to, side, board.size);
+        final from = RotationTransform.worldToView(move.from, side, size);
+        final to = RotationTransform.worldToView(move.to, side, size);
         final flight = engine.config.fallSeconds(move.distance);
         final t = math.min(1.0, state.phaseElapsed / flight);
         final row = from.row + (to.row - from.row) * t * t;
@@ -574,21 +993,44 @@ class FieldPainter extends CustomPainter {
           scaleY = 1 - 0.3 * wave;
           scaleX = 1 + 0.16 * wave;
         }
-        _block(
+        _stretched(
           canvas,
           move.color,
-          origin + to.col + 0.5,
-          origin + row + 0.5 + 0.44 * (1 - math.min(scaleY, 1.0)),
+          origin + to.col,
+          origin + row + 0.44 * (1 - math.min(scaleY, 1.0)),
           side.index,
-          scaleX: scaleX,
-          scaleY: scaleY,
+          scaleX,
+          scaleY,
+          0,
         );
       }
-      canvas.restore();
+
+      // Landing: a white flash, and after a hard drop a squash along the fall.
+      for (final effect in fx.landings) {
+        final u = effect.age / effect.life;
+        final wave = effect.dropped ? math.sin(u * math.pi * 2) * (1 - u) : 0.0;
+        final scaleY = 1 - 0.26 * wave;
+        final scaleX = 1 + 0.15 * wave;
+        final frame = effect.placement.side;
+        for (final cell in effect.placement.cells) {
+          if (!identical(landing[cell.position], effect)) continue;
+          final local = RotationTransform.worldToView(cell.position, frame, size);
+          _stretched(
+            canvas,
+            cell.color,
+            origin + local.col,
+            origin + local.row + 0.44 * (1 - math.min(scaleY, 1.0)),
+            frame.index,
+            scaleX,
+            scaleY,
+            0.85 * (1 - u) * (1 - u),
+          );
+        }
+      }
     }
 
     // Match: flash to white and swell, then collapse while shards fly off.
-    if (matched.isNotEmpty) {
+    if (matched != null && matched.isNotEmpty) {
       final t = state.phaseProgress;
       final popping = state.phase == GamePhase.clearing;
       final scale = popping
@@ -599,65 +1041,32 @@ class FieldPainter extends CustomPainter {
         for (final cell in matched) {
           final color = board.colorAt(cell);
           if (color == null) continue;
-          _block(
-            canvas,
-            color,
-            origin + cell.col + 0.5,
-            origin + cell.row + 0.5,
-            0,
-            scaleX: scale,
-            scaleY: scale,
-            flash: flash,
-          );
+          _stretched(canvas, color, origin + cell.col, origin + cell.row, 0, scale, scale, flash);
         }
       }
-    }
-
-    // Landing: a white flash, and after a hard drop a squash along the fall.
-    for (final effect in fx.landings) {
-      final u = effect.age / effect.life;
-      final wave = effect.dropped ? math.sin(u * math.pi * 2) * (1 - u) : 0.0;
-      final scaleY = 1 - 0.26 * wave;
-      final scaleX = 1 + 0.15 * wave;
-      final side = effect.placement.side;
-      canvas.save();
-      canvas.rotate(side.index * _quarter);
-      for (final cell in effect.placement.cells) {
-        if (!identical(landing[cell.position], effect)) continue;
-        final local = RotationTransform.worldToView(cell.position, side, board.size);
-        _block(
-          canvas,
-          cell.color,
-          origin + local.col + 0.5,
-          origin + local.row + 0.5 + 0.44 * (1 - math.min(scaleY, 1.0)),
-          side.index,
-          scaleX: scaleX,
-          scaleY: scaleY,
-          flash: 0.85 * (1 - u) * (1 - u),
-        );
-      }
-      canvas.restore();
     }
   }
 
   /// Bars of light over popped lines, and the wash of a triple clear.
   void _drawFlashes(Canvas canvas, FieldGeometry g) {
+    final paint = Paint();
     for (final flash in fx.flashes) {
       canvas.drawRect(
         Rect.fromLTRB(flash.x0, flash.y0, flash.x1, flash.y1),
-        Paint()..color = flash.color.withValues(alpha: 0.85 * (1 - flash.age / flash.life)),
+        paint..color = flash.color.withValues(alpha: 0.85 * (1 - flash.age / flash.life)),
       );
     }
     final extent = g.grid.toDouble();
     for (final veil in fx.veils) {
       canvas.drawRect(
         Rect.fromLTWH(-extent, -extent, 2 * extent, 2 * extent),
-        Paint()..color = _white.withValues(alpha: 0.22 * (1 - veil.age / veil.life)),
+        paint..color = _white.withValues(alpha: 0.22 * (1 - veil.age / veil.life)),
       );
     }
   }
 
-  void _drawRings(Canvas canvas, double px) {
+  void _drawRings(Canvas canvas) {
+    final paint = Paint()..style = PaintingStyle.stroke;
     for (final ring in fx.rings) {
       if (ring.age < 0) continue;
       final t = ring.age / ring.life;
@@ -665,29 +1074,41 @@ class FieldPainter extends CustomPainter {
       canvas.drawCircle(
         Offset(ring.x, ring.y),
         0.3 + ring.reach * eased,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(px, 0.16 * (1 - t))
+        paint
+          ..strokeWidth = math.max(_px, 0.16 * (1 - t))
           ..color = ring.color.withValues(alpha: 0.75 * (1 - t)),
       );
     }
   }
 
+  /// Every shard is a tinted copy of one white square: all of them are one
+  /// call, however many a cascade throws up.
   void _drawParticles(Canvas canvas) {
-    final paint = Paint();
+    if (fx.particles.isEmpty) return;
+    final a = assets;
+    final c = _cos[0];
+    final s = _sin[0];
     for (final particle in fx.particles) {
-      final strength = 1 - particle.age / particle.life;
-      final size = particle.size * (0.4 + 0.6 * strength);
-      paint.color = particle.color.withValues(alpha: strength.clamp(0.0, 1.0));
-      canvas.drawRect(
-        Rect.fromCenter(center: Offset(particle.x, particle.y), width: size, height: size),
-        paint,
+      final strength = (1 - particle.age / particle.life).clamp(0.0, 1.0);
+      // The white square is two pixels wide; half its drawn size is its scale.
+      final half = particle.size * (0.4 + 0.6 * strength) / 2;
+      final scos = half * c;
+      final ssin = half * s;
+      a._batch.add(
+        scos,
+        ssin,
+        c * particle.x - s * particle.y - (scos - ssin),
+        s * particle.x + c * particle.y - (ssin + scos),
+        a._whitePatch,
+        ((strength * 255).round() << 24) | (particle.color.toARGB32() & 0xFFFFFF),
       );
     }
+    a._batch.draw(canvas, a._atlas!, a._imagePaint, tinted: true);
   }
 
-  void _drawIncoming(Canvas canvas, FieldGeometry g, double px, IncomingPiece piece) {
+  void _drawIncoming(Canvas canvas, FieldGeometry g, IncomingPiece piece) {
     final side = piece.side;
+    final stick = piece.piece;
     final lit = fx.activeness[side.index];
     final secondsLeft = engine.secondsToLock(side) ?? 0;
     final urgent = secondsLeft < 3;
@@ -695,52 +1116,25 @@ class FieldPainter extends CustomPainter {
     final top = -g.reach + piece.row - fx.slideLeft(piece);
     final left = -g.half + piece.column;
 
-    canvas.save();
-    canvas.rotate(side.index * _quarter);
-
     // Halo: white for the piece being steered, coloured when time runs out.
     final strength = math.max(lit, urgent ? 0.85 : 0.0);
     if (strength > 0.02) {
       final warn = urgent && lit < 0.5;
-      final color = warn ? _urgencyColor(secondsLeft) : _ice;
+      final tone = !warn ? 0 : (secondsLeft < 1.5 ? 2 : 1);
       final pulse = warn ? 0.6 + 0.4 * math.sin(fx.clock * 10) : 1.0;
-      final shape = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          left - 0.03,
-          top - 0.03,
-          piece.piece.width + 0.06,
-          piece.piece.depth + 0.06,
-        ),
-        const Radius.circular(0.2),
-      );
+      _enter(canvas, side.index);
+      _glow(canvas, assets._halo(stick.width, stick.depth, tone, g), left, top, strength);
       canvas.drawRRect(
-        shape,
+        FieldAssets._haloShape(left, top, stick.width, stick.depth),
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 4 * px
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * px)
-          ..color = color.withValues(alpha: 0.7 * strength),
+          ..strokeWidth = 1.8 * _px
+          ..color = _haloColors[tone].withValues(alpha: 0.95 * strength * pulse),
       );
-      canvas.drawRRect(
-        shape,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.8 * px
-          ..color = color.withValues(alpha: 0.95 * strength * pulse),
-      );
+      canvas.restore();
     }
 
-    final offsets = piece.piece.offsets;
-    for (var i = 0; i < offsets.length; i++) {
-      _block(
-        canvas,
-        piece.piece.colors[i],
-        left + offsets[i].col + 0.5,
-        top + offsets[i].row + 0.5,
-        side.index,
-      );
-    }
-    canvas.restore();
+    _stick(canvas, stick, left, top, side.index);
   }
 
   /// A hard-dropped piece streaking down to where it lands.
@@ -749,31 +1143,23 @@ class FieldPainter extends CustomPainter {
     if (drop == null) return;
     final t = state.phaseProgress;
     final row = drop.startRow + (drop.placement.row - drop.startRow) * t * t;
-    final left = -g.half + drop.placement.column;
-    final top = -g.reach + row;
-
-    canvas.save();
-    canvas.rotate(drop.placement.side.index * _quarter);
-    final offsets = drop.placement.piece.offsets;
-    for (var i = 0; i < offsets.length; i++) {
-      _block(
-        canvas,
-        drop.placement.piece.colors[i],
-        left + offsets[i].col + 0.5,
-        top + offsets[i].row + 0.5,
-        drop.placement.side.index,
-        scaleY: 1 + 0.18 * t,
-        flash: 0.25 * t,
-      );
-    }
-    canvas.restore();
+    _stick(
+      canvas,
+      drop.placement.piece,
+      -g.half + drop.placement.column,
+      -g.reach + row,
+      drop.placement.side.index,
+      scaleY: 1 + 0.18 * t,
+      flash: 0.25 * t,
+    );
   }
 
   /// Seconds until a piece locks by itself, written upright beside it.
   void _drawCountdown(
     Canvas canvas,
     FieldGeometry g,
-    Offset origin,
+    double ox,
+    double oy,
     double scale,
     IncomingPiece piece,
   ) {
@@ -783,38 +1169,25 @@ class FieldPainter extends CustomPainter {
     // The piece being steered only needs its timer when it is about to lock.
     if (lit > 0.5 && secondsLeft >= 3) return;
 
-    // A point just beyond the left end of the piece, in its glass's frame…
+    // A point just beyond the left end of the piece, in its glass's frame,
+    // turned with its glass and with the cross into screen pixels.
     final localX = -g.half + piece.column - 0.85;
-    final localY =
-        -g.reach + piece.row - fx.slideLeft(piece) + piece.piece.depth / 2;
-    // …turned with its glass and with the cross into screen pixels.
-    final angle = fx.viewAngle + piece.side.index * _quarter;
-    final centre = origin +
-        Offset(
-          (localX * math.cos(angle) - localY * math.sin(angle)) * scale,
-          (localX * math.sin(angle) + localY * math.cos(angle)) * scale,
-        );
+    final localY = -g.reach + piece.row - fx.slideLeft(piece) + piece.piece.depth / 2;
+    final c = _cos[piece.side.index];
+    final s = _sin[piece.side.index];
 
-    final urgent = secondsLeft < 3;
-    final text = TextPainter(
-      text: TextSpan(
-        text: secondsLeft < 10
-            ? secondsLeft.toStringAsFixed(1)
-            : secondsLeft.round().toString(),
-        style: Type.body(
-          math.max(9.0, g.cell * 0.78),
-          weight: urgent ? FontWeight.w800 : FontWeight.w600,
-          color: urgent
-              ? _urgencyColor(secondsLeft)
-              : Palette.text.withValues(alpha: 0.42),
-          height: 1,
-        ),
+    final text = assets._label(
+      piece.side,
+      secondsLeft < 10 ? secondsLeft.toStringAsFixed(1) : secondsLeft.round().toString(),
+      secondsLeft >= 3 ? 0 : (secondsLeft < 1.5 ? 2 : 1),
+      math.max(9.0, g.cell * 0.78),
+    );
+    text.paint(
+      canvas,
+      Offset(
+        ox + (localX * c - localY * s) * scale - text.width / 2,
+        oy + (localX * s + localY * c) * scale - text.height / 2,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    text.paint(canvas, centre - Offset(text.width / 2, text.height / 2));
+    );
   }
-
-  static Color _urgencyColor(double secondsLeft) =>
-      secondsLeft < 1.5 ? Palette.danger : Palette.warning;
 }

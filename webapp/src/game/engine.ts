@@ -263,6 +263,13 @@ export class GameEngine {
     );
   }
 
+  /** The row where the piece of `side` comes to rest if it falls straight
+   * down; null when that glass has no piece at the moment. */
+  restRow(side: Side): number | null {
+    const piece = this.incoming.pieceAt(side);
+    return piece ? this.incoming.restRow(piece, this.state.board) : null;
+  }
+
   /** Seconds until the piece of `side` locks if it is left alone. */
   secondsToLock(side: Side): number | null {
     const piece = this.incoming.pieceAt(side);

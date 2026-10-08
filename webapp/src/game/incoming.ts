@@ -18,6 +18,16 @@ export interface IncomingPiece {
   stepProgress: number;
 }
 
+/** A landing row and everything it depends on. */
+interface RestRow {
+  board: Board;
+  version: number;
+  piece: Piece;
+  row: number;
+  column: number;
+  value: number;
+}
+
 /** Absorbs floating-point error when a step falls due. */
 const EPSILON = 1e-9;
 
@@ -36,6 +46,10 @@ const KICKS: readonly (readonly [number, number])[] = [
  * only with settled blocks. */
 export class IncomingController {
   readonly pieces = new Map<Side, IncomingPiece>();
+
+  /** The last landing row worked out for each glass, and what it was worked
+   * out from. It is asked for several times a frame and changes once a step. */
+  private readonly rest = new Map<Side, RestRow>();
 
   /** While true, the active piece steps at the soft-drop rate as long as
    * it has room to fall. */
@@ -117,7 +131,27 @@ export class IncomingController {
 
   /** The row where `piece` will come to rest if nothing changes. */
   restRow(piece: IncomingPiece, board: Board): number {
-    return landingRow(board, piece.side, piece.piece, piece.column, piece.row) ?? piece.row;
+    const known = this.rest.get(piece.side);
+    if (
+      known !== undefined &&
+      known.board === board &&
+      known.version === board.version &&
+      known.piece === piece.piece &&
+      known.row === piece.row &&
+      known.column === piece.column
+    ) {
+      return known.value;
+    }
+    const value = landingRow(board, piece.side, piece.piece, piece.column, piece.row) ?? piece.row;
+    this.rest.set(piece.side, {
+      board,
+      version: board.version,
+      piece: piece.piece,
+      row: piece.row,
+      column: piece.column,
+      value,
+    });
+    return value;
   }
 
   /** Seconds until `piece` locks by itself if it is left alone: the steps

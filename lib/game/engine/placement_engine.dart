@@ -37,9 +37,18 @@ class PlacementEngine {
 
   /// Whether [piece] can occupy whole row [row] at [column] of the glass.
   bool fits(Board board, Side side, Piece piece, int row, int column) {
-    final glass = GlassView(board, side);
-    for (final offset in piece.offsets) {
-      if (!glass.isFree(row + offset.row, column + offset.col)) return false;
+    // Which square holds which colour does not matter here, only the cells
+    // the stick covers: a lying stick runs along its row, a standing one down
+    // its lane.
+    final length = piece.length;
+    if (piece.isHorizontal) {
+      for (var i = 0; i < length; i++) {
+        if (!glassIsFree(board, side, row, column + i)) return false;
+      }
+    } else {
+      for (var i = 0; i < length; i++) {
+        if (!glassIsFree(board, side, row + i, column)) return false;
+      }
     }
     return true;
   }

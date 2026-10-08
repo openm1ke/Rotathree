@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../style.dart';
@@ -13,14 +15,33 @@ class Backdrop extends StatefulWidget {
   State<Backdrop> createState() => _BackdropState();
 }
 
-class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin {
-  late final AnimationController _drift = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 40),
-  )..repeat(reverse: true);
+class _BackdropState extends State<Backdrop> {
+  /// The glows take forty seconds to cross: ten pictures a second show all
+  /// there is to see of that, a fraction of a pixel at a time. Asking for a
+  /// new one on every frame would keep the whole screen drawing at full rate
+  /// — on the menus too, where nothing else moves.
+  static const _step = Duration(milliseconds: 100);
+  static const _swingSeconds = 40.0;
+
+  final ValueNotifier<double> _drift = ValueNotifier(0);
+  final Stopwatch _clock = Stopwatch()..start();
+  Timer? _timer;
+
+  /// Where the glows are, 0..1: there and back again, easing at both ends.
+  double _position() {
+    final phase = (_clock.elapsedMilliseconds / 1000 / _swingSeconds) % 2;
+    return Curves.easeInOut.transform(phase <= 1 ? phase : 2 - phase);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_step, (_) => _drift.value = _position());
+  }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _drift.dispose();
     super.dispose();
   }
@@ -28,10 +49,7 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: CustomPaint(
-        painter: _BackdropPainter(CurvedAnimation(parent: _drift, curve: Curves.easeInOut)),
-        size: Size.infinite,
-      ),
+      child: CustomPaint(painter: _BackdropPainter(_drift), size: Size.infinite),
     );
   }
 }
@@ -39,7 +57,7 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
 class _BackdropPainter extends CustomPainter {
   _BackdropPainter(this.drift) : super(repaint: drift);
 
-  final Animation<double> drift;
+  final ValueListenable<double> drift;
 
   @override
   void paint(Canvas canvas, Size size) {

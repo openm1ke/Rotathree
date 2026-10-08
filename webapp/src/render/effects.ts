@@ -26,6 +26,7 @@ export interface Ring {
   y: number;
   age: number;
   life: number;
+  /** A CSS colour; the ring fades through the canvas's alpha. */
   color: string;
   reach: number;
 }
@@ -57,8 +58,8 @@ export interface Flash {
   y1: number;
   age: number;
   life: number;
-  /** `r, g, b`. */
-  rgb: string;
+  /** A CSS colour; the bar fades through the canvas's alpha. */
+  color: string;
 }
 
 /** A whole-field wash of light for a triple clear. */
@@ -98,6 +99,10 @@ interface StepTrack {
 }
 
 const QUARTER = Math.PI / 2;
+
+/** The most shards alive at once. A huge cascade drops its oldest ones rather
+ * than slowing the frame it is celebrated in. */
+const MAX_PARTICLES = 1500;
 
 /** Purely visual state layered on top of the engine: the turn of the cross,
  * kicks and shakes, particles, flashes. Nothing here feeds back into the
@@ -273,7 +278,7 @@ export class Effects {
         case 'glassAdded': {
           // A ring runs out from the far end of the glass as it is finished.
           const far = farEnd(event.side, engine.config.armLength + engine.config.boardSize / 2);
-          this.rings.push({ x: far.x, y: far.y, age: 0, life: 0.7, color: '120, 205, 255', reach: 3 });
+          this.rings.push({ x: far.x, y: far.y, age: 0, life: 0.7, color: 'rgb(120, 205, 255)', reach: 3 });
           this.addShake(0.04);
           break;
         }
@@ -312,9 +317,16 @@ export class Effects {
     this.kickX += this.kickVx * seconds;
     this.kickY += this.kickVy * seconds;
     this.shake *= Math.exp(-14 * seconds);
+    this.punch *= Math.exp(-9 * seconds);
+    // Everything comes to a dead stop instead of creeping towards it for
+    // ever: a field at rest is drawn on whole pixels, which is both sharper
+    // and much cheaper.
+    if (this.shake < 1e-4) this.shake = 0;
+    if (this.punch < 1e-5) this.punch = 0;
+    if (Math.abs(this.kickX) < 1e-4 && Math.abs(this.kickVx) < 1e-3) this.kickX = this.kickVx = 0;
+    if (Math.abs(this.kickY) < 1e-4 && Math.abs(this.kickVy) < 1e-3) this.kickY = this.kickVy = 0;
     this.shakeX = (Math.random() * 2 - 1) * this.shake;
     this.shakeY = (Math.random() * 2 - 1) * this.shake;
-    this.punch *= Math.exp(-9 * seconds);
 
     const drag = Math.max(0, 1 - 3.4 * seconds);
     for (const particle of this.particles) {
@@ -339,15 +351,35 @@ export class Effects {
     const rate = Math.min(1, seconds * 18);
     for (const side of SIDES) {
       const target = side === engine.activeSide ? 1 : 0;
-      this.activeness[side] += (target - this.activeness[side]) * rate;
+      const next = this.activeness[side] + (target - this.activeness[side]) * rate;
+      this.activeness[side] = Math.abs(target - next) < 0.002 ? target : next;
     }
+  }
+
+  /** True when nothing is animating: no turn, no shake, no particles. Two
+   * frames drawn while this holds look the same unless the game moved. */
+  get settled(): boolean {
+    return (
+      this.particles.length === 0 &&
+      this.rings.length === 0 &&
+      this.beams.length === 0 &&
+      this.landings.length === 0 &&
+      this.flashes.length === 0 &&
+      this.veils.length === 0 &&
+      this.kickX === 0 &&
+      this.kickY === 0 &&
+      this.shake === 0 &&
+      this.punch === 0 &&
+      this.turnProgress >= 1 &&
+      this.activeness.every((lit) => lit === 0 || lit === 1)
+    );
   }
 
   /** A level has been finished: rings roll out from the centre of the cross
    * and confetti in the colours in play flies after them. */
   celebrate(colours: number): void {
     for (let i = 0; i < 3; i++) {
-      this.rings.push({ x: 0, y: 0, age: -0.16 * i, life: 0.9, color: '255, 255, 255', reach: 13 });
+      this.rings.push({ x: 0, y: 0, age: -0.16 * i, life: 0.9, color: '#ffffff', reach: 13 });
     }
     for (let i = 0; i < 150; i++) {
       const tones = tonesOf(i % colours);
@@ -364,6 +396,7 @@ export class Effects {
         color: i % 4 === 0 ? '#ffffff' : i % 2 === 0 ? tones.light : tones.base,
       });
     }
+    this.capParticles();
     if (this.screenShake) this.punch = 0.05;
   }
 
@@ -447,7 +480,7 @@ export class Effects {
             y1: Math.max(a.y, b.y) + 0.5,
             age: 0,
             life: sig.flash,
-            rgb: sig.gold ? '255, 215, 106' : '255, 255, 255',
+            color: sig.gold ? '#ffd76a' : '#ffffff',
           });
         }
         this.addShake(sig.shake);
@@ -458,11 +491,17 @@ export class Effects {
       match.runs.forEach((run, i) => {
         if (i === 0) return;
         const mid = at(run.cells[Math.floor(run.cells.length / 2)]);
-        this.rings.push({ x: mid.x, y: mid.y, age: -0.08 * i, life: 0.55, color: '255, 255, 255', reach: 2.6 });
+        this.rings.push({ x: mid.x, y: mid.y, age: -0.08 * i, life: 0.55, color: '#ffffff', reach: 2.6 });
       });
       this.addShake(0.03 * (match.runs.length - 1));
     }
     if (varied && match.runs.length >= 3) this.veils.push({ age: 0, life: 0.2 });
+    this.capParticles();
+  }
+
+  private capParticles(): void {
+    const extra = this.particles.length - MAX_PARTICLES;
+    if (extra > 0) this.particles.splice(0, extra);
   }
 
   private shards(p: { x: number; y: number }, tones: BlockTones, sig: Signature): void {

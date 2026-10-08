@@ -202,6 +202,13 @@ class GameEngine {
     );
   }
 
+  /// The row where the piece of [side] comes to rest if it falls straight
+  /// down; null when that glass has no piece at the moment.
+  int? restRow(Side side) {
+    final piece = incoming.pieceAt(side);
+    return piece == null ? null : incoming.restRow(piece, board);
+  }
+
   /// Seconds until the piece of [side] locks if it is left alone.
   double? secondsToLock(Side side) {
     final piece = incoming.pieceAt(side);

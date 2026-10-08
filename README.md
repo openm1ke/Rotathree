@@ -49,6 +49,7 @@ flutter analyze
 flutter test
 dart run tool/balance_sim.dart          # bot balance simulation
 dart run tool/campaign_sim.dart --glasses=2 --colours=4 --profile=average
+flutter run --profile -t tool/frame_bench.dart   # build and raster time of a busy field
 ```
 
 ## Layout
@@ -70,6 +71,7 @@ dart run tool/campaign_sim.dart --glasses=2 --colours=4 --profile=average
   campaign levels, pause); `test/widget_test.dart` — the app through its menus
 - `tool/balance_sim.dart` — seeded bot games for comparing configurations;
   `tool/campaign_sim.dart` — how long bots of each skill need for the campaign
-  targets
+  targets; `tool/frame_bench.dart` — frame times of a busy field, still,
+  turning and exploding
 - `webapp/` — the browser version (Vite + TypeScript + React), with its own
   port of the engine and its own tests

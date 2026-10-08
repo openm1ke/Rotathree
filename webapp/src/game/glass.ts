@@ -47,6 +47,25 @@ export const sideAtSlot = (active: Side, slot: Side): Side => ((active + slot) %
 export const slotOfSide = (active: Side, worldSide: Side): Side =>
   ((((worldSide - active) % 4) + 4) % 4) as Side;
 
+/** Whether cell (`row`, `lane`) of the glass of `side` exists and is empty.
+ * The same answer as `GlassView.isFree`, without creating anything: this is
+ * asked thousands of times a second while pieces fall. */
+export function glassIsFree(board: Board, side: Side, row: number, lane: number): boolean {
+  if (lane < 0 || lane >= board.center || row < 0 || row >= board.arm + board.center) return false;
+  const col = board.arm + lane;
+  const last = board.size - 1;
+  switch (side) {
+    case 0:
+      return board.at(row, col) === EMPTY;
+    case 1:
+      return board.at(col, last - row) === EMPTY;
+    case 2:
+      return board.at(last - row, last - col) === EMPTY;
+    default:
+      return board.at(last - col, row) === EMPTY;
+  }
+}
+
 /** One glass: the arm of `side` plus the central square, seen with that
  * side on top. Row 0 is the far end of the arm, the last row is the floor —
  * the far wall of the central square. Lanes run across the glass.
