@@ -5,8 +5,10 @@ import { PieceGenerator } from './generator';
 import { settle, type BlockMove } from './gravity';
 import { IncomingController, type IncomingPiece } from './incoming';
 import { findMatches, type MatchResult } from './matchDetector';
-import { headroom, placementAt, type PlacedCell, type Placement } from './placement';
+import { fits, headroom, placementAt, type PlacedCell, type Placement } from './placement';
 import { stepsTo, turned, type Side } from './side';
+import { makePiece, type BlockColor, type Orientation, type Piece } from './piece';
+import { integer, list, number, record } from './snapshotReader';
 
 /** Explicit phases of the engine. Player input is only applied in
  * `playing`; in every other phase it is queued and replayed afterwards, so
@@ -127,6 +129,211 @@ export class GameEngine {
   /** The glasses in play, in the order they came into play. */
   sides: Side[];
   state!: GameState;
+
+  /** Saves timed phases and queued input as well as the visible field. */
+  snapshot(): Record<string, unknown> {
+    const s = this.state;
+    const cells: number[][] = [];
+    this.board.forEachBlock((row, col, color) => cells.push([row, col, color]));
+    return {
+      version: 1,
+      center: this.board.center,
+      arm: this.board.arm,
+      board: cells,
+      sides: [...this.sides],
+      activeSide: this.activeSide,
+      incoming: [...this.incoming.pieces.values()].map((p) => ({
+        ...p,
+        piece: { ...p.piece, colors: [...p.piece.colors] },
+      })),
+      phase: s.phase,
+      phaseElapsed: s.phaseElapsed,
+      phaseDuration: s.phaseDuration,
+      score: s.score,
+      combo: s.combo,
+      bestCombo: s.bestCombo,
+      matches: s.matches,
+      clearedCells: s.clearedCells,
+      piecesPlaced: s.piecesPlaced,
+      selfLocked: s.selfLocked,
+      elapsedSeconds: s.elapsedSeconds,
+      speedLevel: s.speedLevel,
+      buildingSide: s.buildingSide,
+      drop:
+        s.drop == null
+          ? null
+          : {
+              side: s.drop.placement.side,
+              piece: s.drop.placement.piece,
+              column: s.drop.placement.column,
+              row: s.drop.placement.row,
+              startRow: s.drop.startRow,
+            },
+      moves: s.moves.map((m) => [m.from.row, m.from.col, m.to.row, m.to.col, m.color]),
+      waiting: [...this.awaitingPiece],
+      inputs: this.inputs.map((input) => ({ ...input })),
+      activeStep: this.config.activeStepSeconds,
+      inactiveStep: this.config.inactiveStepSeconds,
+      rampBaseActive: this.rampBase.active,
+      rampBaseInactive: this.rampBase.inactive,
+      randomSeed: this.incoming.generator.seed,
+      generated: this.incoming.generator.generated,
+    };
+  }
+
+  restoreSnapshot(raw: unknown): void {
+    const r = record(raw);
+    if (r.version !== 1 || r.center !== this.board.center || r.arm !== this.board.arm)
+      throw new Error('Incompatible save');
+    const board = new Board(this.board.center, this.board.arm);
+    const occupied = new Set<number>();
+    for (const rawCell of list(r.board, board.size * board.size)) {
+      const c = list(rawCell, 3);
+      if (c.length !== 3) throw new Error('Invalid saved cell');
+      const row = integer(c[0], 0, board.size - 1),
+        col = integer(c[1], 0, board.size - 1);
+      const color = integer(c[2], 0, this.config.numberOfColors - 1);
+      if (!board.isInside(row, col) || occupied.has(board.index(row, col))) throw new Error('Invalid saved board');
+      occupied.add(board.index(row, col));
+      board.set(row, col, color);
+    }
+    const side = (raw: unknown): Side => integer(raw, 0, 3) as Side;
+    const piece = (raw: unknown): Piece => {
+      const p = record(raw),
+        colors = list(p.colors, this.config.pieceLength);
+      if (colors.length !== this.config.pieceLength) throw new Error('Invalid saved piece');
+      return makePiece(
+        colors.map((c) => integer(c, 0, this.config.numberOfColors - 1) as BlockColor),
+        integer(p.orientation, 0, 3) as Orientation,
+      );
+    };
+    const sides = list(r.sides, 4).map(side),
+      active = side(r.activeSide);
+    if (sides.length === 0 || new Set(sides).size !== sides.length || !sides.includes(active))
+      throw new Error('Invalid saved glasses');
+    const phases: GamePhase[] = [
+      'playing',
+      'pieceDropping',
+      'matching',
+      'clearing',
+      'settling',
+      'cascading',
+      'building',
+    ];
+    if (!phases.includes(r.phase as GamePhase)) throw new Error('Invalid saved phase');
+    const phase = r.phase as GamePhase;
+    const elapsed = number(r.phaseElapsed, 0, 60),
+      duration = number(r.phaseDuration, 0, 60);
+    if (elapsed > duration) throw new Error('Invalid phase time');
+    const incoming: IncomingPiece[] = list(r.incoming, 4).map((raw) => {
+      const p = record(raw),
+        s = side(p.side),
+        shape = piece(p.piece);
+      const row = integer(p.row, 0, this.config.armLength + this.config.boardSize - 1);
+      const column = integer(p.column, 0, this.config.boardSize - 1);
+      if (!sides.includes(s) || !fits(board, s, shape, row, column)) throw new Error('Invalid incoming piece');
+      return { side: s, piece: shape, row, column, stepProgress: number(p.stepProgress, 0, 1) };
+    });
+    if (new Set(incoming.map((p) => p.side)).size !== incoming.length) throw new Error('Duplicate incoming piece');
+    let drop: DropInFlight | null = null;
+    if (r.drop !== null) {
+      const d = record(r.drop),
+        s = side(d.side),
+        shape = piece(d.piece);
+      const row = integer(d.row, 0, this.config.armLength + this.config.boardSize - 1);
+      const col = integer(d.column, 0, this.config.boardSize - 1);
+      if (!sides.includes(s) || !fits(board, s, shape, row, col)) throw new Error('Invalid saved drop');
+      drop = { placement: placementAt(board, s, shape, col, row), startRow: integer(d.startRow, 0, row) };
+    }
+    if ((phase === 'pieceDropping') !== (drop !== null)) throw new Error('Missing saved drop');
+    const activeMatch = ['matching', 'clearing', 'cascading'].includes(phase)
+      ? findMatches(board, this.config.minMatchLength)
+      : null;
+    if (activeMatch !== null && activeMatch.runs.length === 0) throw new Error('Missing saved match');
+    const buildingSide = r.buildingSide === null ? null : side(r.buildingSide);
+    if (phase === 'building' && (buildingSide === null || !sides.includes(buildingSide)))
+      throw new Error('Invalid building glass');
+    const moves: BlockMove[] = list(r.moves, board.size * board.size).map((raw) => {
+      const m = list(raw, 5);
+      if (m.length !== 5) throw new Error('Invalid saved move');
+      const from = { row: integer(m[0], 0, board.size - 1), col: integer(m[1], 0, board.size - 1) };
+      const to = { row: integer(m[2], 0, board.size - 1), col: integer(m[3], 0, board.size - 1) };
+      if (!board.isInside(from.row, from.col) || !board.isInside(to.row, to.col)) throw new Error('Invalid saved move');
+      return {
+        from,
+        to,
+        color: integer(m[4], 0, this.config.numberOfColors - 1) as BlockColor,
+        distance: Math.abs(to.row - from.row) + Math.abs(to.col - from.col),
+      };
+    });
+    const waiting = list(r.waiting, 4).map(side);
+    if (waiting.some((s) => !sides.includes(s))) throw new Error('Invalid waiting glass');
+    const inputs: Input[] = list(r.inputs, this.config.maxQueuedInputs).map((raw) => {
+      const i = record(raw);
+      switch (i.kind) {
+        case 'turn':
+          return { kind: 'turn', quarterTurns: integer(i.quarterTurns, -2, 2) };
+        case 'activate':
+          return { kind: 'activate', side: side(i.side) };
+        case 'move':
+          return { kind: 'move', delta: integer(i.delta, -this.config.boardSize, this.config.boardSize) };
+        case 'rotate':
+          if (typeof i.clockwise !== 'boolean') throw new Error('Invalid rotation');
+          return { kind: 'rotate', clockwise: i.clockwise };
+        case 'drop':
+          return { kind: 'drop' };
+        default:
+          throw new Error('Invalid saved input');
+      }
+    });
+    const partition = [
+      ...incoming.map((p) => p.side),
+      ...waiting,
+      ...(drop ? [drop.placement.side] : []),
+      ...(phase === 'building' ? [buildingSide!] : []),
+    ];
+    if (partition.length !== sides.length || new Set(partition).size !== sides.length)
+      throw new Error('Incomplete saved glasses');
+    const steps = { active: number(r.activeStep, 0.01, 60), inactive: number(r.inactiveStep, 0.01, 60) };
+    const base = { active: number(r.rampBaseActive, 0.01, 60), inactive: number(r.rampBaseInactive, 0.01, 60) };
+    const seed = integer(r.randomSeed, 0, 0xffffffff),
+      generated = integer(r.generated, 0, 100000);
+    const restored: GameState = {
+      board,
+      incoming: this.incoming.pieces,
+      activeSide: active,
+      phase,
+      phaseElapsed: elapsed,
+      phaseDuration: duration,
+      score: integer(r.score),
+      combo: integer(r.combo),
+      bestCombo: integer(r.bestCombo),
+      matches: integer(r.matches),
+      clearedCells: integer(r.clearedCells),
+      piecesPlaced: integer(r.piecesPlaced),
+      selfLocked: integer(r.selfLocked),
+      elapsedSeconds: number(r.elapsedSeconds),
+      speedLevel: integer(r.speedLevel),
+      buildingSide,
+      drop,
+      activeMatch,
+      moves,
+      gameOverSide: null,
+    };
+    this.setSteps(steps.active, steps.inactive);
+    this.rampBase = base;
+    this.incoming.generator.restore(seed, generated);
+    this.incoming.pieces.clear();
+    for (const p of incoming) this.incoming.pieces.set(p.side, p);
+    this.incoming.softDrop = false;
+    this.sides = sides;
+    this.awaitingPiece.length = 0;
+    this.awaitingPiece.push(...waiting);
+    this.inputs.length = 0;
+    this.inputs.push(...inputs);
+    this.events = [];
+    this.state = restored;
+  }
 
   private readonly startConfig: GameConfig;
   private readonly inputs: Input[] = [];

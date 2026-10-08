@@ -33,8 +33,16 @@ const EPSILON = 1e-9;
 
 /** (rows, lanes) nudges tried when a rotation does not fit, gentlest first. */
 const KICKS: readonly (readonly [number, number])[] = [
-  [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0],
-  [0, -2], [0, 2], [-1, -1], [-1, 1], [-2, 0],
+  [0, 0],
+  [0, -1],
+  [0, 1],
+  [-1, 0],
+  [1, 0],
+  [0, -2],
+  [0, 2],
+  [-1, -1],
+  [-1, 1],
+  [-2, 0],
 ];
 
 /** Owns the independent streams of falling pieces, one per glass in play.
@@ -57,7 +65,7 @@ export class IncomingController {
 
   constructor(
     private config: GameConfig,
-    private readonly generator: PieceGenerator,
+    readonly generator: PieceGenerator,
   ) {}
 
   /** Uses new step times and rules from now on. */
@@ -105,11 +113,7 @@ export class IncomingController {
   }
 
   /** Places a specific piece in a glass (spawning, tests). */
-  put(
-    side: Side,
-    piece: Piece,
-    at: { column?: number; row?: number; stepProgress?: number } = {},
-  ): IncomingPiece {
+  put(side: Side, piece: Piece, at: { column?: number; row?: number; stepProgress?: number } = {}): IncomingPiece {
     const maxColumn = this.config.boardSize - pieceWidth(piece);
     const incoming: IncomingPiece = {
       side,
@@ -159,8 +163,7 @@ export class IncomingController {
    * drop is ignored — this is what the countdown shows. */
   secondsToLock(piece: IncomingPiece, board: Board, active: Side): number {
     const stepsDown = this.restRow(piece, board) - piece.row;
-    const interval =
-      piece.side === active ? this.config.activeStepSeconds : this.config.inactiveStepSeconds;
+    const interval = piece.side === active ? this.config.activeStepSeconds : this.config.inactiveStepSeconds;
     return (1 - piece.stepProgress + stepsDown) * interval;
   }
 

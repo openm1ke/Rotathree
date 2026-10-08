@@ -8,27 +8,46 @@ import 'package:rotathree/ui/data/progress.dart';
 import 'package:rotathree/ui/data/settings.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
 import 'package:rotathree/ui/input/dpad.dart';
+import 'package:rotathree/ui/data/run_save.dart';
+import 'package:rotathree/ui/data/stats.dart';
+import 'package:rotathree/ui/input/game_action.dart';
 
-Future<GameScreenState> pumpGame(WidgetTester tester, {Session session = const CustomSession(defaultCustom)}) async {
-  tester.view.physicalSize = const Size(390, 844);
+Future<GameScreenState> pumpGame(
+  WidgetTester tester, {
+  Session session = const CustomSession(defaultCustom),
+  RunSave? restore,
+  bool tutorial = false,
+  bool blocked = false,
+  ValueChanged<RunSave?>? onCheckpoint,
+  ValueChanged<RunRecord>? onRecord,
+  Size size = const Size(390, 844),
+  VoidCallback? onTutorialDone,
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
-  await tester.pumpWidget(MaterialApp(
-    home: GameScreen(
-      session: session,
-      settings: Settings.defaults(),
-      progress: Progress.initial(),
-      blocked: false,
-      onSettings: () {},
-      onExit: () {},
-      onLevels: () {},
-      onRetry: (_) {},
-      onInsane: () {},
-      onCustomise: () {},
-      onRecord: (_) {},
-      onProgress: (_) {},
+  await tester.pumpWidget(
+    MaterialApp(
+      home: GameScreen(
+        session: session,
+        settings: Settings.defaults(),
+        progress: Progress.initial(),
+        blocked: blocked,
+        restore: restore,
+        tutorial: tutorial,
+        onTutorialDone: onTutorialDone,
+        onCheckpoint: onCheckpoint,
+        onSettings: () {},
+        onExit: () {},
+        onLevels: () {},
+        onRetry: (_) {},
+        onInsane: () {},
+        onCustomise: () {},
+        onRecord: onRecord ?? (_) {},
+        onProgress: (_) {},
+      ),
     ),
-  ));
+  );
   await tester.pump(const Duration(milliseconds: 100));
   return tester.state<GameScreenState>(find.byType(GameScreen));
 }
@@ -111,5 +130,110 @@ void main() {
     await tester.tap(find.text('Продолжить'));
     await pumpFrames(tester, 2);
     expect(find.text('Продолжить'), findsNothing);
+  });
+
+  testWidgets('a level banner stays frozen in pause and survives saving', (tester) async {
+    RunSave? save;
+    final state = await pumpGame(tester, session: const CampaignSession(0), onCheckpoint: (value) => save = value);
+    state.engine.state.score = campaignLevels[0].target;
+    await pumpFrames(tester, 2);
+    state.handleBack();
+    await pumpFrames(tester, 80);
+    expect(state.engine.sides.length, 1);
+    expect(save!.banner!.pendingLevel, 1);
+    final checked = RunSave.read(save!.toJson())!;
+    await tester.pumpWidget(const SizedBox());
+    final resumed = await pumpGame(tester, session: checked.session, restore: checked);
+    await pumpFrames(tester, 80);
+    expect(resumed.engine.sides.length, 1);
+    await tester.tap(find.text('Продолжить'));
+    await pumpFrames(tester, 60);
+    expect(find.text('Уровень 2 / 15'), findsOneWidget);
+    expect(resumed.engine.sides.length, 2);
+  });
+
+  testWidgets('settings freeze the level banner as well as falling', (tester) async {
+    final state = await pumpGame(tester, session: const CampaignSession(0));
+    state.engine.state.score = campaignLevels[0].target;
+    await pumpFrames(tester, 2);
+    // Keep the same screen state while opening settings above it.
+    final original = tester.widget<GameScreen>(find.byType(GameScreen));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameScreen(
+          session: original.session,
+          settings: original.settings,
+          progress: original.progress,
+          blocked: true,
+          onSettings: () {},
+          onExit: () {},
+          onLevels: () {},
+          onRetry: (_) {},
+          onInsane: () {},
+          onCustomise: () {},
+          onRecord: (_) {},
+          onProgress: (_) {},
+        ),
+      ),
+    );
+    await pumpFrames(tester, 80);
+    expect(state.engine.sides.length, 1);
+    expect(find.text('УРОВЕНЬ 1 ПРОЙДЕН'), findsOneWidget);
+  });
+
+  testWidgets('finishing from pause records a run once and clears its save', (tester) async {
+    final records = <RunRecord>[];
+    RunSave? save;
+    final state = await pumpGame(tester, onCheckpoint: (value) => save = value, onRecord: records.add);
+    state.handleBack();
+    await tester.pump();
+    expect(save, isNotNull);
+    await tester.tap(find.text('Завершить и в меню'));
+    await tester.pump();
+    expect(records.single.interrupted, isTrue);
+    expect(save, isNull);
+    state.handleBack();
+    await tester.pump();
+    expect(records.length, 1);
+  });
+
+  testWidgets('phone tutorial requires each action and resolves a real match', (tester) async {
+    var done = false;
+    final state = await pumpGame(
+      tester,
+      tutorial: true,
+      size: const Size(320, 568),
+      session: CustomSession(defaultCustom.copyWith(extraGlasses: 0)),
+      onTutorialDone: () => done = true,
+    );
+    final row = state.engine.activePiece!.row;
+    await pumpFrames(tester, 80);
+    expect(state.engine.activePiece!.row, row);
+    await tester.tap(find.text('Дальше'));
+    await tester.pump();
+    state.press(GameAction.hardDrop);
+    expect(state.engine.phase, GamePhase.playing);
+    state.move(1, toWall: false);
+    await tester.pump();
+    await tester.tap(find.text('✓ Дальше'));
+    await tester.pump();
+    state.press(GameAction.rotateCW);
+    await tester.pump();
+    await tester.tap(find.text('✓ Дальше'));
+    await tester.pump();
+    state.press(GameAction.hardDrop);
+    await pumpFrames(tester, 50);
+    expect(state.engine.state.matches, greaterThan(0));
+    await tester.tap(find.text('✓ Дальше'));
+    await tester.pump();
+    await pumpFrames(tester, 25);
+    state.press(GameAction.glassRight);
+    await tester.pump();
+    await tester.tap(find.text('✓ Дальше'));
+    await tester.pump();
+    await tester.tap(find.text('Играть'));
+    await tester.pump();
+    expect(done, isTrue);
+    expect(tester.takeException(), isNull);
   });
 }

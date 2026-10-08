@@ -6,6 +6,7 @@ import 'data/progress.dart';
 import 'data/settings.dart';
 import 'data/stats.dart';
 import 'data/store.dart';
+import 'data/run_save.dart';
 import 'game/game_screen.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
@@ -58,9 +59,15 @@ class _AppRootState extends State<_AppRoot> {
   Session? _session;
   bool _settingsOpen = false;
 
-  /// Changes for every new game, so that each one starts from scratch.
-  int _nonce = 0;
   bool _stored = true;
+  final Set<String> _failedWrites = {};
+  RunSave? _savedRun;
+  RunSave? _restore;
+  bool _tutorialDone = false;
+  bool _tutorial = false;
+  Session? _afterTutorial;
+  /// A fresh key for each run; system Back talks to the current game.
+  GlobalKey<GameScreenState> _gameKey = GlobalKey<GameScreenState>();
 
   @override
   void initState() {
@@ -77,58 +84,130 @@ class _AppRootState extends State<_AppRoot> {
       _progress = store.loadProgress();
       _stats = store.loadStats();
       _custom = store.loadCustom();
+      _savedRun = store.loadRun();
+      _tutorialDone = store.loadTutorial();
+      if (_savedRun != null && _stats.recent.any((run) => run.id == _savedRun!.id)) {
+        _savedRun = null;
+        _saved('run', store.saveRun(null));
+      }
+      if (!store.available) _failedWrites.add('storage');
+      _stored = _failedWrites.isEmpty;
     });
     BlockTones.setColours(_settings.palettes.activeSet.colours);
   }
 
-  void _saved(Future<bool> write) {
+  void _saved(String key, Future<bool> write) {
     write.then((ok) {
-      if (mounted && ok != _stored) setState(() => _stored = ok);
+      if (!mounted) return;
+      if (ok) {
+        _failedWrites.remove(key);
+      } else {
+        _failedWrites.add(key);
+      }
+      final stored = _failedWrites.isEmpty;
+      if (stored != _stored) setState(() => _stored = stored);
     });
+  }
+
+  Future<void> _retryStorage() async {
+    final store = await AppStore.open();
+    if (!mounted) return;
+    _store = store;
+    if (store.available) _failedWrites.remove('storage');
+    _saved('settings', store.saveSettings(_settings));
+    _saved('progress', store.saveProgress(_progress));
+    _saved('stats', store.saveStats(_stats));
+    _saved('custom', store.saveCustom(_custom));
+    _saved('run', store.saveRun(_savedRun));
+    _saved('tutorial', store.saveTutorial(_tutorialDone));
+  }
+
+  void _checkpoint(RunSave? save) {
+    _savedRun = save;
+    _saved('run', _store!.saveRun(save));
   }
 
   void _changeSettings(Settings next) {
     setState(() => _settings = next);
     BlockTones.setColours(next.palettes.activeSet.colours);
-    _saved(_store!.saveSettings(next));
+    _saved('settings', _store!.saveSettings(next));
   }
 
   void _changeProgress(Progress next) {
     setState(() => _progress = next);
-    _saved(_store!.saveProgress(next));
+    _saved('progress', _store!.saveProgress(next));
   }
 
   void _recordRun(RunRecord run) {
     final next = _stats.withRun(run);
     setState(() => _stats = next);
-    _saved(_store!.saveStats(next));
+    _saved('stats', _store!.saveStats(next));
   }
 
   void _changeCustom(CustomSetup next) {
     setState(() => _custom = next);
-    _saved(_store!.saveCustom(next));
+    _saved('custom', _store!.saveCustom(next));
   }
 
   void _show(_Screen screen) => setState(() {
-        _screen = screen;
-        _settingsOpen = false;
-      });
+    _screen = screen;
+    _settingsOpen = false;
+  });
 
-  void _start(Session session) => setState(() {
-        _nonce++;
-        _settingsOpen = false;
-        _session = session;
-        _screen = _Screen.play;
-      });
+  void _start(Session session, {bool resume = false}) {
+    if (!resume && !_tutorialDone) {
+      _openTutorial(after: session);
+      return;
+    }
+    if (!resume && _savedRun != null) {
+      _recordRun(_savedRun!.abandoned());
+      _checkpoint(null);
+    }
+    setState(() {
+      _gameKey = GlobalKey<GameScreenState>();
+      _restore = resume ? _savedRun : null;
+      _tutorial = false;
+      _settingsOpen = false;
+      _session = session;
+      _screen = _Screen.play;
+    });
+  }
+
+  void _openTutorial({Session? after}) => setState(() {
+    _gameKey = GlobalKey<GameScreenState>();
+    _restore = null;
+    _afterTutorial = after;
+    _tutorial = true;
+    _settingsOpen = false;
+    _session = CustomSession(defaultCustom.copyWith(extraGlasses: 0));
+    _screen = _Screen.play;
+  });
+
+  void _finishTutorial() {
+    _tutorialDone = true;
+    _saved('tutorial', _store!.saveTutorial(true));
+    final next = _afterTutorial;
+    _afterTutorial = null;
+    if (next == null) {
+      _show(_Screen.home);
+    } else {
+      _start(next);
+    }
+  }
 
   void _retry(Session session) => setState(() {
-        _nonce++;
-        _session = session;
-      });
+    _gameKey = GlobalKey<GameScreenState>();
+    _restore = null;
+    _session = session;
+  });
 
   void _back() {
     if (_settingsOpen) {
       setState(() => _settingsOpen = false);
+      return;
+    }
+    if (_screen == _Screen.play) {
+      _gameKey.currentState?.handleBack();
       return;
     }
     if (_screen != _Screen.home) _show(_Screen.home);
@@ -139,56 +218,63 @@ class _AppRootState extends State<_AppRoot> {
     final store = _store;
     final colours = _settings.palettes.activeSet.colours;
     final body = switch (store) {
-      null => const SizedBox.shrink(),
+      null => const Center(child: CircularProgressIndicator()),
       _ => switch (_screen) {
-          _Screen.home => MainMenu(
-              progress: _progress,
-              onCampaign: () => _show(_Screen.campaign),
-              onCustom: () => _show(_Screen.custom),
-              onStatistics: () => _show(_Screen.statistics),
-              onSettings: () => _show(_Screen.settings),
-            ),
-          _Screen.campaign => CampaignScreen(
-              progress: _progress,
-              colours: colours,
-              onStart: (level) => _start(CampaignSession(level)),
-              onInsane: () => _start(const InsaneSession()),
-              onBack: () => _show(_Screen.home),
-            ),
-          _Screen.custom => CustomScreen(
-              setup: _custom,
-              colours: colours,
-              onChange: _changeCustom,
-              onStart: () => _start(CustomSession(_custom)),
-              onBack: () => _show(_Screen.home),
-            ),
-          _Screen.statistics => StatisticsScreen(
-              stats: _stats,
-              progress: _progress,
-              onBack: () => _show(_Screen.home),
-            ),
-          _Screen.settings => SettingsScreen(
-              settings: _settings,
-              stored: _stored,
-              onChange: _changeSettings,
-              onBack: () => _show(_Screen.home),
-            ),
-          _Screen.play => GameScreen(
-              key: ValueKey(_nonce),
-              session: _session!,
-              settings: _settings,
-              progress: _progress,
-              blocked: _settingsOpen,
-              onSettings: () => setState(() => _settingsOpen = true),
-              onExit: () => _show(_Screen.home),
-              onLevels: () => _show(_Screen.campaign),
-              onRetry: _retry,
-              onInsane: () => _start(const InsaneSession()),
-              onCustomise: () => _show(_Screen.custom),
-              onRecord: _recordRun,
-              onProgress: _changeProgress,
-            ),
-        },
+        _Screen.home => MainMenu(
+          progress: _progress,
+          savedRun: _savedRun,
+          onResume: () {
+            final save = _savedRun;
+            if (save != null) _start(save.session, resume: true);
+          },
+          onTutorial: () => _openTutorial(),
+          tutorialDone: _tutorialDone,
+          onCampaign: () => _show(_Screen.campaign),
+          onCustom: () => _show(_Screen.custom),
+          onStatistics: () => _show(_Screen.statistics),
+          onSettings: () => _show(_Screen.settings),
+        ),
+        _Screen.campaign => CampaignScreen(
+          progress: _progress,
+          colours: colours,
+          onStart: (level) => _start(CampaignSession(level)),
+          onInsane: () => _start(const InsaneSession()),
+          onBack: () => _show(_Screen.home),
+        ),
+        _Screen.custom => CustomScreen(
+          setup: _custom,
+          colours: colours,
+          onChange: _changeCustom,
+          onStart: () => _start(CustomSession(_custom)),
+          onBack: () => _show(_Screen.home),
+        ),
+        _Screen.statistics => StatisticsScreen(stats: _stats, progress: _progress, onBack: () => _show(_Screen.home)),
+        _Screen.settings => SettingsScreen(
+          settings: _settings,
+          stored: _stored,
+          onChange: _changeSettings,
+          onBack: () => _show(_Screen.home),
+        ),
+        _Screen.play => GameScreen(
+          key: _gameKey,
+          restore: _restore,
+          onCheckpoint: _checkpoint,
+          tutorial: _tutorial,
+          onTutorialDone: _finishTutorial,
+          session: _session!,
+          settings: _settings,
+          progress: _progress,
+          blocked: _settingsOpen,
+          onSettings: () => setState(() => _settingsOpen = true),
+          onExit: () => _show(_Screen.home),
+          onLevels: () => _show(_Screen.campaign),
+          onRetry: _retry,
+          onInsane: () => _start(const InsaneSession()),
+          onCustomise: () => _show(_Screen.custom),
+          onRecord: _recordRun,
+          onProgress: _changeProgress,
+        ),
+      },
     };
 
     return PopScope(
@@ -202,7 +288,32 @@ class _AppRootState extends State<_AppRoot> {
         child: Stack(
           children: [
             const Positioned.fill(child: Backdrop()),
-            Positioned.fill(child: body),
+            Positioned.fill(
+              child: Column(
+                children: [
+                  Expanded(child: body),
+                  if (!_stored)
+                    SafeArea(
+                      top: false,
+                      child: Container(
+                        color: Palette.panelStrong,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Не удалось сохранить данные. Они пока доступны только в этой сессии.',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            TextButton(onPressed: _retryStorage, child: const Text('Повторить')),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             if (_settingsOpen && _screen == _Screen.play && store != null)
               Positioned.fill(
                 child: SettingsScreen(

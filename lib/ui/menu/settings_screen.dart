@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../data/bindings.dart';
 import '../data/settings.dart';
 import '../input/game_action.dart';
 import '../style.dart';
@@ -46,32 +44,24 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   _Tab _tab = _Tab.controls;
 
-  /// The key slot waiting for its new key.
-  ({GameAction action, int slot})? _capture;
-
   @override
   Widget build(BuildContext context) {
     final frame = Focus(
       autofocus: true,
-      onKeyEvent: _onKey,
       child: ScreenFrame(
         kicker: widget.overlay ? 'В игре' : 'Меню',
         title: 'Настройки',
         onBack: widget.onBack,
         footer: widget.stored
             ? 'Всё сохраняется на этом устройстве сразу'
-            : 'Браузер не даёт сохранить настройки: после перезапуска они сбросятся',
+            : 'Не удалось сохранить данные на устройстве. Проверьте свободное место.',
         children: [
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               for (final tab in _Tab.values)
-                OptionChip(
-                  label: _tabNames[tab]!,
-                  selected: _tab == tab,
-                  onPressed: () => setState(() => _tab = tab),
-                ),
+                OptionChip(label: _tabNames[tab]!, selected: _tab == tab, onPressed: () => setState(() => _tab = tab)),
             ],
           ),
           const SizedBox(height: 14),
@@ -88,44 +78,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ColoredBox(color: const Color(0xF2070710), child: frame);
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    final capture = _capture;
-    if (capture == null || event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.physicalKey;
-    final bindings = widget.settings.bindings;
-    if (key == PhysicalKeyboardKey.escape) {
-      setState(() => _capture = null);
-    } else if (key == PhysicalKeyboardKey.backspace || key == PhysicalKeyboardKey.delete) {
-      widget.onChange(widget.settings.copyWith(bindings: unbindKey(bindings, capture.action, capture.slot)));
-      setState(() => _capture = null);
-    } else {
-      widget.onChange(widget.settings.copyWith(bindings: bindKey(bindings, capture.action, capture.slot, key)));
-      setState(() => _capture = null);
-    }
-    return KeyEventResult.handled;
-  }
-
   // --------------------------------------------------------------- controls
 
   List<Widget> _controls() {
     final s = widget.settings;
     return [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          'Нажмите на действие, затем на новую клавишу. Esc — отмена, Backspace — очистить. '
-          'Клавиша, занятая другим действием, переходит к новому.',
-          style: Type.body(12, color: Palette.textDim),
-        ),
-      ),
-      for (final group in ActionGroup.values)
-        Section(
-          title: group.title,
-          children: [
-            for (final action in keyActions)
-              if (action.group == group) _bindingRow(action),
-          ],
-        ),
       Section(
         title: 'Автоповтор движения',
         children: [
@@ -136,8 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             max: 300,
             step: 5,
             unit: 'мс',
-            onChanged: (value) =>
-                widget.onChange(s.copyWith(handling: s.handling.copyWith(dasMs: value.round()))),
+            onChanged: (value) => widget.onChange(s.copyWith(handling: s.handling.copyWith(dasMs: value.round()))),
           ),
           SliderRow(
             label: 'Интервал повтора (ARR)',
@@ -147,70 +103,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
             step: 5,
             unit: 'мс',
             note: s.handling.arrMs == 0 ? 'сразу до стенки' : null,
-            onChanged: (value) =>
-                widget.onChange(s.copyWith(handling: s.handling.copyWith(arrMs: value.round()))),
+            onChanged: (value) => widget.onChange(s.copyWith(handling: s.handling.copyWith(arrMs: value.round()))),
           ),
         ],
       ),
       Section(
         title: 'Экранные кнопки',
-        note: 'Что делает каждая кнопка левого и правого креста. Кнопки работают как клавиши.',
+        note: 'Что делает каждая кнопка левого и правого креста. Можно нажимать обе крестовины одновременно.',
         children: [
           for (final slot in PadSlot.values)
-            _padRow('Левый крест', slot, s.leftPad, (action) => widget.onChange(s.copyWith(leftPad: {...s.leftPad, slot: action}))),
+            _padRow(
+              'Левый крест',
+              slot,
+              s.leftPad,
+              (action) => widget.onChange(s.copyWith(leftPad: {...s.leftPad, slot: action})),
+            ),
           for (final slot in PadSlot.values)
-            _padRow('Правый крест', slot, s.rightPad, (action) => widget.onChange(s.copyWith(rightPad: {...s.rightPad, slot: action}))),
+            _padRow(
+              'Правый крест',
+              slot,
+              s.rightPad,
+              (action) => widget.onChange(s.copyWith(rightPad: {...s.rightPad, slot: action})),
+            ),
         ],
       ),
       Center(
         child: OutlineButton(
           label: 'Сбросить управление',
-          onPressed: () => widget.onChange(s.copyWith(
-            bindings: defaultBindings(),
-            handling: const Handling(),
-            leftPad: defaultLeftPad,
-            rightPad: defaultRightPad,
-          )),
+          onPressed: () => widget.onChange(
+            s.copyWith(handling: const Handling(), leftPad: defaultLeftPad, rightPad: defaultRightPad),
+          ),
         ),
       ),
       const SizedBox(height: 20),
     ];
-  }
-
-  Widget _bindingRow(GameAction action) {
-    final keys = widget.settings.bindings[action]!;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(action.label, style: Type.body(14, weight: FontWeight.w800)),
-                Text(action.hint, style: Type.body(11, color: Palette.textDim)),
-              ],
-            ),
-          ),
-          for (var slot = 0; slot < slotsPerAction; slot++)
-            // The second slot only shows once the first is taken.
-            if (slot <= keys.length) ...[
-              Keycap(
-                label: _capture?.action == action && _capture?.slot == slot
-                    ? 'нажмите…'
-                    : (slot < keys.length ? keyLabel(keys[slot]) : '+'),
-                waiting: _capture?.action == action && _capture?.slot == slot,
-                empty: slot >= keys.length,
-                onPressed: () => setState(() {
-                  final same = _capture?.action == action && _capture?.slot == slot;
-                  _capture = same ? null : (action: action, slot: slot);
-                }),
-              ),
-              const SizedBox(width: 6),
-            ],
-        ],
-      ),
-    );
   }
 
   Widget _padRow(String pad, PadSlot slot, PadLayout layout, ValueChanged<GameAction> onChanged) {
@@ -226,10 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             dropdownColor: Palette.panelStrong,
             underline: const SizedBox.shrink(),
             style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
-            items: [
-              for (final action in GameAction.values)
-                DropdownMenuItem(value: action, child: Text(action.label)),
-            ],
+            items: [for (final action in GameAction.values) DropdownMenuItem(value: action, child: Text(action.label))],
             onChanged: (action) {
               if (action != null) onChanged(action);
             },
@@ -274,10 +197,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 OutlineButton(
                   label: 'Удалить набор',
                   danger: true,
-                  onPressed: () => _setPalettes(palettes.copyWith(
-                    active: 'classic',
-                    sets: [for (final set in palettes.sets) if (set.id != active.id) set],
-                  )),
+                  onPressed: () => _setPalettes(
+                    palettes.copyWith(
+                      active: 'classic',
+                      sets: [
+                        for (final set in palettes.sets)
+                          if (set.id != active.id) set,
+                      ],
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -337,22 +265,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final picked = await showColourPicker(context, active.colours[slot], colourNames[slot]);
     if (picked == null || !mounted) return;
     final palettes = widget.settings.palettes;
-    final colours = [
-      for (var i = 0; i < active.colours.length; i++) i == slot ? picked : active.colours[i],
-    ];
+    final colours = [for (var i = 0; i < active.colours.length; i++) i == slot ? picked : active.colours[i]];
     if (active.builtin) {
       // A built-in set is copied before it is changed.
       final name = '${active.name} · мой';
-      final set = PaletteSet(
-        id: _newId(),
-        name: name.length > 24 ? name.substring(0, 24) : name,
-        colours: colours,
-      );
+      final set = PaletteSet(id: _newId(), name: name.length > 24 ? name.substring(0, 24) : name, colours: colours);
       _setPalettes(palettes.copyWith(active: set.id, sets: [...palettes.sets, set]));
     } else {
-      _setPalettes(palettes.copyWith(
-        sets: [for (final set in palettes.sets) set.id == active.id ? set.copyWith(colours: colours) : set],
-      ));
+      _setPalettes(
+        palettes.copyWith(
+          sets: [for (final set in palettes.sets) set.id == active.id ? set.copyWith(colours: colours) : set],
+        ),
+      );
     }
   }
 
@@ -404,10 +328,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       Center(
-        child: OutlineButton(
-          label: 'Сбросить эффекты',
-          onPressed: () => _setEffects(const EffectOptions()),
-        ),
+        child: OutlineButton(label: 'Сбросить эффекты', onPressed: () => _setEffects(const EffectOptions())),
       ),
       const SizedBox(height: 20),
     ];
@@ -424,7 +345,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: 'Надписи на поле',
         children: [
           SwitchRow(
-            label: 'Подсказки клавиш',
+            label: 'Подписи экранных кнопок',
             value: h.keyHints,
             on: 'показывать',
             off: 'скрыть',

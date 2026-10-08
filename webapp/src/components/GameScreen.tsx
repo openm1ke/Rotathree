@@ -7,7 +7,13 @@ import { planFor, type Session } from '../game/session';
 import { MODE_NAMES, type RunPlan } from '../game/modes';
 import type { Side } from '../game/side';
 import { KeyboardController } from '../input/keyboard';
-import type { Action } from '../input/bindings';
+import { keyLabel, type Action } from '../input/bindings';
+import { DEFAULT_PADS, PadController, type PadAction } from '../input/pads';
+import { useTouchControls } from '../input/touch';
+import { makePiece } from '../game/piece';
+import type { RunSave, RunTotals } from '../services/runSave';
+import { DPad } from './DPad';
+import { TutorialPanel, TUTORIAL_LESSONS } from './TutorialPanel';
 import { Effects } from '../render/effects';
 import { AdaptiveQuality } from '../render/quality';
 import { GameRenderer } from '../render/renderer';
@@ -21,16 +27,7 @@ import { formatDuration, formatNumber } from './format';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
 
-/** Points, pieces and so on, summed over the engines of one run. */
-interface Totals {
-  score: number;
-  pieces: number;
-  matches: number;
-  bestCombo: number;
-  seconds: number;
-}
-
-const NO_TOTALS: Totals = { score: 0, pieces: 0, matches: 0, bestCombo: 0, seconds: 0 };
+const NO_TOTALS: RunTotals = { score: 0, pieces: 0, matches: 0, bestCombo: 0, seconds: 0 };
 
 interface Props {
   session: Session;
@@ -51,6 +48,10 @@ interface Props {
   onCustomise: () => void;
   onRecord: (run: RunRecord) => void;
   onProgress: (progress: Progress) => void;
+  restore?: RunSave | null;
+  onCheckpoint?: (save: RunSave | null) => void;
+  tutorial?: boolean;
+  onTutorialDone?: () => void;
 }
 
 /** Longest frame the game will simulate in one go (hitches, tab switches). */
@@ -75,11 +76,21 @@ const newId = (): string => `${Date.now().toString(36)}${Math.random().toString(
  * the campaign's levels and turns key presses into engine input. The parent
  * re-keys it for every new game, so a session never changes under it. */
 export function GameScreen(props: Props) {
-  const { session, settings, blocked } = props;
+  const { session, settings, blocked, tutorial = false } = props;
+  const touch = useTouchControls();
+  const runId = useRef(props.restore?.id ?? newId());
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<GameRenderer | null>(null);
-  const actions = useRef({ togglePause: () => {}, retry: () => {}, activeGlass: (_side: number) => {} });
+  const actions = useRef({
+    togglePause: () => {},
+    retry: () => {},
+    activeGlass: (_side: number) => {},
+    down: (_action: PadAction) => {},
+    up: (_action: PadAction) => {},
+    nextLesson: () => {},
+    leave: (_destination: () => void, _save = false) => {},
+  });
 
   const [size, setSize] = useState(0);
   const [hud, setHud] = useState<HudState>(EMPTY_HUD);
@@ -89,6 +100,8 @@ export function GameScreen(props: Props) {
   const [result, setResult] = useState<RunRecord | null>(null);
   const [level, setLevel] = useState(session.mode === 'campaign' ? session.level : -1);
   const [overSlot, setOverSlot] = useState(0);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [performed, setPerformed] = useState(false);
 
   // The loop reads the latest settings and callbacks through this.
   const live = useRef(props);
@@ -108,8 +121,13 @@ export function GameScreen(props: Props) {
     };
 
     let engine = newEngine(plan);
+    if (props.restore) engine.restoreSnapshot(props.restore.engine);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     // Development only: lets the browser checks drive a running game.
-    if (import.meta.env.DEV) Object.assign(window, { __rotathree: engine });
+    const exposeEngine = () => {
+      if (import.meta.env.DEV) Object.assign(window, { __rotathree: engine });
+    };
+    exposeEngine();
     const fx = new Effects();
     fx.reset(engine.activeSide);
     const renderer = new GameRenderer(canvas);
@@ -119,7 +137,10 @@ export function GameScreen(props: Props) {
     /** Set when the picture has to be drawn even though nothing moved. */
     let dirty = true;
     const measure = () => {
-      const next = Math.floor(Math.min(frame.clientWidth, frame.clientHeight));
+      const style = getComputedStyle(frame);
+      const width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const height = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const next = Math.floor(Math.max(0, Math.min(width, height)));
       setSize(next);
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PIXELS / Math.max(1, next));
       renderer.resize(next, dpr * quality.scale);
@@ -130,24 +151,36 @@ export function GameScreen(props: Props) {
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
 
-    let current: Status = 'playing';
+    let current: Status = props.restore ? 'paused' : 'playing';
+    setStatus(current);
     const setRunStatus = (next: Status) => {
       current = next;
       setStatus(next);
     };
 
     let campaignLevel = campaign ? session.level : -1;
-    let levelBase = 0;
-    let carry: Totals = NO_TOTALS;
+    let levelBase = props.restore?.levelBase ?? 0;
+    let carry: RunTotals = props.restore?.carry ?? NO_TOTALS;
     let completing = false;
     let finished = false;
+    let pendingLevel: number | null = props.restore?.banner?.pendingLevel ?? null;
+    let saveCharge = 0;
+    let wasFrozen = false;
+    let lesson = 0;
+    let lessonPerformed = false;
+    let tutorialMatch = false;
     let calloutId = 0;
     let bannerId = 0;
-    let banner: { left: number; blocking: boolean; then: (() => void) | null } | null = null;
+    let banner: {
+      data: Omit<BannerData, 'id' | 'seconds'>;
+      left: number;
+      blocking: boolean;
+      then: (() => void) | null;
+    } | null = null;
     let shown = EMPTY_HUD;
     let progressNow = live.current.progress;
 
-    const totals = (): Totals => ({
+    const totals = (): RunTotals => ({
       score: carry.score + engine.state.score,
       pieces: carry.pieces + engine.state.piecesPlaced,
       matches: carry.matches + engine.state.matches,
@@ -158,22 +191,28 @@ export function GameScreen(props: Props) {
     const swapEngine = (next: GameEngine) => {
       carry = totals();
       engine = next;
-      if (import.meta.env.DEV) Object.assign(window, { __rotathree: engine });
+      exposeEngine();
       fx.reset(engine.activeSide);
     };
 
-    const showBanner = (data: Omit<BannerData, 'id' | 'seconds'>, seconds: number, blocking: boolean, then?: () => void) => {
+    const showBanner = (
+      data: Omit<BannerData, 'id' | 'seconds'>,
+      seconds: number,
+      blocking: boolean,
+      then?: () => void,
+    ) => {
       bannerId++;
       setBanner({ ...data, id: bannerId, seconds });
-      banner = { left: seconds, blocking, then: then ?? null };
+      banner = { data, left: seconds, blocking, then: then ?? null };
     };
 
     const stageColours = (count: number) => paletteColours(live.current.settings.palettes).slice(0, count);
 
-    const recordRun = (completed: boolean) => {
+    const recordRun = (completed: boolean, interrupted = false) => {
+      if (tutorial) return;
       const t = totals();
       const record: RunRecord = {
-        id: newId(),
+        id: runId.current,
         mode: session.mode,
         at: Date.now(),
         score: t.score,
@@ -183,8 +222,10 @@ export function GameScreen(props: Props) {
         seconds: t.seconds,
         level: campaign ? (completed ? CAMPAIGN_LAST + 1 : campaignLevel + 1) : engine.state.speedLevel + 1,
         completed,
+        interrupted,
       };
       live.current.onRecord(record);
+      live.current.onCheckpoint?.(null);
       setResult(record);
     };
 
@@ -219,6 +260,7 @@ export function GameScreen(props: Props) {
         campaignDone();
         return;
       }
+      pendingLevel = next;
       const to = CAMPAIGN[next];
       showBanner(
         {
@@ -237,6 +279,7 @@ export function GameScreen(props: Props) {
      * falling goes on. */
     const advanceTo = (next: number) => {
       completing = false;
+      pendingLevel = null;
       const from = CAMPAIGN[campaignLevel];
       const to = CAMPAIGN[next];
       campaignLevel = next;
@@ -245,7 +288,12 @@ export function GameScreen(props: Props) {
         swapEngine(newEngine({ config: levelConfig(to), ramp: null }));
         levelBase = 0;
         showBanner(
-          { kicker: 'Новый этап', title: `${to.colours} цвета`, sub: 'стаканы снова по одному', colours: stageColours(to.colours) },
+          {
+            kicker: 'Новый этап',
+            title: `${to.colours} цвета`,
+            sub: 'стаканы снова по одному',
+            colours: stageColours(to.colours),
+          },
           2.2,
           true,
         );
@@ -253,44 +301,166 @@ export function GameScreen(props: Props) {
         engine.setSteps(to.activeStep, to.inactiveStep);
         if (to.glasses > from.glasses) {
           engine.addGlass();
-          showBanner({ kicker: 'Новый стакан', title: `${to.glasses} стакана`, sub: 'первая фигура уже в пути' }, 1.6, false);
+          showBanner(
+            { kicker: 'Новый стакан', title: `${to.glasses} стакана`, sub: 'первая фигура уже в пути' },
+            1.6,
+            false,
+          );
         } else {
-          showBanner({ kicker: `Уровень ${next + 1}`, title: `цель ${formatScore(to.target)}`, sub: `${to.glasses} ст. · ${to.colours} цв.` }, 1.6, false);
+          showBanner(
+            {
+              kicker: `Уровень ${next + 1}`,
+              title: `цель ${formatScore(to.target)}`,
+              sub: `${to.glasses} ст. · ${to.colours} цв.`,
+            },
+            1.6,
+            false,
+          );
         }
         levelBase = engine.state.score;
+      }
+    };
+
+    const savedBanner = props.restore?.banner;
+    if (savedBanner) {
+      completing = savedBanner.pendingLevel !== null;
+      showBanner(
+        {
+          kicker: savedBanner.kicker,
+          title: savedBanner.title,
+          sub: savedBanner.sub,
+          colours: stageColours(savedBanner.colours),
+        },
+        savedBanner.left,
+        savedBanner.blocking,
+        savedBanner.pendingLevel === null ? undefined : () => advanceTo(savedBanner.pendingLevel!),
+      );
+    }
+    const checkpoint = () => {
+      if (tutorial || finished || engine.isGameOver || !live.current.onCheckpoint) return;
+      live.current.onCheckpoint({
+        version: 1,
+        id: runId.current,
+        session: campaign ? { mode: 'campaign', level: campaignLevel } : session,
+        engine: engine.snapshot(),
+        carry: { ...carry },
+        levelBase,
+        savedAt: Date.now(),
+        banner:
+          banner === null
+            ? null
+            : {
+                kicker: banner.data.kicker,
+                title: banner.data.title,
+                sub: banner.data.sub,
+                left: banner.left,
+                blocking: banner.blocking,
+                pendingLevel,
+                colours: banner.data.colours?.length ?? 0,
+              },
+      });
+      saveCharge = 0;
+    };
+    const allowsTutorial = (action: Action) =>
+      !tutorial ||
+      (engine.phase === 'playing' &&
+        (lesson === 1
+          ? action === 'moveLeft' || action === 'moveRight'
+          : lesson === 2
+            ? action === 'rotateCW' || action === 'rotateCCW'
+            : lesson === 3
+              ? action === 'hardDrop'
+              : lesson === 4
+                ? ['glassLeft', 'glassRight', 'glassOpposite'].includes(action)
+                : false));
+    const didLesson = () => {
+      if (tutorial && !lessonPerformed) {
+        lessonPerformed = true;
+        setPerformed(true);
       }
     };
 
     const togglePause = () => {
       if (current === 'playing') {
         keyboard.releaseAll();
+        pads.releaseAll();
         setRunStatus('paused');
+        checkpoint();
       } else if (current === 'paused') {
         setRunStatus('playing');
       }
     };
 
     const retry = () => {
+      if (tutorial) {
+        keyboard.releaseAll();
+        pads.releaseAll();
+        engine = newEngine(plan);
+        fx.reset(engine.activeSide);
+        exposeEngine();
+        lesson = 0;
+        lessonPerformed = false;
+        tutorialMatch = false;
+        setTutorialStep(0);
+        setPerformed(false);
+        setRunStatus('playing');
+        return;
+      }
+      if (!finished) recordRun(false, true);
       finished = true;
       live.current.onRetry(campaign ? { mode: 'campaign', level: campaignLevel } : session);
     };
     actions.current = {
       togglePause,
       retry,
+      down: (action) => pads.down(action),
+      up: (action) => pads.up(action),
+      leave: (destination, save = false) => {
+        keyboard.releaseAll();
+        pads.releaseAll();
+        if (save) checkpoint();
+        else if (!finished) recordRun(false, true);
+        finished = true;
+        destination();
+      },
+      nextLesson: () => {
+        if (lesson === TUTORIAL_LESSONS.length - 1) {
+          live.current.onTutorialDone?.();
+          return;
+        }
+        keyboard.releaseAll();
+        pads.releaseAll();
+        lesson++;
+        lessonPerformed = false;
+        setTutorialStep(lesson);
+        setPerformed(false);
+        if (lesson === 3) {
+          engine = newEngine(plan);
+          fx.reset(engine.activeSide);
+          exposeEngine();
+          engine.board.paintCenter(['. Y . . . . . . . .', 'B . . . . . . . . .', 'R R . . . . . . . .']);
+          engine.incoming.put(0, makePiece([0, 1, 2]), { column: 2 });
+        } else if (lesson === 4) engine.addGlass();
+        if (!live.current.blocked) canvas.focus({ preventScroll: true });
+      },
       activeGlass: (slot: number) => {
-        if (current !== 'playing') return;
+        if (current !== 'playing' || live.current.blocked || !allowsTutorial('glassRight') || banner?.blocking) return;
+        const before = engine.activeSide;
         engine.activateSide(sideAtSlot(engine.activeSide, slot as 0 | 1 | 2 | 3));
+        if (engine.activeSide !== before) didLesson();
       },
     };
 
-    const acceptsInput = () => current === 'playing' && !(banner?.blocking ?? false);
+    const acceptsInput = () => current === 'playing' && !live.current.blocked && !(banner?.blocking ?? false);
 
     const sink = {
       move: (direction: -1 | 1, toWall: boolean) => {
-        if (!acceptsInput()) return;
+        if (!acceptsInput() || !allowsTutorial(direction < 0 ? 'moveLeft' : 'moveRight')) return;
+        const before = engine.activePiece?.column;
         engine.moveActive(toWall ? direction * engine.config.boardSize : direction);
+        if (engine.activePiece?.column !== before) didLesson();
       },
-      softDrop: (held: boolean) => engine.setSoftDrop(held),
+      softDrop: (held: boolean) => engine.setSoftDrop(held && acceptsInput() && allowsTutorial('softDrop')),
       press: (action: Exclude<Action, 'moveLeft' | 'moveRight' | 'softDrop'>) => {
         if (action === 'pause') return togglePause();
         if (action === 'restart') return retry();
@@ -299,20 +469,31 @@ export function GameScreen(props: Props) {
           if ((current === 'over' || current === 'done') && action === 'hardDrop') retry();
           return;
         }
+        if (!allowsTutorial(action)) return;
+        const beforePiece = engine.activePiece?.piece,
+          beforeSide = engine.activeSide;
         switch (action) {
           case 'rotateCW':
-            return engine.rotateActive(true);
+            engine.rotateActive(true);
+            break;
           case 'rotateCCW':
-            return engine.rotateActive(false);
+            engine.rotateActive(false);
+            break;
           case 'hardDrop':
-            return engine.dropActive();
+            engine.dropActive();
+            break;
           case 'glassLeft':
-            return engine.switchSide(-1);
+            engine.switchSide(-1);
+            break;
           case 'glassRight':
-            return engine.switchSide(1);
+            engine.switchSide(1);
+            break;
           case 'glassOpposite':
-            return engine.switchSide(2);
+            engine.switchSide(2);
+            break;
         }
+        if (['rotateCW', 'rotateCCW'].includes(action) && engine.activePiece?.piece !== beforePiece) didLesson();
+        if (engine.activeSide !== beforeSide) didLesson();
       },
     };
     const keyboard = new KeyboardController(
@@ -321,18 +502,41 @@ export function GameScreen(props: Props) {
       sink,
     );
 
+    const pads = new PadController(sink, () => live.current.settings.handling);
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (live.current.blocked || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.defaultPrevented || live.current.blocked || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (current === 'paused') {
+        if (live.current.settings.bindings.pause.includes(event.code)) {
+          event.preventDefault();
+          togglePause();
+        }
+        return;
+      }
+      if (current !== 'playing') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest('input, select, textarea, [role="dialog"]') ||
+        (target?.closest('button') && ['Space', 'Enter'].includes(event.code))
+      )
+        return;
       if (keyboard.keyDown(event.code, event.repeat)) event.preventDefault();
     };
     const onKeyUp = (event: KeyboardEvent) => keyboard.keyUp(event.code);
     const onBlur = () => {
       keyboard.releaseAll();
+      pads.releaseAll();
       if (current === 'playing') setRunStatus('paused');
+      checkpoint();
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
+    const onVisibility = () => {
+      if (document.hidden) onBlur();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', checkpoint);
 
     let raf = 0;
     let last = performance.now();
@@ -346,18 +550,24 @@ export function GameScreen(props: Props) {
       const s = live.current.settings;
       const frozen = live.current.blocked;
       const holding = frozen || (banner?.blocking ?? false);
-      if (frozen) keyboard.releaseAll();
-      fx.screenShake = s.effects.screenShake;
-      fx.turnSeconds = s.effects.turnMs / 1000;
+      if (frozen) {
+        keyboard.releaseAll();
+        pads.releaseAll();
+        if (!wasFrozen) checkpoint();
+      }
+      wasFrozen = frozen;
+      fx.screenShake = s.effects.screenShake && !reduceMotion.matches;
+      fx.turnSeconds = reduceMotion.matches ? 0 : s.effects.turnMs / 1000;
       fx.explosion = s.effects.explosion;
 
       if (current === 'playing' && !holding) {
         keyboard.update(seconds);
-        engine.update(seconds);
+        pads.update(seconds);
+        if (!tutorial || engine.phase !== 'playing') engine.update(seconds);
       }
 
-      // Banners count down on their own clock.
-      if (banner) {
+      // Banners share the pause/settings gate with gameplay.
+      if (banner && current === 'playing' && !frozen) {
         banner.left -= seconds;
         if (banner.left <= 0) {
           const done = banner;
@@ -374,6 +584,7 @@ export function GameScreen(props: Props) {
 
       for (const event of events) {
         if (event.type === 'matchScored') {
+          if (tutorial && lesson === 3) tutorialMatch = true;
           setCallout({ id: ++calloutId, kind: 'score', score: event.score, combo: event.combo });
         } else if (event.type === 'speedUp') {
           setCallout({ id: ++calloutId, kind: 'speed', speed: event.level + 1 });
@@ -381,6 +592,14 @@ export function GameScreen(props: Props) {
           gameOver(event.side);
         }
       }
+
+      if (tutorial && tutorialMatch && lesson === 3 && engine.phase === 'playing') didLesson();
+      if (current === 'playing' && !frozen) saveCharge += seconds;
+      if (
+        saveCharge >= 2 ||
+        events.some((event) => ['pieceLanded', 'matchScored', 'glassAdded', 'speedUp'].includes(event.type))
+      )
+        checkpoint();
 
       if (campaign && !finished && !completing && acceptsInput() && engine.phase === 'playing') {
         if (engine.state.score - levelBase >= CAMPAIGN[campaignLevel].target) completeLevel();
@@ -455,6 +674,10 @@ export function GameScreen(props: Props) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', checkpoint);
+      keyboard.releaseAll();
+      pads.releaseAll();
       rendererRef.current = null;
     };
     // The session is fixed for the life of this component; the parent re-keys
@@ -475,11 +698,32 @@ export function GameScreen(props: Props) {
   const corner = `${(100 * config.armLength) / gridSize(config)}%`;
   const campaign = session.mode === 'campaign';
   const retryLabel = campaign ? 'Повторить уровень' : 'Заново';
-  const mode = MODE_NAMES[session.mode];
+  const mode = tutorial ? 'Обучение' : MODE_NAMES[session.mode];
   const playingLevel = campaign ? CAMPAIGN[level] : undefined;
 
   return (
-    <main className="game">
+    <main
+      className={`game ${touch ? 'game--touch' : ''} ${tutorial ? 'game--tutorial' : ''}`}
+      data-frozen={status === 'paused' || blocked}
+    >
+      {touch && (
+        <header className="touch-hud">
+          <div>
+            <strong>{formatScore(hud.score)} очков</strong>
+            <small>
+              {campaign
+                ? `Уровень ${level + 1} · ${formatScore(hud.into)} / ${formatScore(hud.target)}`
+                : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
+            </small>
+          </div>
+          <button type="button" className="chip" onClick={() => actions.current.togglePause()}>
+            Пауза
+          </button>
+          <button type="button" className="chip" onClick={props.onSettings}>
+            Настройки
+          </button>
+        </header>
+      )}
       <div className="game__frame" ref={frameRef}>
         <div
           className="stage"
@@ -491,23 +735,77 @@ export function GameScreen(props: Props) {
             ['--hud-opacity' as string]: settings.hud.opacity,
           }}
         >
-          <canvas ref={canvasRef} className="stage__canvas" style={{ width: size, height: size }} onClick={onCanvasClick} />
-          <Hud
-            hud={hud}
-            callout={callout}
-            bindings={settings.bindings}
-            options={settings.hud}
-            onPause={() => actions.current.togglePause()}
-            onOpenSettings={props.onSettings}
+          <canvas
+            ref={canvasRef}
+            className="stage__canvas"
+            tabIndex={0}
+            aria-label="Игровое поле"
+            style={{ width: size, height: size }}
+            onClick={onCanvasClick}
           />
+          {!touch && (
+            <Hud
+              hud={hud}
+              callout={callout}
+              bindings={settings.bindings}
+              options={settings.hud}
+              onPause={() => actions.current.togglePause()}
+              onOpenSettings={props.onSettings}
+            />
+          )}
           {banner && <LevelBanner banner={banner} />}
         </div>
       </div>
 
+      {tutorial && (
+        <TutorialPanel
+          step={tutorialStep}
+          performed={performed}
+          controls={
+            touch
+              ? 'Левая крестовина — движение и сброс. Правая — повороты и стаканы.'
+              : tutorialStep === 1
+                ? `${settings.bindings.moveLeft.map(keyLabel).join(' / ')} и ${settings.bindings.moveRight.map(keyLabel).join(' / ')} — движение`
+                : tutorialStep === 2
+                  ? `${settings.bindings.rotateCW.map(keyLabel).join(' / ')} — поворот`
+                  : tutorialStep === 3
+                    ? `${settings.bindings.hardDrop.map(keyLabel).join(' / ')} — сброс`
+                    : tutorialStep === 4
+                      ? `${[...settings.bindings.glassLeft, ...settings.bindings.glassRight].map(keyLabel).join(' / ')} — стаканы`
+                      : ''
+          }
+          onNext={() => actions.current.nextLesson()}
+          onSkip={() => props.onTutorialDone?.()}
+        />
+      )}
+      {touch && (
+        <div className="touch-controls">
+          <DPad
+            label="Левая крестовина"
+            layout={tutorial ? DEFAULT_PADS.left : settings.pads.left}
+            disabled={status !== 'playing' || blocked}
+            showLabels={tutorial || settings.hud.keyHints}
+            onDown={(action) => actions.current.down(action)}
+            onUp={(action) => actions.current.up(action)}
+          />
+          <DPad
+            label="Правая крестовина"
+            layout={tutorial ? DEFAULT_PADS.right : settings.pads.right}
+            disabled={status !== 'playing' || blocked}
+            showLabels={tutorial || settings.hud.keyHints}
+            onDown={(action) => actions.current.down(action)}
+            onUp={(action) => actions.current.up(action)}
+          />
+        </div>
+      )}
+
       {status === 'paused' && !blocked && (
-        <Overlay>
+        <Overlay label="Пауза" onDismiss={() => actions.current.togglePause()}>
           <div className="dialog dialog--narrow">
-            <span className="kicker">{mode}{playingLevel ? ` · уровень ${level + 1} из ${CAMPAIGN_LAST + 1}` : ''}</span>
+            <span className="kicker">
+              {mode}
+              {playingLevel ? ` · уровень ${level + 1} из ${CAMPAIGN_LAST + 1}` : ''}
+            </span>
             <h2 className="dialog__title">Пауза</h2>
             {playingLevel && (
               <p className="dialog__note">
@@ -520,10 +818,17 @@ export function GameScreen(props: Props) {
               </Button>
               <Button onClick={() => actions.current.retry()}>{retryLabel}</Button>
               <Button onClick={props.onSettings}>Настройки</Button>
-              {session.mode === 'custom' && <Button onClick={props.onCustomise}>Изменить режим</Button>}
-              {session.mode !== 'custom' && <Button onClick={props.onLevels}>К уровням</Button>}
-              <Button ghost onClick={props.onExit}>
-                В меню
+              {session.mode === 'custom' && !tutorial && (
+                <Button onClick={() => actions.current.leave(props.onCustomise)}>Изменить режим</Button>
+              )}
+              {session.mode !== 'custom' && (
+                <Button onClick={() => actions.current.leave(props.onLevels)}>К уровням</Button>
+              )}
+              {!tutorial && (
+                <Button onClick={() => actions.current.leave(props.onExit, true)}>Сохранить и в меню</Button>
+              )}
+              <Button ghost onClick={() => actions.current.leave(props.onExit)}>
+                {tutorial ? 'В меню' : 'Завершить и в меню'}
               </Button>
             </div>
           </div>
@@ -544,7 +849,9 @@ export function GameScreen(props: Props) {
               <Button primary autoFocus onClick={() => actions.current.retry()}>
                 {retryLabel}
               </Button>
-              {session.mode === 'custom' && <Button onClick={props.onCustomise}>Изменить режим</Button>}
+              {session.mode === 'custom' && !tutorial && (
+                <Button onClick={() => actions.current.leave(props.onCustomise)}>Изменить режим</Button>
+              )}
               {campaign && <Button onClick={props.onLevels}>К уровням</Button>}
               <Button ghost onClick={props.onExit}>
                 В меню

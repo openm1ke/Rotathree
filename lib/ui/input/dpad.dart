@@ -52,8 +52,7 @@ class _DPadState extends State<DPad> {
 
   bool _isPressed(PadSlot slot) => _fingers.containsValue(slot);
 
-  PadSlot _slotAt(Offset point) =>
-      DPad.slotAt(point, widget.size, widget.layout);
+  PadSlot _slotAt(Offset point) => DPad.slotAt(point, widget.size, widget.layout);
 
   void _down(PointerDownEvent event) {
     final slot = _slotAt(event.localPosition);
@@ -94,18 +93,30 @@ class _DPadState extends State<DPad> {
     final size = widget.size;
     final cell = size / 3;
     Widget button(PadSlot slot, int column, int row) => Positioned(
-          left: column * cell,
-          top: row * cell,
-          width: cell,
-          height: cell,
-          child: _PadButton(
-            slot: slot,
-            action: _actionOf(slot),
-            pressed: _isPressed(slot),
-            showLabel: widget.showLabels,
-            size: cell,
-          ),
-        );
+      left: column * cell,
+      top: row * cell,
+      width: cell,
+      height: cell,
+      child: Semantics(
+        button: true,
+        enabled: _actionOf(slot) != GameAction.none,
+        label: _actionOf(slot).hint,
+        excludeSemantics: true,
+        onTap: _actionOf(slot) == GameAction.none
+            ? null
+            : () {
+                widget.onDown(_actionOf(slot));
+                widget.onUp(_actionOf(slot));
+              },
+        child: _PadButton(
+          slot: slot,
+          action: _actionOf(slot),
+          pressed: _isPressed(slot),
+          showLabel: widget.showLabels,
+          size: cell,
+        ),
+      ),
+    );
 
     return Opacity(
       opacity: widget.opacity,
@@ -172,20 +183,16 @@ class _PadButton extends StatelessWidget {
           duration: const Duration(milliseconds: 70),
           decoration: BoxDecoration(
             borderRadius: radius,
-            color: pressed
-                ? tint.withValues(alpha: 0.34)
-                : Colors.white.withValues(alpha: empty ? 0.025 : 0.075),
+            color: pressed ? tint.withValues(alpha: 0.34) : Colors.white.withValues(alpha: empty ? 0.025 : 0.075),
             border: Border.all(
               color: pressed
                   ? tint
                   : empty
-                      ? Palette.line
-                      : Palette.lineStrong,
+                  ? Palette.line
+                  : Palette.lineStrong,
               width: 1.2,
             ),
-            boxShadow: pressed
-                ? [BoxShadow(color: tint.withValues(alpha: 0.5), blurRadius: 16)]
-                : null,
+            boxShadow: pressed ? [BoxShadow(color: tint.withValues(alpha: 0.5), blurRadius: 16)] : null,
           ),
           child: empty
               ? null
@@ -206,7 +213,7 @@ class _PadButton extends StatelessWidget {
                           overflow: TextOverflow.clip,
                           softWrap: false,
                           style: Type.label(
-                            size * 0.125,
+                            9,
                             color: pressed ? Colors.white : Palette.textDim,
                           ).copyWith(letterSpacing: 0.3),
                         ),
@@ -221,42 +228,39 @@ class _PadButton extends StatelessWidget {
 
 /// The picture of an action on its button.
 IconData padActionIcon(GameAction action) => switch (action) {
-      GameAction.none => Icons.remove,
-      GameAction.moveLeft => Icons.arrow_back_rounded,
-      GameAction.moveRight => Icons.arrow_forward_rounded,
-      GameAction.rotateCW => Icons.rotate_right_rounded,
-      GameAction.rotateCCW => Icons.rotate_left_rounded,
-      GameAction.softDrop => Icons.keyboard_double_arrow_down_rounded,
-      GameAction.hardDrop => Icons.vertical_align_bottom_rounded,
-      GameAction.glassLeft => Icons.turn_left_rounded,
-      GameAction.glassRight => Icons.turn_right_rounded,
-      GameAction.glassOpposite => Icons.swap_vert_rounded,
-      GameAction.pause => Icons.pause_rounded,
-      GameAction.restart => Icons.refresh_rounded,
-    };
+  GameAction.none => Icons.remove,
+  GameAction.moveLeft => Icons.arrow_back_rounded,
+  GameAction.moveRight => Icons.arrow_forward_rounded,
+  GameAction.rotateCW => Icons.rotate_right_rounded,
+  GameAction.rotateCCW => Icons.rotate_left_rounded,
+  GameAction.softDrop => Icons.keyboard_double_arrow_down_rounded,
+  GameAction.hardDrop => Icons.vertical_align_bottom_rounded,
+  GameAction.glassLeft => Icons.turn_left_rounded,
+  GameAction.glassRight => Icons.turn_right_rounded,
+  GameAction.glassOpposite => Icons.swap_vert_rounded,
+  GameAction.pause => Icons.pause_rounded,
+  GameAction.restart => Icons.refresh_rounded,
+};
 
 /// A word for the action, small under its picture.
 String padActionCaption(GameAction action) => switch (action) {
-      GameAction.none => '',
-      GameAction.moveLeft => 'ВЛЕВО',
-      GameAction.moveRight => 'ВПРАВО',
-      GameAction.rotateCW || GameAction.rotateCCW => 'ПОВОРОТ',
-      GameAction.softDrop => 'БЫСТРЕЕ',
-      GameAction.hardDrop => 'СБРОС',
-      GameAction.glassLeft || GameAction.glassRight => 'СТАКАН',
-      GameAction.glassOpposite => 'НАПРОТИВ',
-      GameAction.pause => 'ПАУЗА',
-      GameAction.restart => 'ЗАНОВО',
-    };
+  GameAction.none => '',
+  GameAction.moveLeft => 'ВЛЕВО',
+  GameAction.moveRight => 'ВПРАВО',
+  GameAction.rotateCW || GameAction.rotateCCW => 'ПОВОРОТ',
+  GameAction.softDrop => 'БЫСТРЕЕ',
+  GameAction.hardDrop => 'СБРОС',
+  GameAction.glassLeft || GameAction.glassRight => 'СТАКАН',
+  GameAction.glassOpposite => 'НАПРОТИВ',
+  GameAction.pause => 'ПАУЗА',
+  GameAction.restart => 'ЗАНОВО',
+};
 
 /// Buttons light up in the colour of what they do: the piece in blue, the
 /// cross in violet, the drop in pink.
 Color padActionTint(GameAction action) => switch (action) {
-      GameAction.hardDrop => Palette.pink,
-      GameAction.glassLeft ||
-      GameAction.glassRight ||
-      GameAction.glassOpposite =>
-        Palette.violet,
-      GameAction.pause => Palette.warning,
-      _ => Palette.accent,
-    };
+  GameAction.hardDrop => Palette.pink,
+  GameAction.glassLeft || GameAction.glassRight || GameAction.glassOpposite => Palette.violet,
+  GameAction.pause => Palette.warning,
+  _ => Palette.accent,
+};

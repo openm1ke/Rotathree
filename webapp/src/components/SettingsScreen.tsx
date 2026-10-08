@@ -16,6 +16,8 @@ import { defaultHandling } from '../input/keyboard';
 import { defaultSettings, type Palettes, type Settings, type ExplosionStyle } from '../services/storage';
 import { Button, Chip, Choice, Screen, Slider, Toggle } from './ui';
 import { useScreenKeys } from './nav';
+import { useTouchControls } from '../input/touch';
+import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS } from '../input/pads';
 
 type Tab = 'controls' | 'colours' | 'effects' | 'interface';
 
@@ -43,6 +45,7 @@ interface Props {
 const newId = (): string => `custom-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 export function SettingsScreen({ settings, stored, overlay, active, onChange, onBack }: Props) {
+  const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   const [tab, setTab] = useState<Tab>('controls');
   /** The key slot waiting for its new key. */
@@ -51,7 +54,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
 
   // While a slot waits, the very next key is its new key.
   useEffect(() => {
-    if (!capture) return;
+    if (!capture || touch) return;
     const onKey = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
@@ -67,7 +70,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [capture, settings, onChange]);
+  }, [capture, settings, onChange, touch]);
 
   const defaults = defaultSettings();
   let body: React.ReactNode;
@@ -75,42 +78,79 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
     case 'controls':
       body = (
         <>
-          <p className="hint">
-            Нажмите на действие, затем на новую клавишу. Esc — отмена, Backspace — очистить. Клавиша, занятая другим
-            действием, переходит к новому. Клавиша поворота против часовой и мягкий сброс по умолчанию не назначены.
-          </p>
-          {GROUPS.map((group) => (
-            <section className="group" key={group}>
-              <h3>{GROUP_TITLES[group]}</h3>
-              {ACTIONS.filter((action) => action.group === group).map((action) => (
-                <div className="bind" key={action.id}>
-                  <div className="bind__name">
-                    <span>{action.label}</span>
-                    <small>{action.hint}</small>
-                  </div>
-                  <div className="bind__keys">
-                    {Array.from({ length: SLOTS_PER_ACTION }, (_, slot) => {
-                      const code = settings.bindings[action.id][slot];
-                      // The second slot only shows once the first is taken.
-                      if (code === undefined && slot > settings.bindings[action.id].length) return null;
-                      const waiting = capture?.action === action.id && capture.slot === slot;
-                      return (
-                        <button
-                          type="button"
-                          key={slot}
-                          data-nav
-                          className={`bind__key ${waiting ? 'is-waiting' : ''} ${code ? '' : 'is-empty'}`}
-                          onClick={() => setCapture(waiting ? null : { action: action.id, slot })}
-                        >
-                          {waiting ? 'нажмите…' : code ? keyLabel(code) : '+'}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+          {touch ? (
+            <>
+              <p className="hint">
+                Левая крестовина управляет фигурой, правая — поворотами и стаканами. Можно нажимать обе одновременно.
+              </p>
+              {(['left', 'right'] as const).map((side) => (
+                <section className="group" key={side}>
+                  <h3>{side === 'left' ? 'Левая крестовина' : 'Правая крестовина'}</h3>
+                  {PAD_SLOTS.map((slot) => (
+                    <label className="row" key={slot}>
+                      <span className="row__label">{SLOT_LABELS[slot]}</span>
+                      <select
+                        className="pad-select"
+                        value={settings.pads[side][slot]}
+                        onChange={(event) =>
+                          onChange({
+                            ...settings,
+                            pads: { ...settings.pads, [side]: { ...settings.pads[side], [slot]: event.target.value } },
+                          })
+                        }
+                      >
+                        <option value="none">Не назначено</option>
+                        {ACTIONS.map((action) => (
+                          <option key={action.id} value={action.id}>
+                            {action.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </section>
               ))}
-            </section>
-          ))}
+            </>
+          ) : (
+            <>
+              <p className="hint">
+                Нажмите на действие, затем на новую клавишу. Esc — отмена, Backspace — очистить. Клавиша, занятая другим
+                действием, переходит к новому. Клавиша поворота против часовой и мягкий сброс по умолчанию не назначены.
+              </p>
+              {GROUPS.map((group) => (
+                <section className="group" key={group}>
+                  <h3>{GROUP_TITLES[group]}</h3>
+                  {ACTIONS.filter((action) => action.group === group).map((action) => (
+                    <div className="bind" key={action.id}>
+                      <div className="bind__name">
+                        <span>{action.label}</span>
+                        <small>{action.hint}</small>
+                      </div>
+                      <div className="bind__keys">
+                        {Array.from({ length: SLOTS_PER_ACTION }, (_, slot) => {
+                          const code = settings.bindings[action.id][slot];
+                          // The second slot only shows once the first is taken.
+                          if (code === undefined && slot > settings.bindings[action.id].length) return null;
+                          const waiting = capture?.action === action.id && capture.slot === slot;
+                          return (
+                            <button
+                              type="button"
+                              key={slot}
+                              data-nav
+                              className={`bind__key ${waiting ? 'is-waiting' : ''} ${code ? '' : 'is-empty'}`}
+                              onClick={() => setCapture(waiting ? null : { action: action.id, slot })}
+                            >
+                              {waiting ? 'нажмите…' : code ? keyLabel(code) : '+'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ))}
+            </>
+          )}
           <section className="group">
             <h3>Автоповтор движения</h3>
             <Slider
@@ -136,7 +176,15 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
           <div className="form__start">
             <Button
               ghost
-              onClick={() => onChange({ ...settings, bindings: cloneBindings(defaultBindings), handling: { ...defaultHandling } })}
+              onClick={() =>
+                onChange({
+                  ...settings,
+                  ...(touch
+                    ? { pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } } }
+                    : { bindings: cloneBindings(defaultBindings) }),
+                  handling: { ...defaultHandling },
+                })
+              }
             >
               Сбросить управление
             </Button>
@@ -163,8 +211,8 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               onChange={(explosion) => onChange({ ...settings, effects: { ...settings.effects, explosion } })}
             />
             <p className="hint">
-              Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой. Одновременные
-              линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.
+              Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой.
+              Одновременные линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.
             </p>
           </section>
           <section className="group">
@@ -194,7 +242,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
           <section className="group">
             <h3>Надписи на поле</h3>
             <Toggle
-              label="Подсказки клавиш"
+              label={touch ? 'Подписи экранных кнопок' : 'Подсказки клавиш'}
               value={settings.hud.keyHints}
               on="показывать"
               off="скрыть"
@@ -225,12 +273,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
             />
           </section>
           <div className="form__start">
-            <Button
-              ghost
-              onClick={() =>
-                onChange({ ...settings, hud: defaults.hud, effects: defaults.effects })
-              }
-            >
+            <Button ghost onClick={() => onChange({ ...settings, hud: defaults.hud, effects: defaults.effects })}>
               Сбросить интерфейс
             </Button>
           </div>
@@ -273,13 +316,21 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
   const active = palettes.sets.find((set) => set.id === palettes.active) ?? palettes.sets[0];
 
   const copy = () => {
-    const set = { id: newId(), name: `Мой набор ${palettes.sets.length - 2}`, colours: [...active.colours], builtin: false };
+    const set = {
+      id: newId(),
+      name: `Мой набор ${palettes.sets.length - 2}`,
+      colours: [...active.colours],
+      builtin: false,
+    };
     onChange({ ...settings, palettes: { active: set.id, sets: [...palettes.sets, set] } });
   };
 
   const remove = () => {
     if (active.builtin) return;
-    onChange({ ...settings, palettes: { active: 'classic', sets: palettes.sets.filter((set) => set.id !== active.id) } });
+    onChange({
+      ...settings,
+      palettes: { active: 'classic', sets: palettes.sets.filter((set) => set.id !== active.id) },
+    });
   };
 
   const edit = (slot: number, hex: string) => {

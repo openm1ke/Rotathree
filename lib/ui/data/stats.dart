@@ -13,20 +13,22 @@ class RunRecord {
     required this.seconds,
     required this.level,
     required this.completed,
+    this.interrupted = false,
   });
 
   factory RunRecord.fromJson(Map<Object?, Object?> raw) => RunRecord(
-        id: '${raw['id'] ?? ''}',
-        mode: ModeId.values.firstWhere((m) => m.name == raw['mode'], orElse: () => ModeId.custom),
-        at: _count(raw['at']),
-        score: _count(raw['score']),
-        pieces: _count(raw['pieces']),
-        matches: _count(raw['matches']),
-        bestCombo: _count(raw['bestCombo']),
-        seconds: raw['seconds'] is num ? (raw['seconds'] as num).toDouble() : 0,
-        level: _count(raw['level']),
-        completed: raw['completed'] == true,
-      );
+    id: '${raw['id'] ?? ''}',
+    mode: ModeId.values.firstWhere((m) => m.name == raw['mode'], orElse: () => ModeId.custom),
+    at: _count(raw['at']),
+    score: _count(raw['score']),
+    pieces: _count(raw['pieces']),
+    matches: _count(raw['matches']),
+    bestCombo: _count(raw['bestCombo']),
+    seconds: raw['seconds'] is num ? (raw['seconds'] as num).toDouble() : 0,
+    level: _count(raw['level']),
+    completed: raw['completed'] == true,
+    interrupted: raw['interrupted'] == true,
+  );
 
   final String id;
   final ModeId mode;
@@ -44,19 +46,21 @@ class RunRecord {
 
   /// Campaign only: whether the last level was finished.
   final bool completed;
+  final bool interrupted;
 
   Map<String, Object> toJson() => {
-        'id': id,
-        'mode': mode.name,
-        'at': at,
-        'score': score,
-        'pieces': pieces,
-        'matches': matches,
-        'bestCombo': bestCombo,
-        'seconds': seconds,
-        'level': level,
-        'completed': completed,
-      };
+    'id': id,
+    'mode': mode.name,
+    'at': at,
+    'score': score,
+    'pieces': pieces,
+    'matches': matches,
+    'bestCombo': bestCombo,
+    'seconds': seconds,
+    'level': level,
+    'completed': completed,
+    'interrupted': interrupted,
+  };
 }
 
 /// The totals of one mode.
@@ -100,28 +104,28 @@ class ModeStats {
 
   /// The totals with [run] added.
   ModeStats added(RunRecord run) => ModeStats(
-        games: games + 1,
-        completed: completed + (run.completed ? 1 : 0),
-        totalScore: totalScore + run.score,
-        bestScore: run.score > bestScore ? run.score : bestScore,
-        totalPieces: totalPieces + run.pieces,
-        totalMatches: totalMatches + run.matches,
-        bestCombo: run.bestCombo > bestCombo ? run.bestCombo : bestCombo,
-        totalSeconds: totalSeconds + run.seconds,
-        bestLevel: run.level > bestLevel ? run.level : bestLevel,
-      );
+    games: games + 1,
+    completed: completed + (run.completed ? 1 : 0),
+    totalScore: totalScore + run.score,
+    bestScore: run.score > bestScore ? run.score : bestScore,
+    totalPieces: totalPieces + run.pieces,
+    totalMatches: totalMatches + run.matches,
+    bestCombo: run.bestCombo > bestCombo ? run.bestCombo : bestCombo,
+    totalSeconds: totalSeconds + run.seconds,
+    bestLevel: run.level > bestLevel ? run.level : bestLevel,
+  );
 
   Map<String, Object> toJson() => {
-        'games': games,
-        'completed': completed,
-        'totalScore': totalScore,
-        'bestScore': bestScore,
-        'totalPieces': totalPieces,
-        'totalMatches': totalMatches,
-        'bestCombo': bestCombo,
-        'totalSeconds': totalSeconds,
-        'bestLevel': bestLevel,
-      };
+    'games': games,
+    'completed': completed,
+    'totalScore': totalScore,
+    'bestScore': bestScore,
+    'totalPieces': totalPieces,
+    'totalMatches': totalMatches,
+    'bestCombo': bestCombo,
+    'totalSeconds': totalSeconds,
+    'bestLevel': bestLevel,
+  };
 }
 
 /// The statistics of every mode, and the last runs.
@@ -129,9 +133,9 @@ class Stats {
   const Stats({required this.modes, required this.recent});
 
   factory Stats.empty() => const Stats(
-        modes: {ModeId.campaign: ModeStats(), ModeId.insane: ModeStats(), ModeId.custom: ModeStats()},
-        recent: [],
-      );
+    modes: {ModeId.campaign: ModeStats(), ModeId.insane: ModeStats(), ModeId.custom: ModeStats()},
+    recent: [],
+  );
 
   factory Stats.fromJson(Object? raw) {
     if (raw is! Map) return Stats.empty();
@@ -155,15 +159,17 @@ class Stats {
   final List<RunRecord> recent;
 
   /// The statistics with [run] added to its mode and to the recent runs.
-  Stats withRun(RunRecord run) => Stats(
-        modes: {...modes, run.mode: modes[run.mode]!.added(run)},
-        recent: [run, ...recent].take(recentLimit).toList(),
-      );
+  Stats withRun(RunRecord run) => recent.any((old) => old.id == run.id)
+      ? this
+      : Stats(
+          modes: {...modes, run.mode: modes[run.mode]!.added(run)},
+          recent: [run, ...recent].take(recentLimit).toList(),
+        );
 
   Map<String, Object> toJson() => {
-        'modes': {for (final mode in ModeId.values) mode.name: modes[mode]!.toJson()},
-        'recent': [for (final run in recent) run.toJson()],
-      };
+    'modes': {for (final mode in ModeId.values) mode.name: modes[mode]!.toJson()},
+    'recent': [for (final run in recent) run.toJson()],
+  };
 }
 
 int _count(Object? value) => value is num && value.isFinite ? value.round().clamp(0, 1 << 52) : 0;

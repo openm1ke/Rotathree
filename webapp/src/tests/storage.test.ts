@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { CAMPAIGN } from '../game/campaign';
-import { addRun, defaultProgress, defaultStats, sanitizeProgress, sanitizeStats, type RunRecord } from '../services/storage';
+import {
+  addRun,
+  defaultProgress,
+  defaultStats,
+  sanitizeProgress,
+  sanitizeStats,
+  type RunRecord,
+} from '../services/storage';
 
 const run = (overrides: Partial<RunRecord> = {}): RunRecord => ({
   id: 'x',
@@ -19,7 +26,7 @@ const run = (overrides: Partial<RunRecord> = {}): RunRecord => ({
 describe('statistics', () => {
   it('add a run to its mode and keep the best of each figure', () => {
     let stats = addRun(defaultStats(), run({ score: 300, pieces: 10, bestCombo: 2, seconds: 60 }));
-    stats = addRun(stats, run({ score: 200, pieces: 4, bestCombo: 3, seconds: 20, level: 4 }));
+    stats = addRun(stats, run({ id: 'second', score: 200, pieces: 4, bestCombo: 3, seconds: 20, level: 4 }));
     const custom = stats.modes.custom;
     expect(custom.games).toBe(2);
     expect(custom.totalScore).toBe(500);
@@ -41,7 +48,10 @@ describe('statistics', () => {
   });
 
   it('a damaged record is read as far as it can be', () => {
-    const cleaned = sanitizeStats({ modes: { custom: { games: 'many', bestScore: 42 } }, recent: [{ mode: 'nope' }, { mode: 'insane', score: 9 }] });
+    const cleaned = sanitizeStats({
+      modes: { custom: { games: 'many', bestScore: 42 } },
+      recent: [{ mode: 'nope' }, { mode: 'insane', score: 9 }],
+    });
     expect(cleaned.modes.custom.games).toBe(0);
     expect(cleaned.modes.custom.bestScore).toBe(42);
     expect(cleaned.recent).toHaveLength(1);

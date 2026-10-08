@@ -1,10 +1,8 @@
 import 'package:flutter/widgets.dart';
 
 import '../../game/config/campaign.dart';
-import '../data/bindings.dart';
 import '../data/settings.dart';
 import '../format.dart';
-import '../input/game_action.dart';
 import '../style.dart';
 
 /// The numbers shown in the corners of the field.
@@ -75,16 +73,14 @@ class HudState {
       other.speed == speed;
 
   @override
-  int get hashCode => Object.hash(score, combo, bestCombo, matches, pieces, seconds, level, into, target, colours, glasses, speed);
+  int get hashCode =>
+      Object.hash(score, combo, bestCombo, matches, pieces, seconds, level, into, target, colours, glasses, speed);
 }
 
 /// A short-lived callout: a score gain with its combo, or a new speed.
 class Callout {
   const Callout.score({required this.id, required this.points, required this.combo}) : speed = 0, isSpeed = false;
-  const Callout.speed({required this.id, required this.speed})
-      : points = 0,
-        combo = 0,
-        isSpeed = true;
+  const Callout.speed({required this.id, required this.speed}) : points = 0, combo = 0, isSpeed = true;
 
   final int id;
   final bool isSpeed;
@@ -99,17 +95,13 @@ class Hud extends StatelessWidget {
     super.key,
     required this.hud,
     required this.callout,
-    required this.bindings,
     required this.options,
     required this.corner,
     required this.base,
-    required this.onPause,
-    required this.onOpenSettings,
   });
 
   final HudState hud;
   final Callout? callout;
-  final Bindings bindings;
   final HudOptions options;
 
   /// Side of a corner square, in logical pixels.
@@ -117,8 +109,6 @@ class Hud extends StatelessWidget {
 
   /// The base text size; everything on the field is a multiple of it.
   final double base;
-  final VoidCallback onPause;
-  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -141,10 +131,7 @@ class Hud extends StatelessWidget {
                 children: [
                   Text('Счёт', style: label),
                   Text(formatNumber(hud.score), style: value.copyWith(fontSize: base * 2.4)),
-                  if (hud.level > 0) ...[
-                    SizedBox(height: base * 0.6),
-                    _LevelBlock(hud: hud, base: base),
-                  ],
+                  if (hud.level > 0) ...[SizedBox(height: base * 0.6), _LevelBlock(hud: hud, base: base)],
                   if (hud.speed > 0)
                     Text('Скорость ${hud.speed}', style: Type.body(base * 0.95, color: Palette.accent)),
                   if (callout != null) _CalloutView(callout: callout!, base: base),
@@ -181,28 +168,6 @@ class Hud extends StatelessWidget {
               ),
             ),
           ],
-          Positioned(
-            right: pad,
-            bottom: pad,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (options.keyHints) ...[
-                  _Hints(bindings: bindings, base: base),
-                  SizedBox(height: base * 0.5),
-                ],
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _HudButton(label: 'Пауза', onPressed: onPause, base: base),
-                    SizedBox(width: base * 0.5),
-                    _HudButton(label: 'Настройки', onPressed: onOpenSettings, base: base),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -264,9 +229,7 @@ class _CalloutView extends StatelessWidget {
     final text = callout.isSpeed
         ? Text('Скорость ${callout.speed}', style: Type.display(base * 1.3, color: Palette.warning))
         : Text(
-            callout.combo > 1
-                ? '+${callout.points}  ${callout.combo}× комбо'
-                : '+${callout.points}',
+            callout.combo > 1 ? '+${callout.points}  ${callout.combo}× комбо' : '+${callout.points}',
             style: Type.display(base * 1.5, color: Palette.accent),
           );
     // A new key per callout makes it pop again each time.
@@ -280,72 +243,6 @@ class _CalloutView extends StatelessWidget {
         child: Transform.scale(scale: t, alignment: Alignment.topLeft, child: child),
       ),
       child: text,
-    );
-  }
-}
-
-class _Hints extends StatelessWidget {
-  const _Hints({required this.bindings, required this.base});
-
-  final Bindings bindings;
-  final double base;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget row(String text, List<GameAction> actions) {
-      final keys = [
-        for (final action in actions)
-          ...bindings[action]!.take(1).map(keyLabel),
-      ];
-      return Padding(
-        padding: EdgeInsets.only(bottom: base * 0.25),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final key in keys) ...[
-              Text(key, style: Type.body(base * 0.95, weight: FontWeight.w800)),
-              SizedBox(width: base * 0.25),
-            ],
-            Text(text, style: Type.body(base * 0.9, color: Palette.textDim)),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        row('движение', [GameAction.moveLeft, GameAction.moveRight]),
-        row('поворот', [GameAction.rotateCW, GameAction.rotateCCW]),
-        row('сброс', [GameAction.hardDrop]),
-        row('стаканы', [GameAction.glassLeft, GameAction.glassRight]),
-      ],
-    );
-  }
-}
-
-class _HudButton extends StatelessWidget {
-  const _HudButton({required this.label, required this.onPressed, required this.base});
-
-  final String label;
-  final VoidCallback onPressed;
-  final double base;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: base * 0.7, vertical: base * 0.4),
-        decoration: BoxDecoration(
-          color: Palette.panel,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Palette.lineStrong),
-        ),
-        child: Text(label, style: Type.body(base * 0.95, weight: FontWeight.w800)),
-      ),
     );
   }
 }

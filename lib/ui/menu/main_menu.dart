@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../game/config/campaign.dart';
 import '../data/progress.dart';
 import '../style.dart';
+import '../data/run_save.dart';
+import '../widgets/controls.dart';
 
 /// The first screen: a column of large entries, the progress on the side.
 class MainMenu extends StatelessWidget {
@@ -13,6 +15,10 @@ class MainMenu extends StatelessWidget {
     required this.onCustom,
     required this.onStatistics,
     required this.onSettings,
+    this.savedRun,
+    this.onResume,
+    this.onTutorial,
+    this.tutorialDone = false,
   });
 
   final Progress progress;
@@ -20,6 +26,9 @@ class MainMenu extends StatelessWidget {
   final VoidCallback onCustom;
   final VoidCallback onStatistics;
   final VoidCallback onSettings;
+  final RunSave? savedRun;
+  final VoidCallback? onResume, onTutorial;
+  final bool tutorialDone;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +55,10 @@ class MainMenu extends StatelessWidget {
               style: Type.display(46, spacing: 1),
               children: [
                 const TextSpan(text: 'ROTA'),
-                TextSpan(text: 'THREE', style: TextStyle(color: Palette.accent)),
+                TextSpan(
+                  text: 'THREE',
+                  style: TextStyle(color: Palette.accent),
+                ),
               ],
             ),
             textAlign: TextAlign.center,
@@ -58,10 +70,38 @@ class MainMenu extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          _NavItem(number: '01', title: 'Campaign', caption: 'Пятнадцать уровней: от одного стакана до четырёх', onTap: onCampaign),
+          if (savedRun != null && onResume != null) ...[
+            GoButton(label: 'Продолжить партию', expand: true, onPressed: onResume),
+            const SizedBox(height: 12),
+          ],
+          if (onTutorial != null)
+            _NavItem(
+              number: '▶',
+              title: 'Обучение',
+              caption: tutorialDone
+                  ? 'Повторить первые шаги и управление'
+                  : 'Первые шаги: попробуйте правила на практике',
+              onTap: onTutorial!,
+            ),
+          _NavItem(
+            number: '01',
+            title: 'Campaign',
+            caption: 'Пятнадцать уровней: от одного стакана до четырёх',
+            onTap: onCampaign,
+          ),
           _NavItem(number: '02', title: 'Custom', caption: 'Своя игра: стаканы, цвета и скорость', onTap: onCustom),
-          _NavItem(number: '03', title: 'Statistics', caption: 'Очки, фигуры и рекорды по режимам', onTap: onStatistics),
-          _NavItem(number: '04', title: 'Settings', caption: 'Клавиши, цвета, эффекты, интерфейс', onTap: onSettings),
+          _NavItem(
+            number: '03',
+            title: 'Statistics',
+            caption: 'Очки, фигуры и рекорды по режимам',
+            onTap: onStatistics,
+          ),
+          _NavItem(
+            number: '04',
+            title: 'Settings',
+            caption: 'Крестовины, цвета, эффекты, интерфейс',
+            onTap: onSettings,
+          ),
           const SizedBox(height: 16),
           _InfoCard(
             kicker: 'Кампания',

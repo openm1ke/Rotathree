@@ -4,6 +4,9 @@ import '../config/game_config.dart';
 import '../model/board.dart';
 import '../model/cell.dart';
 import '../model/incoming_piece.dart';
+import '../model/color.dart';
+import '../model/piece.dart';
+import '../model/position.dart';
 import '../model/side.dart';
 import '../state/game_state.dart';
 import 'game_event.dart';
@@ -13,6 +16,7 @@ import 'match_detector.dart';
 import 'piece_generator.dart';
 import 'placement_engine.dart';
 import 'speed_ramp.dart';
+import 'snapshot_reader.dart';
 
 const _epsilon = 1e-9;
 
@@ -67,9 +71,9 @@ final class _Drop extends _Input {
 /// Time only moves through [update].
 class GameEngine {
   GameEngine({required GameConfig config, Random? random})
-      : _startConfig = config,
-        _config = config,
-        incoming = IncomingController(config, PieceGenerator(config, random)) {
+    : _startConfig = config,
+      _config = config,
+      incoming = IncomingController(config, PieceGenerator(config, random)) {
     restart();
   }
 
@@ -116,8 +120,7 @@ class GameEngine {
       GamePhase.clearing ||
       GamePhase.settling ||
       GamePhase.cascading ||
-      GamePhase.building =>
-        true,
+      GamePhase.building => true,
       _ => false,
     };
   }
@@ -147,14 +150,243 @@ class GameEngine {
     return events;
   }
 
+  /// Includes in-flight drops, cascades and queued input: closing the app
+  /// during an animation must not lose or duplicate a placed piece.
+  Map<String, Object?> snapshot() => {
+    'version': 1,
+    'center': board.center,
+    'arm': board.arm,
+    'board': [
+      for (final b in board.blocks) [b.position.row, b.position.col, b.color.index],
+    ],
+    'sides': [for (final side in _sides) side.index],
+    'activeSide': activeSide.index,
+    'incoming': [
+      for (final p in incoming.pieces.values)
+        {
+          'side': p.side.index,
+          'piece': _pieceJson(p.piece),
+          'row': p.row,
+          'column': p.column,
+          'progress': p.stepProgress,
+        },
+    ],
+    'phase': phase.index,
+    'phaseElapsed': state.phaseElapsed,
+    'phaseDuration': state.phaseDuration,
+    'score': state.score,
+    'combo': state.combo,
+    'bestCombo': state.bestCombo,
+    'matches': state.matches,
+    'clearedCells': state.clearedCells,
+    'piecesPlaced': state.piecesPlaced,
+    'selfLocked': state.selfLocked,
+    'elapsedSeconds': state.elapsedSeconds,
+    'speedLevel': state.speedLevel,
+    'buildingSide': state.buildingSide?.index,
+    'drop': state.drop == null
+        ? null
+        : {
+            'side': state.drop!.placement.side.index,
+            'piece': _pieceJson(state.drop!.placement.piece),
+            'column': state.drop!.placement.column,
+            'row': state.drop!.placement.row,
+            'startRow': state.drop!.startRow,
+          },
+    'moves': [
+      for (final m in state.moves) [m.from.row, m.from.col, m.to.row, m.to.col, m.color.index],
+    ],
+    'waiting': [for (final side in _awaitingPiece) side.index],
+    'inputs': [
+      for (final input in _inputs)
+        switch (input) {
+          _Turn(:final quarterTurns) => {'kind': 'turn', 'value': quarterTurns},
+          _Activate(:final side) => {'kind': 'activate', 'value': side.index},
+          _Move(:final delta) => {'kind': 'move', 'value': delta},
+          _Rotate(:final clockwise) => {'kind': 'rotate', 'value': clockwise},
+          _Drop() => {'kind': 'drop'},
+        },
+    ],
+    'activeStep': config.activeStepSeconds,
+    'inactiveStep': config.inactiveStepSeconds,
+    'rampBaseActive': _rampBaseActive,
+    'rampBaseInactive': _rampBaseInactive,
+    'randomSeed': incoming.generator.seed,
+    'generated': incoming.generator.generated,
+  };
+
+  void restoreSnapshot(Object? raw) {
+    final r = SnapshotReader(raw);
+    if (r.integer('version', max: 1) != 1 || r.integer('center') != board.center || r.integer('arm') != board.arm) {
+      throw const FormatException('Incompatible game save');
+    }
+    final restoredBoard = Board(center: board.center, arm: board.arm);
+    final occupied = <CellPosition>{};
+    for (final rawCell in r.list('board', max: board.size * board.size)) {
+      final c = _tuple(rawCell, 3);
+      final pos = CellPosition(c[0], c[1]);
+      if (!restoredBoard.isInside(pos.row, pos.col) ||
+          !occupied.add(pos) ||
+          c[2] < 0 ||
+          c[2] >= config.numberOfColors) {
+        throw const FormatException('Invalid board cell');
+      }
+      restoredBoard.set(pos.row, pos.col, BlockColor.values[c[2]]);
+    }
+    final sides = r.list('sides', max: 4).map(_readSide).toList();
+    if (sides.isEmpty || sides.toSet().length != sides.length) throw const FormatException('Invalid glasses');
+    final active = _readSide(r.data['activeSide']);
+    if (!sides.contains(active)) throw const FormatException('Invalid active glass');
+    final phase = GamePhase.values[r.integer('phase', max: GamePhase.values.length - 2)];
+    final restored = GameState(board: restoredBoard, incoming: incoming.pieces, activeSide: active)
+      ..phase = phase
+      ..phaseElapsed = r.number('phaseElapsed', max: 60)
+      ..phaseDuration = r.number('phaseDuration', max: 60)
+      ..score = r.integer('score')
+      ..combo = r.integer('combo')
+      ..bestCombo = r.integer('bestCombo')
+      ..matches = r.integer('matches')
+      ..clearedCells = r.integer('clearedCells')
+      ..piecesPlaced = r.integer('piecesPlaced')
+      ..selfLocked = r.integer('selfLocked')
+      ..elapsedSeconds = r.number('elapsedSeconds')
+      ..speedLevel = r.integer('speedLevel');
+    if (restored.phaseElapsed > restored.phaseDuration) throw const FormatException('Invalid phase time');
+    final building = r.data['buildingSide'];
+    restored.buildingSide = building == null ? null : _readSide(building);
+    if (phase == GamePhase.building && (restored.buildingSide == null || !sides.contains(restored.buildingSide))) {
+      throw const FormatException('Invalid building glass');
+    }
+    final rawDrop = r.data['drop'];
+    if (rawDrop != null) {
+      final d = SnapshotReader(rawDrop);
+      final side = _readSide(d.data['side']);
+      final piece = _readPiece(d.data['piece']);
+      final row = d.integer('row', max: config.glassDepth - 1);
+      final column = d.integer('column', max: config.boardSize - 1);
+      if (!sides.contains(side) || !_placement.fits(restoredBoard, side, piece, row, column)) {
+        throw const FormatException('Invalid drop');
+      }
+      restored.drop = DropInFlight(
+        placement: _placement.placementAt(restoredBoard, side, piece, column, row),
+        startRow: d.integer('startRow', max: row),
+      );
+    }
+    if ((phase == GamePhase.pieceDropping) != (restored.drop != null)) throw const FormatException('Missing drop');
+    if (phase == GamePhase.matching || phase == GamePhase.clearing || phase == GamePhase.cascading) {
+      restored.activeMatch = MatchDetector(minLength: config.minMatchLength).find(restoredBoard);
+      if (restored.activeMatch!.isEmpty) throw const FormatException('Missing match');
+    }
+    restored.moves = [
+      for (final rawMove in r.list('moves', max: board.size * board.size)) _readMove(rawMove, restoredBoard),
+    ];
+    final waiting = r.list('waiting', max: 4).map(_readSide).toList();
+    if (waiting.any((s) => !sides.contains(s))) throw const FormatException('Invalid waiting glass');
+    final pieces = <IncomingPiece>[];
+    for (final rawPiece in r.list('incoming', max: 4)) {
+      final p = SnapshotReader(rawPiece);
+      final side = _readSide(p.data['side']);
+      final piece = _readPiece(p.data['piece']);
+      final row = p.integer('row', max: config.glassDepth - 1);
+      final column = p.integer('column', max: config.boardSize - 1);
+      if (!sides.contains(side) ||
+          pieces.any((p) => p.side == side) ||
+          !_placement.fits(restoredBoard, side, piece, row, column)) {
+        throw const FormatException('Invalid incoming piece');
+      }
+      pieces.add(
+        IncomingPiece(side: side, piece: piece, column: column, row: row, stepProgress: p.number('progress', max: 1)),
+      );
+    }
+    final inputs = [for (final input in r.list('inputs', max: config.maxQueuedInputs)) _readInput(input)];
+    final partition = [
+      for (final p in pieces) p.side,
+      ...waiting,
+      if (restored.drop != null) restored.drop!.placement.side,
+      if (phase == GamePhase.building) restored.buildingSide!,
+    ];
+    if (partition.length != sides.length || partition.toSet().length != sides.length) {
+      throw const FormatException('Incomplete saved glasses');
+    }
+    final activeStep = r.number('activeStep', min: 0.01, max: 60);
+    final inactiveStep = r.number('inactiveStep', min: 0.01, max: 60);
+    final baseActive = r.number('rampBaseActive', min: 0.01, max: 60);
+    final baseInactive = r.number('rampBaseInactive', min: 0.01, max: 60);
+    final seed = r.integer('randomSeed', max: 1 << 32);
+    final generated = r.integer('generated', max: 100000);
+    setSteps(activeStep, inactiveStep);
+    _rampBaseActive = baseActive;
+    _rampBaseInactive = baseInactive;
+    incoming.generator.restore(seed, generated);
+    incoming.pieces.clear();
+    for (final p in pieces) {
+      incoming.pieces[p.side] = p;
+    }
+    incoming.softDrop = false;
+    _sides = sides;
+    _awaitingPiece
+      ..clear()
+      ..addAll(waiting);
+    _inputs
+      ..clear()
+      ..addAll(inputs);
+    _events.clear();
+    state = restored;
+    _changedBoard();
+  }
+
+  Map<String, Object> _pieceJson(Piece p) => {
+    'colors': [for (final c in p.colors) c.index],
+    'orientation': p.orientation.index,
+  };
+  Piece _readPiece(Object? raw) {
+    final r = SnapshotReader(raw);
+    final colors = r.list('colors', max: config.pieceLength);
+    if (colors.length != config.pieceLength || colors.any((c) => c is! int || c < 0 || c >= config.numberOfColors)) {
+      throw const FormatException('Invalid piece');
+    }
+    return Piece([
+      for (final c in colors) BlockColor.values[c as int],
+    ], orientation: PieceOrientation.values[r.integer('orientation', max: 3)]);
+  }
+
+  Side _readSide(Object? value) {
+    if (value is! int || value < 0 || value > 3) throw const FormatException('Invalid side');
+    return Side.values[value];
+  }
+
+  List<int> _tuple(Object? raw, int length) {
+    if (raw is! List || raw.length != length || raw.any((v) => v is! int)) {
+      throw const FormatException('Invalid coordinates');
+    }
+    return List<int>.from(raw);
+  }
+
+  BlockMove _readMove(Object? raw, Board board) {
+    final m = _tuple(raw, 5);
+    if (!board.isInside(m[0], m[1]) || !board.isInside(m[2], m[3]) || m[4] < 0 || m[4] >= config.numberOfColors) {
+      throw const FormatException('Invalid block move');
+    }
+    return BlockMove(CellPosition(m[0], m[1]), CellPosition(m[2], m[3]), BlockColor.values[m[4]]);
+  }
+
+  _Input _readInput(Object? raw) {
+    final r = SnapshotReader(raw);
+    return switch (r.data['kind']) {
+      'turn' => _Turn(r.integer('value', min: -2, max: 2)),
+      'activate' => _Activate(_readSide(r.data['value'])),
+      'move' => _Move(r.integer('value', min: -config.boardSize, max: config.boardSize)),
+      'rotate' when r.data['value'] is bool => _Rotate(r.data['value'] as bool),
+      'drop' => const _Drop(),
+      _ => throw const FormatException('Invalid input'),
+    };
+  }
+
   // ------------------------------------------------------------- settings
 
   /// Changes the step times from now on. Pieces keep their progress.
   void setSteps(double activeStepSeconds, double inactiveStepSeconds) {
-    _config = _config.copyWith(
-      activeStepSeconds: activeStepSeconds,
-      inactiveStepSeconds: inactiveStepSeconds,
-    );
+    _config = _config.copyWith(activeStepSeconds: activeStepSeconds, inactiveStepSeconds: inactiveStepSeconds);
     incoming.setConfig(_config);
   }
 
@@ -193,13 +425,7 @@ class GameEngine {
   Placement? previewDrop(Side side) {
     final piece = incoming.pieceAt(side);
     if (piece == null) return null;
-    return _placement.placementAt(
-      board,
-      side,
-      piece.piece,
-      piece.column,
-      incoming.restRow(piece, board),
-    );
+    return _placement.placementAt(board, side, piece.piece, piece.column, incoming.restRow(piece, board));
   }
 
   /// The row where the piece of [side] comes to rest if it falls straight
@@ -217,8 +443,7 @@ class GameEngine {
 
   /// Free rows at the far end of the glass of [side], in the lanes where its
   /// pieces appear. At 0 the next piece has no room and the game ends.
-  int headroom(Side side) =>
-      _placement.headroom(board, side, incoming.spawnColumn, _config.pieceLength);
+  int headroom(Side side) => _placement.headroom(board, side, incoming.spawnColumn, _config.pieceLength);
 
   /// True when the glass of [side] is close to overflowing.
   bool isCrowded(Side side) => headroom(side) <= _config.crowdedHeadroom;
@@ -269,11 +494,7 @@ class GameEngine {
       case _Move move:
         if (incoming.pieceAt(side) == null) break;
         final moved = incoming.move(side, move.delta, board);
-        _events.add(PieceMoved(
-          side,
-          direction: move.delta.sign,
-          blocked: moved < move.delta.abs(),
-        ));
+        _events.add(PieceMoved(side, direction: move.delta.sign, blocked: moved < move.delta.abs()));
       case _Rotate rotate:
         if (incoming.pieceAt(side) == null) break;
         final turned = incoming.rotate(side, board, clockwise: rotate.clockwise);
@@ -356,10 +577,7 @@ class GameEngine {
       }
       final piece = incoming.take(side)!;
       state.selfLocked++;
-      _commit(
-        _placement.placementAt(board, side, piece.piece, piece.column, piece.row),
-        dropped: false,
-      );
+      _commit(_placement.placementAt(board, side, piece.piece, piece.column, piece.row), dropped: false);
       return;
     }
   }
@@ -411,20 +629,13 @@ class GameEngine {
         _enterPhase(GamePhase.clearing, _config.clearPhaseSeconds);
       case GamePhase.clearing:
         final match = s.activeMatch!;
-        _events.add(CellsPopped([
-          for (final cell in match.cells) PlacedCell(cell, board.colorAt(cell)!),
-        ]));
+        _events.add(CellsPopped([for (final cell in match.cells) PlacedCell(cell, board.colorAt(cell)!)]));
         for (final cell in match.cells) {
           board.set(cell.row, cell.col, null);
         }
         _changedBoard();
         s.activeMatch = null;
-        final moves = _gravity.settle(
-          board,
-          s.activeSide,
-          scope: _config.gravityScope,
-          cleared: match.cells,
-        );
+        final moves = _gravity.settle(board, s.activeSide, scope: _config.gravityScope, cleared: match.cells);
         if (moves.isEmpty) {
           _checkMatches();
         } else {
@@ -473,20 +684,13 @@ class GameEngine {
     s.activeMatch = match;
     _events.add(MatchScored(combo: s.combo, score: score, match: match));
     _applyRamp();
-    _enterPhase(
-      s.combo == 1 ? GamePhase.matching : GamePhase.cascading,
-      _config.matchPhaseSeconds,
-    );
+    _enterPhase(s.combo == 1 ? GamePhase.matching : GamePhase.cascading, _config.matchPhaseSeconds);
   }
 
   int _scoreFor(MatchResult match, int combo) {
     var score = 0;
     for (final run in match.runs) {
-      score += _config.scoring.scoreForRun(
-        run.length,
-        combo,
-        minMatchLength: _config.minMatchLength,
-      );
+      score += _config.scoring.scoreForRun(run.length, combo, minMatchLength: _config.minMatchLength);
     }
     return score;
   }

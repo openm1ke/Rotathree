@@ -9,7 +9,9 @@ export function useScreenKeys(root: RefObject<HTMLElement | null>, active: boole
   useEffect(() => {
     if (!active) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
+      if (target?.closest('select, textarea')) return;
       if (target instanceof HTMLInputElement && (target.type === 'text' || target.type === 'color')) {
         if (event.code === 'Escape') target.blur();
         return;

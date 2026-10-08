@@ -10,12 +10,15 @@ import '../../game/engine/game_engine.dart';
 import '../../game/engine/game_event.dart';
 import '../../game/engine/rotation_transform.dart';
 import '../../game/model/side.dart';
+import '../../game/model/color.dart';
+import '../../game/model/piece.dart';
 import '../../game/session.dart';
 import '../../game/state/game_state.dart';
 import '../data/bindings.dart';
 import '../data/progress.dart';
 import '../data/settings.dart';
 import '../data/stats.dart';
+import '../data/run_save.dart';
 import '../field/effects.dart';
 import '../field/field_painter.dart';
 import '../format.dart';
@@ -26,29 +29,11 @@ import '../style.dart';
 import '../widgets/controls.dart';
 import 'hud.dart';
 import 'level_banner.dart';
+import 'tutorial.dart';
 
 enum _Status { playing, paused, over, done }
 
 const _slotNames = ['Верхний', 'Правый', 'Нижний', 'Левый'];
-
-/// Points, pieces and so on, summed over the engines of one run.
-class _Totals {
-  const _Totals({
-    this.score = 0,
-    this.pieces = 0,
-    this.matches = 0,
-    this.bestCombo = 0,
-    this.seconds = 0,
-  });
-
-  static const none = _Totals();
-
-  final int score;
-  final int pieces;
-  final int matches;
-  final int bestCombo;
-  final double seconds;
-}
 
 /// A banner on the field and how long it still shows.
 class _BannerState {
@@ -88,6 +73,10 @@ class GameScreen extends StatefulWidget {
     required this.onCustomise,
     required this.onRecord,
     required this.onProgress,
+    this.restore,
+    this.onCheckpoint,
+    this.tutorial = false,
+    this.onTutorialDone,
   });
 
   final Session session;
@@ -114,6 +103,10 @@ class GameScreen extends StatefulWidget {
   final VoidCallback onCustomise;
   final ValueChanged<RunRecord> onRecord;
   final ValueChanged<Progress> onProgress;
+  final RunSave? restore;
+  final ValueChanged<RunSave?>? onCheckpoint;
+  final bool tutorial;
+  final VoidCallback? onTutorialDone;
 
   @override
   State<GameScreen> createState() => GameScreenState();
@@ -147,9 +140,15 @@ class GameScreenState extends State<GameScreen>
   /// The campaign level being played; -1 in the other modes.
   late int _campaignLevel;
   int _levelBase = 0;
-  _Totals _carry = _Totals.none;
+  RunTotals _carry = RunTotals.none;
   bool _completing = false;
   bool _finished = false;
+  late final String _runId = widget.restore?.id ?? DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+  int? _pendingLevel;
+  double _saveCharge = 0;
+  int _tutorialStep = 0;
+  bool _tutorialPerformed = false;
+  bool _tutorialMatch = false;
   _BannerState? _banner;
   int _bannerId = 0;
   Callout? _callout;
@@ -160,24 +159,25 @@ class GameScreenState extends State<GameScreen>
   int _still = 0;
   int _drawnPalette = -1;
   double _pixelRatio = 1;
+  bool _reduceMotion = false;
 
   bool get _isCampaign => widget.session is CampaignSession;
 
-  bool get _acceptsInput => _status == _Status.playing && !(_banner?.blocking ?? false);
+  bool get _acceptsInput => _status == _Status.playing && !widget.blocked && !(_banner?.blocking ?? false);
 
   ModeId get _mode => switch (widget.session) {
-        CampaignSession() => ModeId.campaign,
-        InsaneSession() => ModeId.insane,
-        CustomSession() => ModeId.custom,
-      };
+    CampaignSession() => ModeId.campaign,
+    InsaneSession() => ModeId.insane,
+    CustomSession() => ModeId.custom,
+  };
 
-  _Totals get _totals => _Totals(
-        score: _carry.score + _engine.state.score,
-        pieces: _carry.pieces + _engine.state.piecesPlaced,
-        matches: _carry.matches + _engine.state.matches,
-        bestCombo: math.max(_carry.bestCombo, _engine.state.bestCombo),
-        seconds: _carry.seconds + _engine.state.elapsedSeconds,
-      );
+  RunTotals get _totals => RunTotals(
+    score: _carry.score + _engine.state.score,
+    pieces: _carry.pieces + _engine.state.piecesPlaced,
+    matches: _carry.matches + _engine.state.matches,
+    bestCombo: math.max(_carry.bestCombo, _engine.state.bestCombo),
+    seconds: _carry.seconds + _engine.state.elapsedSeconds,
+  );
 
   @override
   void initState() {
@@ -188,6 +188,30 @@ class GameScreenState extends State<GameScreen>
       _ => -1,
     };
     _progressNow = widget.progress;
+    final save = widget.restore;
+    if (save != null) {
+      _engine.restoreSnapshot(save.engine);
+      _carry = save.carry;
+      _levelBase = save.levelBase;
+      _status = _Status.paused;
+      final b = save.banner;
+      if (b != null) {
+        _pendingLevel = b.pendingLevel;
+        _completing = b.pendingLevel != null;
+        _banner = _BannerState(
+          data: BannerData(
+            id: ++_bannerId,
+            kicker: b.kicker,
+            title: b.title,
+            sub: b.sub,
+            colours: _stageColours(b.colours),
+          ),
+          left: b.left,
+          blocking: b.blocking,
+          then: b.pendingLevel == null ? null : () => _advanceTo(b.pendingLevel!),
+        );
+      }
+    }
     _fx.reset(_engine.activeSide);
     _hud.value = _currentHud();
     _pads = PadController(
@@ -202,6 +226,10 @@ class GameScreenState extends State<GameScreen>
   @override
   void didUpdateWidget(GameScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!oldWidget.blocked && widget.blocked) {
+      _pads.releaseAll();
+      _checkpoint();
+    }
     // Keys go back to the game once the settings over it are closed.
     if (oldWidget.blocked && !widget.blocked) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -227,6 +255,7 @@ class GameScreenState extends State<GameScreen>
     if (state == AppLifecycleState.resumed) return;
     _pads.releaseAll();
     if (_status == _Status.playing) _setStatus(_Status.paused);
+    _checkpoint();
   }
 
   void _setStatus(_Status status) => setState(() => _status = status);
@@ -271,13 +300,7 @@ class GameScreenState extends State<GameScreen>
     _bannerId++;
     setState(() {
       _banner = _BannerState(
-        data: BannerData(
-          id: _bannerId,
-          kicker: kicker,
-          title: title,
-          sub: sub,
-          colours: colours,
-        ),
+        data: BannerData(id: _bannerId, kicker: kicker, title: title, sub: sub, colours: colours),
         left: seconds,
         blocking: blocking,
         then: then,
@@ -285,13 +308,13 @@ class GameScreenState extends State<GameScreen>
     });
   }
 
-  List<Color> _stageColours(int count) =>
-      widget.settings.palettes.activeSet.colours.take(count).toList();
+  List<Color> _stageColours(int count) => widget.settings.palettes.activeSet.colours.take(count).toList();
 
-  void _recordRun({required bool completed}) {
+  void _recordRun({required bool completed, bool interrupted = false}) {
+    if (widget.tutorial) return;
     final t = _totals;
     final record = RunRecord(
-      id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+      id: _runId,
       mode: _mode,
       at: DateTime.now().millisecondsSinceEpoch,
       score: t.score,
@@ -299,12 +322,12 @@ class GameScreenState extends State<GameScreen>
       matches: t.matches,
       bestCombo: t.bestCombo,
       seconds: t.seconds,
-      level: _isCampaign
-          ? (completed ? campaignLast + 1 : _campaignLevel + 1)
-          : _engine.state.speedLevel + 1,
+      level: _isCampaign ? (completed ? campaignLast + 1 : _campaignLevel + 1) : _engine.state.speedLevel + 1,
       completed: completed,
+      interrupted: interrupted,
     );
     widget.onRecord(record);
+    widget.onCheckpoint?.call(null);
     setState(() => _result = record);
   }
 
@@ -334,6 +357,7 @@ class GameScreenState extends State<GameScreen>
       return;
     }
     final next = index + 1;
+    _pendingLevel = next;
     final to = campaignLevels[next];
     _showBanner(
       kicker: 'Уровень ${index + 1} пройден',
@@ -350,6 +374,7 @@ class GameScreenState extends State<GameScreen>
   /// goes on.
   void _advanceTo(int next) {
     _completing = false;
+    _pendingLevel = null;
     final from = campaignLevels[_campaignLevel];
     final to = campaignLevels[next];
     setState(() => _campaignLevel = next);
@@ -392,26 +417,125 @@ class GameScreenState extends State<GameScreen>
     if (_status == _Status.playing) {
       _pads.releaseAll();
       _setStatus(_Status.paused);
+      _checkpoint();
     } else if (_status == _Status.paused) {
       _setStatus(_Status.playing);
     }
   }
 
   void _retry() {
+    if (widget.tutorial) {
+      _pads.releaseAll();
+      _engine = _newEngine(_plan);
+      _fx.reset(_engine.activeSide);
+      setState(() {
+        _tutorialStep = 0;
+        _tutorialPerformed = false;
+        _tutorialMatch = false;
+        _status = _Status.playing;
+      });
+      return;
+    }
+    if (!_finished) _recordRun(completed: false, interrupted: true);
     _finished = true;
     widget.onRetry(_isCampaign ? CampaignSession(_campaignLevel) : widget.session);
+  }
+
+  void _checkpoint() {
+    if (widget.tutorial || _finished || _engine.isGameOver || widget.onCheckpoint == null) return;
+    final b = _banner;
+    widget.onCheckpoint!(
+      RunSave(
+        id: _runId,
+        session: _isCampaign ? CampaignSession(_campaignLevel) : widget.session,
+        engine: _engine.snapshot(),
+        carry: _carry,
+        levelBase: _levelBase,
+        savedAt: DateTime.now().millisecondsSinceEpoch,
+        banner: b == null
+            ? null
+            : SavedBanner(
+                kicker: b.data.kicker,
+                title: b.data.title,
+                sub: b.data.sub,
+                left: b.left,
+                blocking: b.blocking,
+                pendingLevel: _pendingLevel,
+                colours: b.data.colours.length,
+              ),
+      ),
+    );
+    _saveCharge = 0;
+  }
+
+  void _leave(VoidCallback destination, {bool save = false}) {
+    _pads.releaseAll();
+    if (save) {
+      _checkpoint();
+    } else if (!_finished) {
+      _recordRun(completed: false, interrupted: true);
+      _finished = true;
+    }
+    destination();
+  }
+
+  /// System Back opens the pause, and never throws away the field.
+  void handleBack() {
+    if (_status == _Status.over || _status == _Status.done) {
+      _leave(widget.onExit);
+    } else {
+      _togglePause();
+    }
+  }
+
+  bool _tutorialAllows(GameAction action) =>
+      !widget.tutorial ||
+      (_engine.phase == GamePhase.playing &&
+          switch (_tutorialStep) {
+            1 => action == GameAction.moveLeft || action == GameAction.moveRight,
+            2 => action == GameAction.rotateCW || action == GameAction.rotateCCW,
+            3 => action == GameAction.hardDrop,
+            4 =>
+              action == GameAction.glassLeft || action == GameAction.glassRight || action == GameAction.glassOpposite,
+            _ => false,
+          });
+  void _performed() {
+    if (widget.tutorial && !_tutorialPerformed) setState(() => _tutorialPerformed = true);
+  }
+
+  void _tutorialNext() {
+    if (_tutorialStep == tutorialLessons.length - 1) {
+      widget.onTutorialDone?.call();
+      return;
+    }
+    _pads.releaseAll();
+    setState(() {
+      _tutorialStep++;
+      _tutorialPerformed = false;
+    });
+    if (_tutorialStep == 3) {
+      _engine = _newEngine(_plan);
+      _fx.reset(_engine.activeSide);
+      _engine.board.paintCenter(['. Y . . . . . . . .', 'B . . . . . . . . .', 'R R . . . . . . . .']);
+      _engine.incoming.put(Side.top, Piece([BlockColor.red, BlockColor.blue, BlockColor.yellow]), column: 2);
+    } else if (_tutorialStep == 4) {
+      _engine.addGlass();
+    }
   }
 
   // ------------------------------------------------------------------ input
 
   @override
   void move(int direction, {required bool toWall}) {
-    if (!_acceptsInput) return;
+    if (!_acceptsInput || !_tutorialAllows(direction < 0 ? GameAction.moveLeft : GameAction.moveRight)) return;
+    final before = _engine.activePiece?.column;
     _engine.moveActive(toWall ? direction * _engine.config.boardSize : direction);
+    if (_engine.activePiece?.column != before) _performed();
   }
 
   @override
-  void softDrop({required bool held}) => _engine.setSoftDrop(held);
+  void softDrop({required bool held}) =>
+      _engine.setSoftDrop(held && _acceptsInput && _tutorialAllows(GameAction.softDrop));
 
   @override
   void press(GameAction action) {
@@ -423,12 +547,14 @@ class GameScreenState extends State<GameScreen>
       default:
         if (!_acceptsInput) {
           // On the result screens the drop key starts the next game.
-          if ((_status == _Status.over || _status == _Status.done) &&
-              action == GameAction.hardDrop) {
+          if ((_status == _Status.over || _status == _Status.done) && action == GameAction.hardDrop) {
             _retry();
           }
           return;
         }
+        if (!_tutorialAllows(action)) return;
+        final beforePiece = _engine.activePiece?.piece;
+        final beforeSide = _engine.activeSide;
         switch (action) {
           case GameAction.rotateCW:
             _engine.rotateActive();
@@ -445,11 +571,21 @@ class GameScreenState extends State<GameScreen>
           default:
             break;
         }
+        if (_engine.activePiece?.piece != beforePiece &&
+            (action == GameAction.rotateCW || action == GameAction.rotateCCW)) {
+          _performed();
+        }
+        if (_engine.activeSide != beforeSide) _performed();
     }
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (widget.blocked) return KeyEventResult.ignored;
+    if (_status != _Status.playing &&
+        event.physicalKey != PhysicalKeyboardKey.escape &&
+        event.physicalKey != PhysicalKeyboardKey.keyP) {
+      return KeyEventResult.ignored;
+    }
     final action = actionForKey(widget.settings.bindings, event.physicalKey);
     if (action == null) return KeyEventResult.ignored;
     // Held keys repeat through the pad controller, not through the system.
@@ -463,9 +599,9 @@ class GameScreenState extends State<GameScreen>
 
   /// Tapping a glass brings it to the top.
   void _onTapStage(TapUpDetails details, double side) {
-    if (_status != _Status.playing) return;
-    final zone = FieldGeometry(side, _engine.config, devicePixelRatio: _pixelRatio)
-        .zoneAt(details.localPosition);
+    if (!_acceptsInput || (widget.tutorial && _tutorialStep != 4)) return;
+    final before = _engine.activeSide;
+    final zone = FieldGeometry(side, _engine.config, devicePixelRatio: _pixelRatio).zoneAt(details.localPosition);
     final slot = switch (zone) {
       FieldZone.right => Side.right,
       FieldZone.bottom => Side.bottom,
@@ -474,6 +610,7 @@ class GameScreenState extends State<GameScreen>
     };
     if (slot != null) {
       _engine.activateSide(RotationTransform.sideAtSlot(_engine.activeSide, slot));
+      if (_engine.activeSide != before) _performed();
     }
   }
 
@@ -486,18 +623,18 @@ class GameScreenState extends State<GameScreen>
     final frozen = widget.blocked;
     final holding = frozen || (_banner?.blocking ?? false);
     if (frozen) _pads.releaseAll();
-    _fx.screenShake = settings.effects.screenShake;
-    _fx.turnSeconds = settings.effects.turnMs / 1000;
+    _fx.screenShake = settings.effects.screenShake && !_reduceMotion;
+    _fx.turnSeconds = _reduceMotion ? 0 : settings.effects.turnMs / 1000;
     _fx.explosion = settings.effects.explosion;
 
     if (_status == _Status.playing && !holding) {
       _pads.update(seconds);
-      _engine.update(seconds);
+      if (!widget.tutorial || _engine.phase != GamePhase.playing) _engine.update(seconds);
     }
 
-    // Banners count down on their own clock.
+    // Banners share the pause/settings gate with gameplay.
     final banner = _banner;
-    if (banner != null) {
+    if (banner != null && _status == _Status.playing && !frozen) {
       banner.left -= seconds;
       if (banner.left <= 0) {
         setState(() => _banner = null);
@@ -513,6 +650,7 @@ class GameScreenState extends State<GameScreen>
     for (final event in events) {
       switch (event) {
         case MatchScored(:final score, :final combo):
+          if (widget.tutorial && _tutorialStep == 3) _tutorialMatch = true;
           setState(() => _callout = Callout.score(id: ++_calloutId, points: score, combo: combo));
         case SpeedUp(:final level):
           setState(() => _callout = Callout.speed(id: ++_calloutId, speed: level + 1));
@@ -522,6 +660,8 @@ class GameScreenState extends State<GameScreen>
           break;
       }
     }
+
+    if (widget.tutorial && _tutorialMatch && _tutorialStep == 3 && _engine.phase == GamePhase.playing) _performed();
 
     if (_isCampaign &&
         !_finished &&
@@ -533,6 +673,11 @@ class GameScreenState extends State<GameScreen>
     }
 
     _hud.value = _currentHud();
+    if (_status == _Status.playing && !frozen) _saveCharge += seconds;
+    if (_saveCharge >= 2 ||
+        events.any((event) => event is PieceLanded || event is MatchScored || event is GlassAdded || event is SpeedUp)) {
+      _checkpoint();
+    }
 
     // A picture that cannot have changed is not drawn again: under a pause,
     // or once a game that stands still has played out its effects. Nothing
@@ -552,6 +697,7 @@ class GameScreenState extends State<GameScreen>
   Widget build(BuildContext context) {
     final settings = widget.settings;
     _pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
     // Whatever made this build happen may have changed the picture too.
     _still = 0;
     return Focus(
@@ -563,9 +709,24 @@ class GameScreenState extends State<GameScreen>
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final padSize = math.min(constraints.maxWidth * 0.36, 150.0);
+                final padSize = math.min(math.max(constraints.maxWidth * 0.36, 132.0), 150.0);
                 return Column(
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.tutorial ? 'Обучение' : modeTitle(_mode),
+                              style: Type.body(14, weight: FontWeight.w800),
+                            ),
+                          ),
+                          TextButton(onPressed: _togglePause, child: const Text('Пауза')),
+                          TextButton(onPressed: widget.onSettings, child: const Text('Настройки')),
+                        ],
+                      ),
+                    ),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, box) {
@@ -587,6 +748,16 @@ class GameScreenState extends State<GameScreen>
                         },
                       ),
                     ),
+                    if (widget.tutorial)
+                      SizedBox(
+                        height: math.min(constraints.maxHeight * 0.4, 250),
+                        child: TutorialPanel(
+                          step: _tutorialStep,
+                          performed: _tutorialPerformed,
+                          onNext: _tutorialNext,
+                          onSkip: () => widget.onTutorialDone?.call(),
+                        ),
+                      ),
                     // The pads are a layer of their own: the field is drawn
                     // again every frame, and they need not be.
                     RepaintBoundary(
@@ -596,13 +767,15 @@ class GameScreenState extends State<GameScreen>
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             DPad(
-                              layout: settings.leftPad,
+                              layout: widget.tutorial ? defaultLeftPad : settings.leftPad,
+                              showLabels: widget.tutorial || settings.hud.keyHints,
                               size: padSize,
                               onDown: _pads.down,
                               onUp: _pads.up,
                             ),
                             DPad(
-                              layout: settings.rightPad,
+                              layout: widget.tutorial ? defaultRightPad : settings.rightPad,
+                              showLabels: widget.tutorial || settings.hud.keyHints,
                               size: padSize,
                               onDown: _pads.down,
                               onUp: _pads.up,
@@ -651,23 +824,16 @@ class GameScreenState extends State<GameScreen>
             ),
           ),
         ),
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: ValueListenableBuilder<HudState>(
-              valueListenable: _hud,
-              builder: (context, hud, _) => Hud(
-                hud: hud,
-                callout: _callout,
-                bindings: widget.settings.bindings,
-                options: widget.settings.hud,
-                corner: corner,
-                base: base,
-                onPause: _togglePause,
-                onOpenSettings: widget.onSettings,
+        if (!widget.tutorial)
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: ValueListenableBuilder<HudState>(
+                valueListenable: _hud,
+                builder: (context, hud, _) =>
+                    Hud(hud: hud, callout: _callout, options: widget.settings.hud, corner: corner, base: base),
               ),
             ),
           ),
-        ),
         if (banner != null)
           Positioned(
             top: side * 0.3,
@@ -681,35 +847,33 @@ class GameScreenState extends State<GameScreen>
 
   /// A dialog over the game: the game stands still behind it.
   Widget _dialog(Widget card) => Positioned.fill(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {},
-                child: const ColoredBox(color: Color(0xC4050508)),
-              ),
-            ),
-            Positioned.fill(
-              child: SafeArea(
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: card,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: const ColoredBox(color: Color(0xC4050508)),
+          ),
         ),
-      );
+        Positioned.fill(
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: card),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _pauseDialog() {
     final campaign = _isCampaign;
     final custom = widget.session is CustomSession;
     final level = campaign ? campaignLevels[_campaignLevel] : null;
     return DialogCard(
-      kicker: '${modeTitle(_mode)}${campaign ? ' · уровень ${_campaignLevel + 1} из ${campaignLevels.length}' : ''}',
+      kicker:
+          '${widget.tutorial ? 'Обучение' : modeTitle(_mode)}${campaign ? ' · уровень ${_campaignLevel + 1} из ${campaignLevels.length}' : ''}',
       title: 'Пауза',
       note: level == null
           ? null
@@ -719,9 +883,15 @@ class GameScreenState extends State<GameScreen>
           GoButton(label: 'Продолжить', expand: true, onPressed: _togglePause),
           OutlineButton(label: campaign ? 'Повторить уровень' : 'Заново', onPressed: _retry),
           OutlineButton(label: 'Настройки', onPressed: widget.onSettings),
-          if (custom) OutlineButton(label: 'Изменить режим', onPressed: widget.onCustomise),
-          if (!custom) OutlineButton(label: 'К уровням', onPressed: widget.onLevels),
-          OutlineButton(label: 'В меню', onPressed: widget.onExit),
+          if (custom && !widget.tutorial)
+            OutlineButton(label: 'Изменить режим', onPressed: () => _leave(widget.onCustomise)),
+          if (!custom) OutlineButton(label: 'К уровням', onPressed: () => _leave(widget.onLevels)),
+          if (!widget.tutorial)
+            OutlineButton(label: 'Сохранить и в меню', onPressed: () => _leave(widget.onExit, save: true)),
+          OutlineButton(
+            label: widget.tutorial ? 'В меню' : 'Завершить и в меню',
+            onPressed: () => _leave(widget.onExit),
+          ),
         ]),
       ],
     );
@@ -734,48 +904,43 @@ class GameScreenState extends State<GameScreen>
       kicker: modeTitle(_mode),
       title: 'Игра окончена',
       danger: true,
-      note: '${_slotNames[_overSlot]} стакан заполнился до конца рукава.'
+      note:
+          '${_slotNames[_overSlot]} стакан заполнился до конца рукава.'
           '${campaign ? ' Уровень не пройден: начнём его заново или выберем другой.' : ''}',
       children: [
         _RunStats(record: record, campaign: campaign),
         const SizedBox(height: 14),
         _buttons([
-          GoButton(
-            label: campaign ? 'Повторить уровень' : 'Заново',
-            expand: true,
-            onPressed: _retry,
-          ),
-          if (custom) OutlineButton(label: 'Изменить режим', onPressed: widget.onCustomise),
+          GoButton(label: campaign ? 'Повторить уровень' : 'Заново', expand: true, onPressed: _retry),
+          if (custom && !widget.tutorial)
+            OutlineButton(label: 'Изменить режим', onPressed: () => _leave(widget.onCustomise)),
           if (campaign) OutlineButton(label: 'К уровням', onPressed: widget.onLevels),
-          OutlineButton(label: 'В меню', onPressed: widget.onExit),
+          OutlineButton(label: 'В меню', onPressed: () => _leave(widget.onExit)),
         ]),
       ],
     );
   }
 
   Widget _doneDialog(RunRecord record) => DialogCard(
-        kicker: 'Кампания',
-        title: 'Кампания пройдена',
-        note: 'Все ${campaignLevels.length} уровней позади. Безумие открыто.',
-        children: [
-          _RunStats(record: record, campaign: true),
-          const SizedBox(height: 14),
-          _buttons([
-            GoButton(label: 'Безумие', expand: true, onPressed: widget.onInsane),
-            OutlineButton(label: 'К уровням', onPressed: widget.onLevels),
-            OutlineButton(label: 'В меню', onPressed: widget.onExit),
-          ]),
-        ],
-      );
+    kicker: 'Кампания',
+    title: 'Кампания пройдена',
+    note: 'Все ${campaignLevels.length} уровней позади. Безумие открыто.',
+    children: [
+      _RunStats(record: record, campaign: true),
+      const SizedBox(height: 14),
+      _buttons([
+        GoButton(label: 'Безумие', expand: true, onPressed: widget.onInsane),
+        OutlineButton(label: 'К уровням', onPressed: widget.onLevels),
+        OutlineButton(label: 'В меню', onPressed: () => _leave(widget.onExit)),
+      ]),
+    ],
+  );
 
   Widget _buttons(List<Widget> buttons) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final button in buttons)
-            Padding(padding: const EdgeInsets.only(bottom: 8), child: button),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: [for (final button in buttons) Padding(padding: const EdgeInsets.only(bottom: 8), child: button)],
+  );
 }
 
 /// The summary of a finished run.
@@ -788,8 +953,7 @@ class _RunStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = [
-      if (campaign)
-        ('Уровень', '${record.completed ? campaignLast + 1 : record.level}'),
+      if (campaign) ('Уровень', '${record.completed ? campaignLast + 1 : record.level}'),
       ('Очки', formatNumber(record.score)),
       ('Фигуры', '${record.pieces}'),
       ('Матчи', '${record.matches}'),

@@ -1,11 +1,71 @@
-import type { ReactNode, RefObject } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 /** A layer over the whole window, not just the field it was opened from. */
-export function Overlay({ children, onDismiss }: { children: ReactNode; onDismiss?: () => void }) {
+export function Overlay({
+  children,
+  onDismiss,
+  label = 'Меню игры',
+}: {
+  children: ReactNode;
+  onDismiss?: () => void;
+  label?: string;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const returnFocus = useRef(document.activeElement as HTMLElement | null);
+  useEffect(() => {
+    const dialog = root.current!;
+    const previous = returnFocus.current;
+    const background = [...document.body.children].filter(
+      (node): node is HTMLElement => node instanceof HTMLElement && !node.contains(dialog),
+    );
+    const original = background.map((node) => node.inert);
+    background.forEach((node) => {
+      node.inert = true;
+    });
+    if (!dialog.contains(document.activeElement))
+      (dialog.querySelector<HTMLElement>('button:not(:disabled), input, select, [tabindex="0"]') ?? dialog).focus();
+    return () => {
+      background.forEach((node, i) => {
+        node.inert = original[i];
+      });
+      if (previous?.isConnected && !previous.closest('[inert]')) previous.focus();
+    };
+  }, []);
   return createPortal(
     <div
+      ref={root}
       className="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.defaultPrevented) return;
+        if (event.key === 'Escape' && onDismiss) {
+          event.preventDefault();
+          event.stopPropagation();
+          onDismiss();
+        }
+        if (event.key !== 'Tab') return;
+        const items = [
+          ...(root.current?.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea, [tabindex="0"]',
+          ) ?? []),
+        ].filter((el) => el.getClientRects().length > 0);
+        const first = items[0],
+          last = items.at(-1);
+        if (!first) {
+          event.preventDefault();
+          root.current?.focus();
+        } else if (event.shiftKey && (document.activeElement === first || document.activeElement === root.current)) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && onDismiss) onDismiss();
       }}
@@ -144,7 +204,15 @@ export function Slider({
   return (
     <Row label={label} note={note}>
       <div className="slider">
-        <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+        <input
+          aria-label={label}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
         <output>
           {Number.isInteger(value) ? value : value.toFixed(2)} {unit}
         </output>
@@ -154,7 +222,19 @@ export function Slider({
 }
 
 /** A two-state switch, shown as on or off words. */
-export function Toggle({ label, value, onChange, on = 'вкл', off = 'выкл' }: { label: string; value: boolean; onChange: (value: boolean) => void; on?: string; off?: string }) {
+export function Toggle({
+  label,
+  value,
+  onChange,
+  on = 'вкл',
+  off = 'выкл',
+}: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  on?: string;
+  off?: string;
+}) {
   return (
     <Choice<boolean>
       label={label}
@@ -197,4 +277,3 @@ export function Button({
     </button>
   );
 }
-

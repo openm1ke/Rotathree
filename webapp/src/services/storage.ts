@@ -3,6 +3,9 @@ import { defaultBindings, cloneBindings, sanitizeBindings, type Bindings } from 
 import { defaultHandling, type Handling } from '../input/keyboard';
 import { CAMPAIGN } from '../game/campaign';
 import { DEFAULT_CUSTOM, sanitizeCustom, type CustomSetup, type ModeId } from '../game/modes';
+import { sanitizeRunSave, type RunSave } from './runSave';
+import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
+import { ACTIONS } from '../input/bindings';
 
 /** How the explosion of a match looks: one animation for everything, or one
  * per kind of match. */
@@ -46,6 +49,7 @@ export interface Settings {
   palettes: Palettes;
   effects: Effects;
   hud: HudOptions;
+  pads: { left: PadLayout; right: PadLayout };
 }
 
 export const BUILTIN_PALETTES: PaletteSet[] = [
@@ -70,6 +74,7 @@ export const defaultSettings = (): Settings => ({
   palettes: { active: 'classic', sets: BUILTIN_PALETTES.map((set) => ({ ...set, colours: [...set.colours] })) },
   effects: { explosion: 'varied', screenShake: true, turnMs: 260 },
   hud: { keyHints: true, score: true, stats: true, opacity: 1 },
+  pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -96,7 +101,8 @@ function sanitizePalettes(raw: unknown): Palettes {
     }
   }
   const sets = [...base.sets, ...custom];
-  const active = typeof stored.active === 'string' && sets.some((set) => set.id === stored.active) ? stored.active : 'classic';
+  const active =
+    typeof stored.active === 'string' && sets.some((set) => set.id === stored.active) ? stored.active : 'classic';
   return { active, sets };
 }
 
@@ -109,8 +115,19 @@ export function sanitizeSettings(raw: unknown): Settings {
   const handling = (stored.handling ?? {}) as Record<string, unknown>;
   const effects = (stored.effects ?? {}) as Record<string, unknown>;
   const hud = (stored.hud ?? {}) as Record<string, unknown>;
+  const pads = (stored.pads ?? {}) as Record<string, unknown>;
+  const pad = (raw: unknown, fallback: PadLayout): PadLayout => {
+    const p = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    return Object.fromEntries(
+      PAD_SLOTS.map((slot) => [
+        slot,
+        p[slot] === 'none' || ACTIONS.some((a) => a.id === p[slot]) ? p[slot] : fallback[slot],
+      ]),
+    ) as PadLayout;
+  };
   return {
     bindings: sanitizeBindings(stored.bindings),
+    pads: { left: pad(pads.left, DEFAULT_PADS.left), right: pad(pads.right, DEFAULT_PADS.right) },
     handling: {
       dasMs: numberIn(handling.dasMs, 0, 400, base.handling.dasMs),
       arrMs: numberIn(handling.arrMs, 0, 150, base.handling.arrMs),
@@ -177,6 +194,7 @@ export interface RunRecord {
   level: number;
   /** Campaign only: whether the last level was finished. */
   completed: boolean;
+  interrupted?: boolean;
 }
 
 export interface ModeStats {
@@ -217,6 +235,7 @@ const RECENT_LIMIT = 20;
 
 /** Adds a finished run to the totals and to the list of recent runs. */
 export function addRun(stats: Stats, run: RunRecord): Stats {
+  if (stats.recent.some((old) => old.id === run.id)) return stats;
   const old = stats.modes[run.mode];
   const next: ModeStats = {
     games: old.games + 1,
@@ -274,6 +293,7 @@ export function sanitizeStats(raw: unknown): Stats {
             seconds: numberIn(run.seconds, 0, 1e9, 0),
             level: Math.round(numberIn(run.level, 0, 1e6, 0)),
             completed: run.completed === true,
+            interrupted: run.interrupted === true,
           },
         ];
       })
@@ -295,6 +315,8 @@ const KEYS = {
   progress: 'rotathree.progress.v1',
   stats: 'rotathree.stats.v1',
   custom: 'rotathree.custom.v1',
+  run: 'rotathree.run.web.v1',
+  tutorial: 'rotathree.tutorial.v1',
 } as const;
 
 type KeyValue = Partial<Pick<Storage, 'getItem' | 'setItem'>>;
@@ -337,3 +359,7 @@ export const saveStats = (value: Stats, storage = browserStorage()) => write(KEY
 export const loadCustom = (storage = browserStorage()): CustomSetup =>
   read(KEYS.custom, (raw) => (raw === undefined ? { ...DEFAULT_CUSTOM } : sanitizeCustom(raw)), storage);
 export const saveCustom = (value: CustomSetup, storage = browserStorage()) => write(KEYS.custom, value, storage);
+export const loadRun = (storage = browserStorage()) => read(KEYS.run, sanitizeRunSave, storage);
+export const saveRun = (value: RunSave | null, storage = browserStorage()) => write(KEYS.run, value, storage);
+export const loadTutorial = (storage = browserStorage()) => read(KEYS.tutorial, (raw) => raw === true, storage);
+export const saveTutorial = (value: boolean, storage = browserStorage()) => write(KEYS.tutorial, value, storage);

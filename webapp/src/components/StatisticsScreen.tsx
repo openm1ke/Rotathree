@@ -52,7 +52,14 @@ export function StatisticsScreen({ stats, progress, onBack, active }: Props) {
             <tbody>
               {stats.recent.map((run) => (
                 <tr key={run.id}>
-                  <td>{new Date(run.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                  <td>
+                    {new Date(run.at).toLocaleString('ru-RU', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </td>
                   <td>{MODE_NAMES[run.mode]}</td>
                   <td>{outcome(run)}</td>
                   <td>{formatNumber(run.score)}</td>
@@ -70,6 +77,7 @@ export function StatisticsScreen({ stats, progress, onBack, active }: Props) {
 }
 
 function outcome(run: RunRecord): string {
+  if (run.interrupted) return 'партия прервана';
   if (run.mode === 'campaign') return run.completed ? 'кампания пройдена' : `уровень ${run.level}`;
   return `скорость ${run.level}`;
 }
@@ -79,13 +87,17 @@ function ModeCard({ mode, stats, progress }: { mode: ModeId; stats: ModeStats; p
   return (
     <section className="mode-card">
       <header>
-        <span className="kicker">{mode === 'campaign' ? `${progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1}`}` : 'режим'}</span>
+        <span className="kicker">
+          {mode === 'campaign' ? `${progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1}`}` : 'режим'}
+        </span>
         <h2>{MODE_NAMES[mode]}</h2>
         <p>{DESCRIPTIONS[mode]}</p>
       </header>
       <dl>
         <Line label="Партий" value={String(stats.games)} />
-        {mode === 'campaign' && <Line label="Кампания пройдена" value={stats.completed > 0 ? `${stats.completed} раз` : 'нет'} />}
+        {mode === 'campaign' && (
+          <Line label="Кампания пройдена" value={stats.completed > 0 ? `${stats.completed} раз` : 'нет'} />
+        )}
         <Line label="Лучший счёт" value={formatNumber(stats.bestScore)} main />
         <Line label="Очков всего" value={formatNumber(stats.totalScore)} />
         <Line label="Фигур всего" value={formatNumber(stats.totalPieces)} />

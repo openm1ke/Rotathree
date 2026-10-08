@@ -10,14 +10,15 @@ drop it, and line up three or more of a colour: they pop and the blocks above
 fall. A glass that fills up to the far end of its arm ends the game.
 
 There are two front ends over the same rules: the Flutter app in this folder
-and a browser version for the keyboard in [`webapp/`](webapp/README.md).
+and a browser version with keyboard and adaptive touch controls in [`webapp/`](webapp/README.md).
 
 **Play in the browser:** https://openm1ke.github.io/Rotathree/ — built from
 `webapp/` and published by `.github/workflows/pages.yml` on every push to
 `main` that touches it.
 
-See [PROTOTYPE_REPORT.md](PROTOTYPE_REPORT.md) for the rules as implemented,
-the architecture, test and playtest results.
+See [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) for current session behavior,
+validation and release setup. [PROTOTYPE_REPORT.md](PROTOTYPE_REPORT.md) is the
+historical prototype audit, with its original test and playtest results.
 
 ## Run
 
@@ -34,13 +35,23 @@ Controls are two on-screen D-pads in the bottom corners, the buttons of which
 are chosen in Settings. Tapping a glass on the field also brings it to the top.
 With a hardware keyboard the defaults are the browser version's: A / D move,
 W rotates, S or Space drops, ← / → switch glass, ↑ or ↓ the glass opposite,
-Esc or P pauses, N starts again. Everything can be changed in
-Settings → Controls.
+Esc or P pauses, N starts again. The mobile settings configure the D-pads
+and repeat timing; hardware key defaults are retained without a key-binding editor.
 
-Settings (saved on the device): the keys and pad buttons, the auto-repeat
+Settings (saved on the device): pad buttons, the auto-repeat
 timing, the nine block colours with saved palettes, the explosions (a different
 one for each length of line, or one for all), the shake and turn duration, and
 what is written on the field.
+
+New players get six practical lessons before their first game. Training freezes
+automatic falling, requires movement, rotation, a real match and a glass switch,
+and can be skipped or replayed from the menu. Practice does not affect statistics.
+
+Games are saved periodically, at significant engine events, on pause and when the
+app goes into the background. **Continue** in the main menu restores the run paused.
+In pause, **Save and menu** keeps the game; **Finish and menu** records an interrupted
+run. System Back opens the pause. A storage failure shows a persistent notice with
+a retry button while the app stays usable in memory. Clearing app data clears saves.
 
 ## Checks
 
@@ -48,7 +59,8 @@ what is written on the field.
 flutter analyze
 flutter test
 dart run tool/balance_sim.dart          # bot balance simulation
-dart run tool/campaign_sim.dart --glasses=2 --colours=4 --profile=average
+dart run tool/campaign_sim.dart --glasses=2 --colours=4 --profile=average # one fixed configuration
+dart run tool/campaign_run_sim.dart --games=24 --cap=3600 --profile=average # continuous campaign
 flutter run --profile -t tool/frame_bench.dart   # build and raster time of a busy field
 ```
 
@@ -71,7 +83,19 @@ flutter run --profile -t tool/frame_bench.dart   # build and raster time of a bu
   campaign levels, pause); `test/widget_test.dart` — the app through its menus
 - `tool/balance_sim.dart` — seeded bot games for comparing configurations;
   `tool/campaign_sim.dart` — how long bots of each skill need for the campaign
-  targets; `tool/frame_bench.dart` — frame times of a busy field, still,
+  targets from an empty board; `tool/campaign_run_sim.dart` runs the continuous
+  campaign with retained boards and level transitions; `tool/frame_bench.dart` — frame times of a busy field, still,
   turning and exploding
 - `webapp/` — the browser version (Vite + TypeScript + React), with its own
   port of the engine and its own tests
+
+## Android release
+
+Debug builds retain the existing application ID. Release builds require the owner's
+publishing ID and release key: copy `android/key.properties.example` to the ignored
+`android/key.properties`, then set `ROTATHREE_APPLICATION_ID`. Equivalent environment
+variables for signing are documented in [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md).
+A release without these values fails explicitly instead of using the debug key.
+
+Pull requests and main pushes run Flutter analysis, tests and a debug APK build, plus
+web checks and browser regression tests in `.github/workflows/checks.yml`.

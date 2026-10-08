@@ -37,7 +37,9 @@ button {
 button:focus-visible,
 input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(120, 205, 255, 0.85), 0 0 22px rgba(120, 205, 255, 0.35);
+  box-shadow:
+    0 0 0 2px rgba(120, 205, 255, 0.85),
+    0 0 22px rgba(120, 205, 255, 0.35);
 }
 
 .app {
@@ -1653,4 +1655,236 @@ input:focus-visible {
   .banner__title {
     animation: none;
   }
+}
+
+/* The field keeps the space left after controls, lessons and storage notices. */
+.app {
+  display: flex;
+  flex-direction: column;
+}
+.app__content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.storage-notice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel-strong);
+  font-size: 13px;
+}
+.storage-notice span {
+  flex: 1;
+}
+.storage-notice .chip {
+  min-height: 44px;
+}
+.navitem--resume {
+  border-color: var(--accent);
+}
+.game--touch,
+.game--tutorial {
+  display: flex;
+  flex-direction: column;
+}
+.game--touch .game__frame,
+.game--tutorial .game__frame {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+}
+.touch-hud {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: max(6px, env(safe-area-inset-top)) 8px 6px;
+}
+.touch-hud > div {
+  flex: 1;
+  min-width: 0;
+}
+.touch-hud strong {
+  display: block;
+  font-size: 16px;
+}
+.touch-hud small {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.touch-hud .chip {
+  min-height: 44px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+.touch-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+}
+.dpad {
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  width: clamp(136px, 36vw, 150px);
+  height: clamp(136px, 36vw, 150px);
+  flex-shrink: 0;
+  gap: 2px;
+}
+.dpad__button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 2px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--panel-strong);
+  color: var(--text);
+  touch-action: none;
+  user-select: none;
+}
+.dpad__button--up {
+  grid-area: 1 / 2;
+}
+.dpad__button--left {
+  grid-area: 2 / 1;
+}
+.dpad__button--center {
+  grid-area: 2 / 2;
+}
+.dpad__button--right {
+  grid-area: 2 / 3;
+}
+.dpad__button--down {
+  grid-area: 3 / 2;
+}
+.dpad__button.is-pressed {
+  background: var(--accent);
+  color: var(--bg);
+}
+.dpad__button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.dpad__icon {
+  font: 22px/1 sans-serif;
+}
+.dpad__button small {
+  font-size: 9px;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.pad-select {
+  max-width: 65%;
+  min-height: 44px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  padding: 6px;
+}
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tutorial {
+  width: min(620px, calc(100% - 16px));
+  align-self: center;
+  flex-shrink: 0;
+  margin: 4px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+}
+.tutorial h2 {
+  font-size: 18px;
+  line-height: 1.15;
+  margin: 4px 0;
+}
+.tutorial p {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 4px 0;
+}
+.tutorial__controls {
+  color: var(--accent);
+}
+.tutorial__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tutorial__actions .button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.game--touch .level-banner {
+  max-width: 92%;
+}
+@media (max-height: 600px) and (orientation: landscape) {
+  .game--touch {
+    padding-right: 152px;
+    padding-left: 152px;
+  }
+  .game--touch .touch-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+  }
+  .game--touch .game__frame {
+    padding-top: 56px;
+  }
+  .game--touch .touch-controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+  .game--touch .dpad {
+    pointer-events: auto;
+  }
+  .game--touch .tutorial {
+    max-height: 42vh;
+    overflow-y: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+.tutorial {
+  display: flex;
+  flex-direction: column;
+  max-height: 40vh;
+}
+.tutorial > div:first-child {
+  min-height: 0;
+  overflow-y: auto;
+}
+.tutorial__actions {
+  flex-shrink: 0;
+}
+.game[data-frozen='true'] .banner,
+.game[data-frozen='true'] .banner * {
+  animation-play-state: paused;
 }

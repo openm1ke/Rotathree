@@ -2,6 +2,9 @@ import { useRef } from 'react';
 import { CAMPAIGN_LAST } from '../game/campaign';
 import type { Progress } from '../services/storage';
 import { useScreenKeys } from './nav';
+import type { RunSave } from '../services/runSave';
+import { useTouchControls } from '../input/touch';
+import { MODE_NAMES } from '../game/modes';
 
 export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
 
@@ -36,10 +39,15 @@ interface Props {
   onOpen: (target: MenuTarget) => void;
   /** False while the settings are open over the menu. */
   active: boolean;
+  savedRun?: RunSave | null;
+  tutorialDone?: boolean;
+  onResume?: () => void;
+  onTutorial?: () => void;
 }
 
 /** The first screen: a column of large entries, the progress on the side. */
-export function MainMenu({ progress, onOpen, active }: Props) {
+export function MainMenu({ progress, onOpen, active, savedRun, tutorialDone, onResume, onTutorial }: Props) {
+  const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, () => {});
   const opened = progress.unlocked + (progress.completed ? 1 : 0);
@@ -68,6 +76,26 @@ export function MainMenu({ progress, onOpen, active }: Props) {
       </header>
 
       <nav className="home__nav" aria-label="Главное меню">
+        {savedRun && (
+          <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
+            <span className="navitem__no">▶</span>
+            <span className="navitem__text">
+              <span className="navitem__title">Продолжить</span>
+              <span className="navitem__caption">{MODE_NAMES[savedRun.session.mode]} · сохранённая партия</span>
+            </span>
+          </button>
+        )}
+        {onTutorial && (
+          <button type="button" data-nav className="navitem" onClick={onTutorial}>
+            <span className="navitem__no">?</span>
+            <span className="navitem__text">
+              <span className="navitem__title">Обучение</span>
+              <span className="navitem__caption">
+                {tutorialDone ? 'Повторить основы и управление' : 'Первые шаги без спешки'}
+              </span>
+            </span>
+          </button>
+        )}
         {ITEMS.map((item, i) => (
           <button
             key={item.id}
@@ -80,7 +108,9 @@ export function MainMenu({ progress, onOpen, active }: Props) {
             <span className="navitem__no">{String(i + 1).padStart(2, '0')}</span>
             <span className="navitem__text">
               <span className="navitem__title">{item.title}</span>
-              <span className="navitem__caption">{item.caption}</span>
+              <span className="navitem__caption">
+                {touch && item.id === 'settings' ? 'Крестовины, цвета, эффекты, интерфейс' : item.caption}
+              </span>
             </span>
           </button>
         ))}
@@ -102,11 +132,13 @@ export function MainMenu({ progress, onOpen, active }: Props) {
         </div>
       </aside>
 
-      <footer className="home__foot">
-        <span>↑ ↓ выбрать</span>
-        <span>Enter открыть</span>
-        <span>Esc назад в меню</span>
-      </footer>
+      {!touch && (
+        <footer className="home__foot">
+          <span>↑ ↓ выбрать</span>
+          <span>Enter открыть</span>
+          <span>Esc назад в меню</span>
+        </footer>
+      )}
     </main>
   );
 }
