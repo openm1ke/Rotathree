@@ -1,8 +1,8 @@
 /** Block colours: red, blue, yellow, green, purple, white. The first
  * `config.numberOfColors` of them are in play. */
-export type BlockColor = 0 | 1 | 2 | 3 | 4 | 5;
+export type BlockColor = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
-export const COLOR_SYMBOLS = ['R', 'B', 'Y', 'G', 'P', 'W'] as const;
+export const COLOR_SYMBOLS = ['R', 'B', 'Y', 'G', 'P', 'W', 'O', 'C', 'K'] as const;
 
 /** The most colours a game can have. */
 export const MAX_COLORS = COLOR_SYMBOLS.length;

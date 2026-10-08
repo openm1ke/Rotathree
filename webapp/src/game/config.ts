@@ -1,4 +1,4 @@
-import { LEFT, RIGHT, SIDES, TOP, type Side } from './side';
+import { BOTTOM, LEFT, RIGHT, TOP, type Side } from './side';
 
 /** Which blocks fall after a match has popped. */
 export type GravityScope =
@@ -14,8 +14,8 @@ export interface GameConfig {
   boardSize: number;
   /** Length of each outer arm, in cells. A glass is one arm plus the centre. */
   armLength: number;
-  /** How many of the four glasses are in play, 2 to 4: the one the game
-   * starts in plus one to three more. The arms of the others do not exist. */
+  /** How many of the four glasses are in play when a game starts, 1 to 4.
+   * The arms of the others do not exist until they are added. */
   glassCount: number;
   /** Number of squares in a stick. */
   pieceLength: number;
@@ -29,6 +29,9 @@ export interface GameConfig {
   /** …and in the three other glasses this often. A piece that cannot take
    * its next step locks instead. */
   inactiveStepSeconds: number;
+  /** How long building a new glass takes (its arm grows, then its first
+   * piece appears). */
+  buildSeconds: number;
   /** While soft drop is held, the active piece steps this often as long as
    * it has room to fall. */
   softDropStepSeconds: number;
@@ -75,6 +78,7 @@ export const defaultConfig: GameConfig = {
   minMatchLength: 3,
   activeStepSeconds: 1,
   inactiveStepSeconds: 3,
+  buildSeconds: 1.1,
   softDropStepSeconds: 0.05,
   initialProgressStagger: 0.15,
   spawnColumn: null,
@@ -97,8 +101,11 @@ export const defaultConfig: GameConfig = {
 
 /** The glasses in play. Two are neighbours, so that switching is a quarter
  * turn; three leave out the one opposite the starting glass. */
-export const sidesInPlay = (c: GameConfig): readonly Side[] =>
-  c.glassCount <= 2 ? [TOP, RIGHT] : c.glassCount === 3 ? [TOP, RIGHT, LEFT] : SIDES;
+/** The order in which glasses come into play: the one the game starts in,
+ * its two neighbours, and the glass opposite it last. */
+export const GLASS_ORDER: readonly Side[] = [TOP, RIGHT, LEFT, BOTTOM];
+
+export const sidesInPlay = (c: GameConfig): Side[] => GLASS_ORDER.slice(0, c.glassCount);
 
 /** Rows of one glass, from the far end of its arm to its floor. */
 export const glassDepth = (c: GameConfig): number => c.armLength + c.boardSize;

@@ -1,5 +1,3 @@
-import type { BlockColor } from '../game/piece';
-
 /** Tones of one block colour. */
 export interface BlockTones {
   base: string;
@@ -9,16 +7,67 @@ export interface BlockTones {
   rgb: string;
 }
 
-export const BLOCK_TONES: readonly BlockTones[] = [
-  { base: '#ff3d5e', light: '#ff96a8', dark: '#a8132f', rgb: '255, 61, 94' },
-  { base: '#3b82ff', light: '#93bbff', dark: '#1646b8', rgb: '59, 130, 255' },
-  { base: '#ffc531', light: '#ffe696', dark: '#b97c00', rgb: '255, 197, 49' },
-  { base: '#2fd985', light: '#93f2c2', dark: '#0d8a4d', rgb: '47, 217, 133' },
-  { base: '#a65cff', light: '#d6b3ff', dark: '#5a1fbd', rgb: '166, 92, 255' },
-  { base: '#e4eafa', light: '#ffffff', dark: '#8a94b4', rgb: '228, 234, 250' },
+/** The names of the nine colour slots, in order. */
+export const COLOUR_NAMES = [
+  'Красный',
+  'Синий',
+  'Жёлтый',
+  'Зелёный',
+  'Фиолетовый',
+  'Белый',
+  'Оранжевый',
+  'Голубой',
+  'Розовый',
+] as const;
+
+/** The colours of the classic set, one per slot. */
+export const DEFAULT_COLOURS: readonly string[] = [
+  '#ff3d5e',
+  '#3b82ff',
+  '#ffc531',
+  '#2fd985',
+  '#a65cff',
+  '#e4eafa',
+  '#ff8a2e',
+  '#2ee6f0',
+  '#ff5fb0',
 ];
 
-export const tonesOf = (color: BlockColor): BlockTones => BLOCK_TONES[color];
+const channels = (hex: string): [number, number, number] => {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+const toHex = (rgb: number[]): string =>
+  `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`;
+
+/** Lighter and darker tones of a colour, for the bevel of a block. */
+export function toneOf(hex: string): BlockTones {
+  const [r, g, b] = channels(hex);
+  return {
+    base: hex,
+    light: toHex([r, g, b].map((c) => c + (255 - c) * 0.45)),
+    dark: toHex([r, g, b].map((c) => c * (1 - 0.35))),
+    rgb: `${r}, ${g}, ${b}`,
+  };
+}
+
+let tones: BlockTones[] = DEFAULT_COLOURS.map(toneOf);
+let revision = 0;
+
+/** Replaces the colours of the block slots. */
+export function setPalette(colours: readonly string[]): void {
+  tones = colours.map(toneOf);
+  revision++;
+}
+
+/** Changes every time the palette changes, so cached sprites can be checked. */
+export const paletteRevision = (): number => revision;
+
+export const tonesOf = (color: number): BlockTones => tones[color];
+
+/** The tones of every colour slot in the current palette. */
+export const paletteTones = (): readonly BlockTones[] => tones;
 
 export const THEME = {
   /** Accent of the active glass. */

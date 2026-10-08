@@ -1,6 +1,6 @@
 import { Board } from './board';
 import { clearMatch, scoreFor } from './cascade';
-import { dropSeconds, fallPhaseSeconds, sidesInPlay, type GameConfig } from './config';
+import { GLASS_ORDER, dropSeconds, fallPhaseSeconds, sidesInPlay, type GameConfig } from './config';
 import { PieceGenerator } from './generator';
 import { settle, type BlockMove } from './gravity';
 import { IncomingController, type IncomingPiece } from './incoming';
@@ -24,6 +24,8 @@ export type GamePhase =
   | 'settling'
   /** A follow-up match (combo ×2 and up) is flashing. */
   | 'cascading'
+  /** A new glass is being built; its first piece appears at the end. */
+  | 'building'
   | 'gameOver';
 
 /** Things that happened inside the engine, for the renderer to react to. */
@@ -37,7 +39,18 @@ export type GameEvent =
   | { type: 'matchScored'; combo: number; score: number; match: MatchResult }
   | { type: 'cellsPopped'; cells: PlacedCell[] }
   | { type: 'blocksFell'; moves: BlockMove[] }
+  | { type: 'glassAdded'; side: Side }
+  | { type: 'speedUp'; level: number; activeStep: number; inactiveStep: number }
   | { type: 'gameEnded'; side: Side };
+
+/** A speed that rises with the score: every `everyPoints` the step times are
+ * multiplied by `factor`, never going below the minimums. */
+export interface SpeedRamp {
+  everyPoints: number;
+  factor: number;
+  minActive: number;
+  minInactive: number;
+}
 
 /** A hard-dropped piece on its way to where it lands. */
 export interface DropInFlight {
@@ -49,7 +62,7 @@ export interface DropInFlight {
 /** Everything the renderer needs to draw a frame. Owned by the engine. */
 export interface GameState {
   board: Board;
-  /** The piece currently falling down each glass. */
+  /** The piece currently falling down each glass in play. */
   incoming: Map<Side, IncomingPiece>;
   activeSide: Side;
   phase: GamePhase;
@@ -72,6 +85,10 @@ export interface GameState {
   /** Blocks falling during `settling`; the board already holds them at
    * their destination. */
   moves: BlockMove[];
+  /** The glass being built during `building`. */
+  buildingSide: Side | null;
+  /** How many speed-ups the score has earned (0 without a ramp). */
+  speedLevel: number;
   /** The glass that overflowed, once the game is over. */
   gameOverSide: Side | null;
 }
@@ -89,9 +106,9 @@ const EPSILON = 1e-9;
  *
  * Rules in short:
  *  * the playfield is a cross: a central square and four arms. Each side
- *    owns a glass — its arm plus the central square — and the glasses
- *    share the centre. Two to four of them are in play; the arms of the
- *    rest do not exist;
+ *    owns a glass — its arm plus the central square — and the glasses share
+ *    the centre. One to four of them are in play; the arms of the rest do
+ *    not exist yet, and a glass can be added during play;
  *  * the pieces fall at the same time, one per glass, a whole cell per
  *    step — quickly in the active glass, slowly in the others — through the
  *    arm and on through the centre. A piece whose next step is blocked by
@@ -104,23 +121,27 @@ const EPSILON = 1e-9;
  *
  * Time only moves through `update`. */
 export class GameEngine {
+  /** Step times may change during a game (see `setSteps` and `setRamp`). */
+  config: GameConfig;
   readonly incoming: IncomingController;
-  /** The glasses in play, in the order TOP → RIGHT → BOTTOM → LEFT. */
-  readonly sides: readonly Side[];
+  /** The glasses in play, in the order they came into play. */
+  sides: Side[];
   state!: GameState;
 
+  private readonly startConfig: GameConfig;
   private readonly inputs: Input[] = [];
   private events: GameEvent[] = [];
   /** Glasses whose piece has locked and that get a new one as soon as the
    * board has come to rest. */
   private awaitingPiece: Side[] = [];
+  private ramp: SpeedRamp | null = null;
+  private rampBase = { active: 1, inactive: 3 };
 
-  constructor(
-    readonly config: GameConfig,
-    random?: () => number,
-  ) {
-    this.sides = sidesInPlay(config);
+  constructor(config: GameConfig, random?: () => number) {
+    this.startConfig = config;
+    this.config = config;
     this.incoming = new IncomingController(config, new PieceGenerator(config, random));
+    this.sides = sidesInPlay(config);
     this.restart();
   }
 
@@ -144,24 +165,32 @@ export class GameEngine {
     return this.incoming.pieceAt(this.state.activeSide);
   }
 
-  /** True while falling pieces are frozen for a match animation. */
+  /** True while falling pieces are frozen for a match or a new glass. */
   get incomingPaused(): boolean {
     const phase = this.state.phase;
     return (
       this.config.pauseIncomingDuringCascade &&
-      (phase === 'matching' || phase === 'clearing' || phase === 'settling' || phase === 'cascading')
+      (phase === 'matching' ||
+        phase === 'clearing' ||
+        phase === 'settling' ||
+        phase === 'cascading' ||
+        phase === 'building')
     );
   }
 
   restart(): void {
+    this.config = this.startConfig;
+    this.rampBase = { active: this.config.activeStepSeconds, inactive: this.config.inactiveStepSeconds };
+    this.sides = sidesInPlay(this.startConfig);
+    this.incoming.setConfig(this.config);
     this.inputs.length = 0;
     this.events = [];
     this.awaitingPiece = [];
-    this.incoming.reset();
+    this.incoming.reset(this.sides);
     this.state = {
       board: new Board(this.config.boardSize, this.config.armLength),
       incoming: this.incoming.pieces,
-      activeSide: 0,
+      activeSide: this.sides[0],
       phase: 'playing',
       phaseElapsed: 0,
       phaseDuration: 0,
@@ -176,6 +205,8 @@ export class GameEngine {
       drop: null,
       activeMatch: null,
       moves: [],
+      buildingSide: null,
+      speedLevel: 0,
       gameOverSide: null,
     };
   }
@@ -187,7 +218,36 @@ export class GameEngine {
     return events;
   }
 
-  // -------------------------------------------------------------- queries
+  // ------------------------------------------------------------- settings
+
+  /** Changes the step times from now on. Pieces keep their progress. */
+  setSteps(activeStepSeconds: number, inactiveStepSeconds: number): void {
+    this.config = { ...this.config, activeStepSeconds, inactiveStepSeconds };
+    this.incoming.setConfig(this.config);
+  }
+
+  /** Makes the speed rise with the score (or stops it when null). The
+   * current step times are the ones it starts from. */
+  setRamp(ramp: SpeedRamp | null): void {
+    this.ramp = ramp;
+    this.rampBase = { active: this.config.activeStepSeconds, inactive: this.config.inactiveStepSeconds };
+    this.state.speedLevel = 0;
+  }
+
+  /** Brings the next glass into play: its arm grows, and its first piece
+   * appears at the far end when the building phase is over. Returns the
+   * glass, or null when all four are in play or the board is busy. */
+  addGlass(): Side | null {
+    if (this.state.phase !== 'playing') return null;
+    const side = GLASS_ORDER.find((candidate) => !this.sides.includes(candidate));
+    if (side === undefined) return null;
+    this.sides = [...this.sides, side];
+    this.state.buildingSide = side;
+    this.enterPhase('building', this.config.buildSeconds);
+    return side;
+  }
+
+  // ------------------------------------------------------------- queries
 
   /** Where the piece of `side` comes to rest if it falls straight down from
    * where it is; null when that glass has no piece at the moment. */
@@ -209,8 +269,8 @@ export class GameEngine {
     return piece ? this.incoming.secondsToLock(piece, this.state.board, this.state.activeSide) : null;
   }
 
-  /** Free rows at the far end of the glass of `side`, in the lanes where
-   * its pieces appear. At 0 the next piece has no room and the game ends. */
+  /** Free rows at the far end of the glass of `side`, in the lanes where its
+   * pieces appear. At 0 the next piece has no room and the game ends. */
   headroom(side: Side): number {
     return headroom(this.state.board, side, this.incoming.spawnColumn, this.config.pieceLength);
   }
@@ -222,8 +282,8 @@ export class GameEngine {
 
   // ---------------------------------------------------------------- input
 
-  /** Turns the cross: ±1 goes on round TOP → RIGHT → BOTTOM → LEFT to the
-   * next glass in play, 2 goes to the glass opposite if there is one. */
+  /** Turns the cross: ±1 goes on to the next glass in play, 2 goes to the
+   * glass opposite if there is one. */
   switchSide(quarterTurns: number): void {
     this.submit({ kind: 'turn', quarterTurns });
   }
@@ -301,8 +361,8 @@ export class GameEngine {
   }
 
   /** The glass a turn of `quarterTurns` leads to from `side`. A single step
-   * skips the sides that are not in play; any other turn only happens when
-   * a glass is exactly there. */
+   * skips the sides that are not in play; any other turn only happens when a
+   * glass is exactly there. */
   private sideAfter(side: Side, quarterTurns: number): Side {
     if (Math.abs(quarterTurns) !== 1) {
       const to = turned(side, quarterTurns);
@@ -445,6 +505,16 @@ export class GameEngine {
         state.moves = [];
         this.checkMatches();
         break;
+      case 'building': {
+        const side = state.buildingSide!;
+        state.buildingSide = null;
+        // The arm is empty, so the first piece always finds room.
+        this.incoming.spawn(side, state.board);
+        this.events.push({ type: 'glassAdded', side });
+        this.enterPhase('playing', 0);
+        this.flushInputs();
+        break;
+      }
       default:
         break;
     }
@@ -474,7 +544,23 @@ export class GameEngine {
     state.clearedCells += match.cells.size;
     state.activeMatch = match;
     this.events.push({ type: 'matchScored', combo: state.combo, score, match });
+    this.applyRamp();
     this.enterPhase(state.combo === 1 ? 'matching' : 'cascading', this.config.matchSeconds);
+  }
+
+  /** Steps the speed up when the score has passed another multiple of the
+   * ramp's interval. */
+  private applyRamp(): void {
+    const ramp = this.ramp;
+    if (!ramp) return;
+    const level = Math.floor(this.state.score / ramp.everyPoints);
+    if (level === this.state.speedLevel) return;
+    this.state.speedLevel = level;
+    const factor = Math.pow(ramp.factor, level);
+    const activeStep = Math.max(ramp.minActive, this.rampBase.active * factor);
+    const inactiveStep = Math.max(ramp.minInactive, this.rampBase.inactive * factor);
+    this.setSteps(activeStep, inactiveStep);
+    this.events.push({ type: 'speedUp', level, activeStep, inactiveStep });
   }
 
   private finishResolution(): void {

@@ -1,5 +1,5 @@
 import type { Board } from './board';
-import { sidesInPlay, spawnColumnOf, type GameConfig } from './config';
+import { spawnColumnOf, type GameConfig } from './config';
 import type { PieceGenerator } from './generator';
 import { isHorizontal, pieceWidth, rotatePiece, type Piece } from './piece';
 import { fits, landingRow } from './placement';
@@ -42,9 +42,14 @@ export class IncomingController {
   softDrop = false;
 
   constructor(
-    private readonly config: GameConfig,
+    private config: GameConfig,
     private readonly generator: PieceGenerator,
   ) {}
+
+  /** Uses new step times and rules from now on. */
+  setConfig(config: GameConfig): void {
+    this.config = config;
+  }
 
   get spawnColumn(): number {
     return spawnColumnOf(this.config);
@@ -68,10 +73,9 @@ export class IncomingController {
   /** Starts a fresh game: one piece per glass in play, staggered so that
    * TOP is the furthest along and the last glass starts at the very end of
    * its arm. */
-  reset(): void {
+  reset(sides: readonly Side[]): void {
     this.pieces.clear();
     this.softDrop = false;
-    const sides = sidesInPlay(this.config);
     sides.forEach((side, i) => {
       const headStart = (sides.length - 1 - i) * this.config.initialProgressStagger;
       this.put(side, this.generator.next(), { row: Math.round(headStart * this.config.armLength) });

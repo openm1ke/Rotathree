@@ -13,6 +13,10 @@ enum GravityScope {
   aboveCleared,
 }
 
+/// The order in which glasses are in play: the one the game starts in, then
+/// its two neighbours, and the glass opposite it last.
+const glassOrder = [Side.top, Side.right, Side.left, Side.bottom];
+
 /// Every tunable of the prototype lives here.
 class GameConfig {
   const GameConfig({
@@ -48,7 +52,7 @@ class GameConfig {
     this.seed,
   })  : assert(boardSize >= pieceLength),
         assert(armLength >= pieceLength),
-        assert(glassCount >= 2 && glassCount <= 4),
+        assert(glassCount >= 1 && glassCount <= 4),
         assert(numberOfColors >= 2 && numberOfColors <= 6),
         assert(activeStepSeconds > 0 && inactiveStepSeconds > 0),
         assert(animationSpeed > 0);
@@ -154,11 +158,7 @@ class GameConfig {
 
   /// The glasses in play. Two are neighbours, so that switching is a quarter
   /// turn; three leave out the one opposite the starting glass.
-  List<Side> get sides => switch (glassCount) {
-        2 => const [Side.top, Side.right],
-        3 => const [Side.top, Side.right, Side.left],
-        _ => Side.values,
-      };
+  List<Side> get sides => [for (final side in glassOrder.take(glassCount)) side];
 
   /// Rows of one glass, from the far end of its arm to its floor (the far
   /// wall of the central square).

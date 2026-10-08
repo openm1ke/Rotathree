@@ -48,17 +48,17 @@ export type Bindings = Record<Action, string[]>;
 export const SLOTS_PER_ACTION = 2;
 
 export const defaultBindings: Bindings = {
-  moveLeft: ['ArrowLeft'],
-  moveRight: ['ArrowRight'],
-  rotateCW: ['ArrowUp', 'KeyX'],
-  rotateCCW: ['KeyZ'],
-  softDrop: ['ArrowDown'],
-  hardDrop: ['Space'],
-  glassLeft: ['KeyA'],
-  glassRight: ['KeyD'],
-  glassOpposite: ['KeyS'],
+  moveLeft: ['KeyA'],
+  moveRight: ['KeyD'],
+  rotateCW: ['KeyW'],
+  rotateCCW: [],
+  softDrop: [],
+  hardDrop: ['KeyS', 'Space'],
+  glassLeft: ['ArrowLeft'],
+  glassRight: ['ArrowRight'],
+  glassOpposite: ['ArrowUp', 'ArrowDown'],
   pause: ['Escape', 'KeyP'],
-  restart: ['KeyR'],
+  restart: ['KeyN'],
 };
 
 export const cloneBindings = (bindings: Bindings): Bindings =>

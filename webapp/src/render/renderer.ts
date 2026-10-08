@@ -1,12 +1,12 @@
 import { EMPTY } from '../game/board';
-import { fallSeconds, gridSize, sidesInPlay, type GameConfig } from '../game/config';
+import { fallSeconds, gridSize, type GameConfig } from '../game/config';
 import type { GameEngine, GameState } from '../game/engine';
 import { worldToView } from '../game/glass';
 import type { IncomingPiece } from '../game/incoming';
 import { pieceDepth, pieceOffsets, pieceWidth, type BlockColor } from '../game/piece';
 import { SIDES, type Side } from '../game/side';
 import type { Effects } from './effects';
-import { BLOCK_TONES, THEME, rgba, tonesOf } from './theme';
+import { THEME, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
 
 const QUARTER = Math.PI / 2;
 
@@ -29,6 +29,7 @@ export class GameRenderer {
   private dpr = 1;
   private sprites: HTMLCanvasElement[] = [];
   private spriteSize = 0;
+  private spriteRevision = -1;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -85,13 +86,14 @@ export class GameRenderer {
     ctx.scale(scale, scale);
     ctx.rotate(fx.viewAngle);
 
-    this.drawField(view, sidesInPlay(config), 1 - 0.7 * fx.turnMotion);
+    this.drawField(view, engine.sides, 1 - 0.7 * fx.turnMotion, state);
     this.drawActiveGlass(view, fx);
     for (const side of SIDES) this.drawCrowdedWarning(view, engine, fx, side);
     for (const beam of fx.beams) this.drawBeam(view, beam);
     for (const piece of state.incoming.values()) this.drawAim(view, engine, fx, piece);
     this.drawSettled(view, engine, fx);
     this.drawRings(view, fx);
+    this.drawFlashes(view, fx);
     this.drawParticles(fx);
     for (const piece of state.incoming.values()) this.drawIncoming(view, engine, fx, piece);
     this.drawDrop(view, state);
@@ -105,9 +107,10 @@ export class GameRenderer {
   /** One pre-rendered block per colour: flat, with a lit top edge and a
    * shaded bottom one. */
   private ensureSprites(size: number): void {
-    if (size === this.spriteSize && this.sprites.length > 0) return;
+    if (size === this.spriteSize && this.spriteRevision === paletteRevision()) return;
     this.spriteSize = size;
-    this.sprites = BLOCK_TONES.map((tones) => {
+    this.spriteRevision = paletteRevision();
+    this.sprites = paletteTones().map((tones) => {
       const sprite = document.createElement('canvas');
       sprite.width = sprite.height = Math.max(4, size);
       const g = sprite.getContext('2d')!;
@@ -171,25 +174,32 @@ export class GameRenderer {
 
   // ------------------------------------------------------------- playfield
 
-  /** The cross: the central square and the arm of every glass in play.
-   * `lines` fades the grid while the cross is turning. */
-  private drawField(view: View, sides: readonly Side[], lines: number): void {
+  /** The cross: the central square and the arm of every glass in play. A
+   * glass being built grows out of the centre. `lines` fades the grid while
+   * the cross is turning. */
+  private drawField(view: View, sides: readonly Side[], lines: number, state: GameState): void {
     const { ctx } = this;
     const { n, arm, half, reach, px } = view;
+    const building = state.phase === 'building' ? state.buildingSide : null;
+    const grow = building === null ? 1 : easeOut(state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1);
+    const reachOf = (side: Side) => half + arm * (side === building ? grow : 1);
 
     for (const side of sides) {
+      const far = reachOf(side);
       ctx.save();
       ctx.rotate(side * QUARTER);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.022)';
-      ctx.fillRect(-half, -reach, n, arm);
+      ctx.fillRect(-half, -far, n, far - half);
       ctx.beginPath();
       for (let i = 1; i < n; i++) {
-        ctx.moveTo(-half + i, -reach);
+        ctx.moveTo(-half + i, -far);
         ctx.lineTo(-half + i, -half);
       }
       for (let j = 1; j < arm; j++) {
-        ctx.moveTo(-half, -reach + j);
-        ctx.lineTo(half, -reach + j);
+        const y = -reach + j;
+        if (y < -far) continue;
+        ctx.moveTo(-half, y);
+        ctx.lineTo(half, y);
       }
       ctx.strokeStyle = `rgba(255, 255, 255, ${0.045 * lines})`;
       ctx.lineWidth = px;
@@ -220,9 +230,10 @@ export class GameRenderer {
       ctx.rotate(side * QUARTER);
       ctx.beginPath();
       if (sides.includes(side)) {
+        const far = reachOf(side);
         ctx.moveTo(-half, -half);
-        ctx.lineTo(-half, -reach);
-        ctx.lineTo(half, -reach);
+        ctx.lineTo(-half, -far);
+        ctx.lineTo(half, -far);
         ctx.lineTo(half, -half);
       } else {
         ctx.moveTo(-half, -half);
@@ -231,8 +242,34 @@ export class GameRenderer {
       ctx.stroke();
       ctx.restore();
     }
+    if (building !== null) {
+      // The leading edge of the glass that is growing.
+      ctx.save();
+      ctx.rotate(building * QUARTER);
+      ctx.strokeStyle = `rgba(120, 205, 255, ${0.9 * (1 - grow)})`;
+      ctx.lineWidth = 3 * px;
+      ctx.beginPath();
+      ctx.moveTo(-half, -reachOf(building));
+      ctx.lineTo(half, -reachOf(building));
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
     ctx.strokeRect(-half, -half, n, n);
+  }
+
+  /** Bars of light over the popped lines, and the wash of a triple clear. */
+  private drawFlashes(view: View, fx: Effects): void {
+    const { ctx } = this;
+    for (const flash of fx.flashes) {
+      const alpha = 0.85 * (1 - flash.age / flash.life);
+      ctx.fillStyle = rgba(flash.rgb, alpha);
+      ctx.fillRect(flash.x0, flash.y0, flash.x1 - flash.x0, flash.y1 - flash.y0);
+    }
+    for (const veil of fx.veils) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.22 * (1 - veil.age / veil.life)})`;
+      ctx.fillRect(-view.grid, -view.grid, view.grid * 2, view.grid * 2);
+    }
   }
 
   /** The active glass is one tall well — its arm and the central square —
@@ -607,6 +644,8 @@ function viewScale(view: View, fx: Effects): number {
   const room = view.grid / 2 / FIT - 0.25;
   return Math.min(1, room / extent) + fx.punch;
 }
+
+const easeOut = (t: number): number => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
 
 const urgencyColor = (secondsLeft: number): string =>
   secondsLeft < 1.5 ? THEME.danger : THEME.warning;

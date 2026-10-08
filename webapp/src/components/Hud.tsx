@@ -1,5 +1,6 @@
 import type { Bindings } from '../input/bindings';
-import type { HudOptions } from '../services/settingsStore';
+import type { HudOptions } from '../services/storage';
+import { CAMPAIGN_LAST } from '../game/campaign';
 import { formatClock, formatScore, type Callout, type HudState } from './hudState';
 import { Keys } from './Keycap';
 
@@ -26,25 +27,37 @@ export function Hud({ hud, callout, bindings, options, onPause, onOpenSettings }
           </span>
           {hud.level > 0 && (
             <div className="level">
-              <span className="level__name" key={hud.level}>
-                Уровень {hud.level}
-              </span>
-              <span className="level__bar">
-                <i style={{ width: `${(100 * hud.levelInto) / hud.levelTarget}%` }} />
-              </span>
+              <div className="level__head">
+                <span className="level__name">
+                  Уровень {hud.level}
+                  <small> / {CAMPAIGN_LAST + 1}</small>
+                </span>
+                <span className="level__meta">
+                  {hud.colours} цв · {hud.glasses} ст
+                </span>
+              </div>
+              <div className="level__bar">
+                <i style={{ width: `${Math.min(100, (100 * hud.into) / Math.max(1, hud.target))}%` }} />
+              </div>
               <span className="level__numbers">
-                {formatScore(hud.levelInto)} / {formatScore(hud.levelTarget)}
+                {formatScore(hud.into)} / {formatScore(hud.target)}
               </span>
             </div>
           )}
-          {callout && (
+          {hud.speed > 0 && <span className="speed">Скорость {hud.speed}</span>}
+          {callout?.kind === 'score' && (
             <span className="hud__gain" key={`gain-${callout.id}`}>
               +{callout.score}
             </span>
           )}
-          {callout && callout.combo > 1 && (
+          {callout?.kind === 'score' && (callout.combo ?? 0) > 1 && (
             <span className="hud__combo" key={`combo-${callout.id}`}>
               <b>{callout.combo}×</b> комбо
+            </span>
+          )}
+          {callout?.kind === 'speed' && (
+            <span className="hud__speedup" key={`speed-${callout.id}`}>
+              Скорость {callout.speed}
             </span>
           )}
         </section>
@@ -76,9 +89,6 @@ export function Hud({ hud, callout, bindings, options, onPause, onOpenSettings }
             </span>
             <span>
               <Keys codes={[...bindings.rotateCW.slice(0, 1), ...bindings.rotateCCW.slice(0, 1)]} /> поворот
-            </span>
-            <span>
-              <Keys codes={bindings.softDrop.slice(0, 1)} /> быстрее
             </span>
             <span>
               <Keys codes={bindings.hardDrop.slice(0, 1)} /> сброс

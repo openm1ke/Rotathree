@@ -4,13 +4,14 @@ import { GameEngine } from '../game/engine';
 import { GlassView } from '../game/glass';
 import { fits } from '../game/placement';
 import { createRandom } from '../game/random';
-import { BOTTOM, LEFT, RIGHT, SIDES, TOP } from '../game/side';
+import { BOTTOM, LEFT, RIGHT, TOP } from '../game/side';
 import { ARM, B, DEPTH, G, R, Y, centerAt, lying, newEngine, runUntilPlaying, standing } from './helpers';
 
 describe('four streams', () => {
   it('four pieces exist, staggered so TOP is the furthest along', () => {
     const engine = new GameEngine({ ...defaultConfig, seed: 1 });
-    const rows = SIDES.map((side) => engine.state.incoming.get(side)!.row);
+    // The order glasses come into play: start, its neighbours, the opposite one last.
+    const rows = [TOP, RIGHT, LEFT, BOTTOM].map((side) => engine.state.incoming.get(side)!.row);
     expect(rows[0]).toBeGreaterThan(rows[1]);
     expect(rows[1]).toBeGreaterThan(rows[2]);
     expect(rows[2]).toBeGreaterThan(rows[3]);

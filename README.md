@@ -25,9 +25,9 @@ the architecture, test and playtest results.
 flutter run
 ```
 
-The app opens on a menu: **Играть** (one run for survival), **Дзен** (the same
-game through levels — reach a level's score, watch it celebrated, play on) and
-**Настройки**.
+The app opens on a menu: **Campaign** (fifteen levels, each a score target with
+more glasses and colours), **Custom** (your own game), **Statistics** and
+**Settings**. Insane opens after the campaign is finished.
 
 Controls are two on-screen D-pads in the bottom corners. By default the left
 one steers the piece (left / right, soft drop down, hard drop up) and the

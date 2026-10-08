@@ -9,7 +9,7 @@ import { findMatches } from '../game/matchDetector';
 import { MAX_COLORS, isHorizontal, pieceOffsets, rotatePiece, samePiece } from '../game/piece';
 import { computeDrop, headroom, landingRow } from '../game/placement';
 import { BOTTOM, LEFT, RIGHT, SIDES, TOP, stepsTo, turned } from '../game/side';
-import { BLOCK_TONES } from '../render/theme';
+import { paletteTones } from '../render/theme';
 import { ARM, B, DEPTH, G, R, Y, boardOf, centerAt, emptyBoard, lying, standing, testConfig } from './helpers';
 
 describe('piece', () => {
@@ -65,7 +65,7 @@ describe('piece', () => {
     expect(board.centerRows().at(-1)).toBe('P P P W G W . . . .');
     const match = findMatches(board, 3);
     expect(match.runs.map((run) => run.color)).toEqual([4]);
-    expect(BLOCK_TONES).toHaveLength(MAX_COLORS);
+    expect(paletteTones()).toHaveLength(MAX_COLORS);
   });
 
   it('single-colour sticks are rarer than a fair roll', () => {
