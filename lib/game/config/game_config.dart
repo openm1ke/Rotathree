@@ -8,16 +8,15 @@ enum GravityScope {
   /// Every unsupported block of the active glass falls to rest.
   wholeGlass,
 
-  /// Only the blocks sitting above a popped cell fall — like the rows above a
-  /// cleared line. Anything left hanging elsewhere by a turn stays put.
+  /// Only the blocks sitting above a popped cell fall.
   aboveCleared,
 }
 
-/// The order in which glasses are in play: the one the game starts in, then
+/// The order in which glasses come into play: the one the game starts in,
 /// its two neighbours, and the glass opposite it last.
 const glassOrder = [Side.top, Side.right, Side.left, Side.bottom];
 
-/// Every tunable of the prototype lives here.
+/// Every tunable of the game lives here.
 class GameConfig {
   const GameConfig({
     this.boardSize = 10,
@@ -29,6 +28,7 @@ class GameConfig {
     this.activeStepSeconds = 1.0,
     this.inactiveStepSeconds = 3.0,
     this.softDropStepSeconds = 0.05,
+    this.buildSeconds = 1.1,
     this.initialProgressStagger = 0.15,
     this.spawnColumn,
     this.monoPieceKeepChance = 0.4,
@@ -37,73 +37,64 @@ class GameConfig {
     this.gravityScope = GravityScope.wholeGlass,
     this.crowdedHeadroom = 2,
     this.animationSpeed = 1.0,
-    this.timeScale = 1.0,
-    this.dropBaseSeconds = 0.07,
-    this.dropSecondsPerCell = 0.012,
-    this.matchSeconds = 0.18,
-    this.clearSeconds = 0.22,
-    this.fallBaseSeconds = 0.10,
-    this.fallSecondsPerRootCell = 0.11,
-    this.fallBounceSeconds = 0.14,
-    this.rotationSeconds = 0.3,
-    this.stepSlideSeconds = 0.12,
+    this.dropBaseSeconds = 0.06,
+    this.dropSecondsPerCell = 0.008,
+    this.matchSeconds = 0.16,
+    this.clearSeconds = 0.2,
+    this.fallBaseSeconds = 0.09,
+    this.fallSecondsPerRootCell = 0.1,
+    this.fallBounceSeconds = 0.12,
     this.maxQueuedInputs = 8,
     this.scoring = const ScoreRules(),
     this.seed,
   })  : assert(boardSize >= pieceLength),
         assert(armLength >= pieceLength),
         assert(glassCount >= 1 && glassCount <= 4),
-        assert(numberOfColors >= 2 && numberOfColors <= 6),
+        assert(numberOfColors >= 2 && numberOfColors <= 9),
         assert(activeStepSeconds > 0 && inactiveStepSeconds > 0),
         assert(animationSpeed > 0);
 
   /// Side of the central square, and the width of each of the four glasses.
   final int boardSize;
 
-  /// Length of each outer arm, in cells. A glass is one arm plus the central
-  /// square, so it is [glassDepth] cells deep.
+  /// Length of each outer arm, in cells.
   final int armLength;
 
-  /// How many of the four glasses are in play, 2 to 4: the one the game
-  /// starts in plus one to three more. The arms of the others do not exist.
+  /// How many of the four glasses are in play when a game starts (1 to 4).
   final int glassCount;
 
   /// Number of squares in a stick.
   final int pieceLength;
 
-  /// How many of [BlockColor.values] are in play, 3 to 6.
+  /// How many of [BlockColor.values] are in play (3 to 9).
   final int numberOfColors;
 
   /// Shortest line of one colour that counts as a match.
   final int minMatchLength;
 
-  /// Pieces fall one whole cell at a time. In the active glass a step comes
-  /// this often…
+  /// Seconds between two steps of the active glass.
   final double activeStepSeconds;
 
-  /// …and in the three other glasses this often — slowly, so there is time
-  /// to think. A piece that cannot take its next step locks instead, so it
-  /// always rests for one full step before it does.
+  /// Seconds between two steps of the other glasses.
   final double inactiveStepSeconds;
 
-  /// While soft drop is held, the active piece steps this often as long as
-  /// it has room to fall.
+  /// While soft drop is held, the active piece steps this often.
   final double softDropStepSeconds;
 
-  /// Head start, as a fraction of the arm, between the four pieces at the
-  /// beginning of a game so they do not all start from the same row.
+  /// How long building a new glass takes.
+  final double buildSeconds;
+
+  /// Head start, as a fraction of the arm, between the pieces at the start.
   final double initialProgressStagger;
 
-  /// Column (leftmost square, in the frame of its own glass) where a new
-  /// piece appears. Null centres it.
+  /// Column (leftmost square, in the frame of its own glass) where a new piece
+  /// appears. Null centres it.
   final int? spawnColumn;
 
-  /// A stick rolled with a single colour is kept with this probability;
-  /// otherwise one of its squares is repainted. 1.0 = no bias.
+  /// A stick rolled with a single colour is kept with this probability.
   final double monoPieceKeepChance;
 
-  /// Experimental: let the blocks of the new active glass fall every time the
-  /// cross is turned. Off by default — the structure turns as a rigid body.
+  /// Let the blocks of the new active glass fall every time the cross turns.
   final bool settleAfterBoardRotation;
 
   /// Freeze all falling pieces while a match is being resolved.
@@ -112,16 +103,11 @@ class GameConfig {
   /// What falls after a match has popped.
   final GravityScope gravityScope;
 
-  /// A glass with this many free rows or fewer at its far end is flagged as
-  /// about to overflow.
+  /// A glass with this many free rows or fewer at its far end is flagged.
   final int crowdedHeadroom;
 
-  /// Multiplier for the engine-timed animations (drop, match, pop, fall).
+  /// Multiplier for the engine-timed animations.
   final double animationSpeed;
-
-  /// Debug slow motion. Applied by the host loop to the frame delta before it
-  /// reaches the engine; the engine itself always works in game seconds.
-  final double timeScale;
 
   final double dropBaseSeconds;
   final double dropSecondsPerCell;
@@ -132,23 +118,13 @@ class GameConfig {
   /// …then pop for this long.
   final double clearSeconds;
 
-  /// Blocks released by a pop accelerate downwards: falling `n` cells takes
-  /// `fallBaseSeconds + fallSecondsPerRootCell * sqrt(n)`.
   final double fallBaseSeconds;
   final double fallSecondsPerRootCell;
 
   /// A block that has landed wobbles for this long before play goes on.
   final double fallBounceSeconds;
 
-  /// Duration of the visual 90° turn of the cross (UI only).
-  final double rotationSeconds;
-
-  /// How long the short slide of a piece into its next cell takes (UI only;
-  /// the step itself is instant).
-  final double stepSlideSeconds;
-
-  /// Inputs received while the board is resolving are replayed afterwards;
-  /// this caps how many are remembered.
+  /// Inputs received while the board resolves are replayed afterwards.
   final int maxQueuedInputs;
 
   final ScoreRules scoring;
@@ -156,12 +132,10 @@ class GameConfig {
   /// Seed for the piece generator; null = non-deterministic.
   final int? seed;
 
-  /// The glasses in play. Two are neighbours, so that switching is a quarter
-  /// turn; three leave out the one opposite the starting glass.
+  /// The glasses in play at the start, in the order they came into play.
   List<Side> get sides => [for (final side in glassOrder.take(glassCount)) side];
 
-  /// Rows of one glass, from the far end of its arm to its floor (the far
-  /// wall of the central square).
+  /// Rows of one glass, from the far end of its arm to its floor.
   int get glassDepth => armLength + boardSize;
 
   /// Side of the square grid that contains the whole cross.
@@ -170,7 +144,7 @@ class GameConfig {
   int get defaultSpawnColumn => (boardSize - pieceLength) ~/ 2;
 
   /// Flight time of a hard drop over [cells] cells.
-  double dropSeconds(double cells) =>
+  double dropSeconds(num cells) =>
       (dropBaseSeconds + dropSecondsPerCell * cells) / animationSpeed;
 
   /// Time a released block needs to fall [cells] cells.
@@ -178,8 +152,7 @@ class GameConfig {
       (fallBaseSeconds + fallSecondsPerRootCell * math.sqrt(cells)) /
       animationSpeed;
 
-  /// Length of the falling phase when the furthest block falls [cells]
-  /// cells: its flight plus the wobble on landing.
+  /// Length of the falling phase when the furthest block falls [cells] cells.
   double fallPhaseSeconds(int cells) =>
       fallSeconds(cells) + fallBounceSeconds / animationSpeed;
 
@@ -192,19 +165,14 @@ class GameConfig {
     int? glassCount,
     int? pieceLength,
     int? numberOfColors,
-    int? minMatchLength,
     double? activeStepSeconds,
     double? inactiveStepSeconds,
-    double? initialProgressStagger,
+    double? buildSeconds,
     int? spawnColumn,
-    double? monoPieceKeepChance,
     bool? settleAfterBoardRotation,
     bool? pauseIncomingDuringCascade,
     GravityScope? gravityScope,
-    double? animationSpeed,
-    double? timeScale,
     int? maxQueuedInputs,
-    ScoreRules? scoring,
     int? seed,
   }) {
     return GameConfig(
@@ -213,22 +181,19 @@ class GameConfig {
       glassCount: glassCount ?? this.glassCount,
       pieceLength: pieceLength ?? this.pieceLength,
       numberOfColors: numberOfColors ?? this.numberOfColors,
-      minMatchLength: minMatchLength ?? this.minMatchLength,
+      minMatchLength: minMatchLength,
       activeStepSeconds: activeStepSeconds ?? this.activeStepSeconds,
       inactiveStepSeconds: inactiveStepSeconds ?? this.inactiveStepSeconds,
       softDropStepSeconds: softDropStepSeconds,
-      initialProgressStagger:
-          initialProgressStagger ?? this.initialProgressStagger,
+      buildSeconds: buildSeconds ?? this.buildSeconds,
+      initialProgressStagger: initialProgressStagger,
       spawnColumn: spawnColumn ?? this.spawnColumn,
-      monoPieceKeepChance: monoPieceKeepChance ?? this.monoPieceKeepChance,
-      settleAfterBoardRotation:
-          settleAfterBoardRotation ?? this.settleAfterBoardRotation,
-      pauseIncomingDuringCascade:
-          pauseIncomingDuringCascade ?? this.pauseIncomingDuringCascade,
+      monoPieceKeepChance: monoPieceKeepChance,
+      settleAfterBoardRotation: settleAfterBoardRotation ?? this.settleAfterBoardRotation,
+      pauseIncomingDuringCascade: pauseIncomingDuringCascade ?? this.pauseIncomingDuringCascade,
       gravityScope: gravityScope ?? this.gravityScope,
       crowdedHeadroom: crowdedHeadroom,
-      animationSpeed: animationSpeed ?? this.animationSpeed,
-      timeScale: timeScale ?? this.timeScale,
+      animationSpeed: animationSpeed,
       dropBaseSeconds: dropBaseSeconds,
       dropSecondsPerCell: dropSecondsPerCell,
       matchSeconds: matchSeconds,
@@ -236,10 +201,8 @@ class GameConfig {
       fallBaseSeconds: fallBaseSeconds,
       fallSecondsPerRootCell: fallSecondsPerRootCell,
       fallBounceSeconds: fallBounceSeconds,
-      rotationSeconds: rotationSeconds,
-      stepSlideSeconds: stepSlideSeconds,
       maxQueuedInputs: maxQueuedInputs ?? this.maxQueuedInputs,
-      scoring: scoring ?? this.scoring,
+      scoring: scoring,
       seed: seed ?? this.seed,
     );
   }

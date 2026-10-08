@@ -13,12 +13,12 @@ enum Side {
 
   /// The side reached after [quarterTurns] steps of [next] (negative steps go
   /// backwards).
-  Side turned(int quarterTurns) => Side.values[(index + quarterTurns) % 4];
+  Side turned(int quarterTurns) => Side.values[((index + quarterTurns) % 4 + 4) % 4];
 
   /// Signed number of [next] steps from this side to [other], taking the
   /// short way round: -1, 0, 1 or 2.
   int stepsTo(Side other) {
-    final diff = (other.index - index) % 4;
+    final diff = ((other.index - index) % 4 + 4) % 4;
     return diff == 3 ? -1 : diff;
   }
 }

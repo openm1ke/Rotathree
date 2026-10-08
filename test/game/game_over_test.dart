@@ -37,7 +37,7 @@ void main() {
 
     expect(engine.phase, GamePhase.gameOver);
     expect(engine.isGameOver, isTrue);
-    expect(engine.state.gameOver!.side, Side.top);
+    expect(engine.state.gameOverSide!, Side.top);
     expect(engine.state.piecesPlaced, 1);
     expect(engine.drainEvents().whereType<GameEnded>(), hasLength(1));
   });
@@ -72,7 +72,7 @@ void main() {
     expect(engine.isCrowded(Side.right), isTrue);
     engine.update(3.1); // an inactive piece takes three seconds per step
     expect(engine.phase, GamePhase.gameOver);
-    expect(engine.state.gameOver!.side, Side.right);
+    expect(engine.state.gameOverSide!, Side.right);
   });
 
   test('a hard drop that fills the last row ends the game', () {
@@ -124,7 +124,7 @@ void main() {
     expect(engine.phase, GamePhase.playing);
     expect(engine.board.isEmpty, isTrue);
     expect(engine.state.score, 0);
-    expect(engine.state.gameOver, isNull);
+    expect(engine.state.gameOverSide, isNull);
     expect(engine.state.incoming, hasLength(4));
   });
 }

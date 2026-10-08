@@ -84,9 +84,9 @@ GameStats playOne(GameConfig config, BotProfile profile, int seed, double cap) {
     ..score = state.score
     ..decisions = bot.decisions
     ..choseNonUrgent = bot.choseNonUrgent;
-  final over = state.gameOver;
+  final over = state.gameOverSide;
   if (over != null) {
-    stats.fatalSlot = RotationTransform.slotOfSide(state.activeSide, over.side);
+    stats.fatalSlot = RotationTransform.slotOfSide(state.activeSide, over);
   }
   return stats;
 }

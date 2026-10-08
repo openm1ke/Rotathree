@@ -133,7 +133,7 @@ void main() {
           case 4:
             engine.dropActive();
           case 5:
-            engine.setActiveColumn(inputs.nextInt(12) - 1);
+            engine.incoming.setColumn(engine.activeSide, inputs.nextInt(12) - 1, engine.board);
         }
         engine.update(inputs.nextDouble() * 0.08);
 

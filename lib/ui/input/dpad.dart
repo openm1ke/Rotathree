@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../settings/pad_action.dart';
+import 'game_action.dart';
 import '../style.dart';
 
 /// A cross of four buttons with a fifth in the middle. What each of them
@@ -25,14 +25,14 @@ class DPad extends StatefulWidget {
   final double size;
   final bool showLabels;
   final double opacity;
-  final ValueChanged<PadAction> onDown;
-  final ValueChanged<PadAction> onUp;
+  final ValueChanged<GameAction> onDown;
+  final ValueChanged<GameAction> onUp;
 
   /// The button under a point of a pad [size] wide.
   static PadSlot slotAt(Offset point, double size, PadLayout layout) {
     final dx = point.dx - size / 2;
     final dy = point.dy - size / 2;
-    final hasCenter = layout[PadSlot.center] != PadAction.none;
+    final hasCenter = layout[PadSlot.center] != GameAction.none;
     if (hasCenter && dx * dx + dy * dy < size * size * 0.028) {
       return PadSlot.center;
     }
@@ -48,7 +48,7 @@ class _DPadState extends State<DPad> {
   /// The button each finger is on.
   final Map<int, PadSlot> _fingers = {};
 
-  PadAction _actionOf(PadSlot slot) => widget.layout[slot] ?? PadAction.none;
+  GameAction _actionOf(PadSlot slot) => widget.layout[slot] ?? GameAction.none;
 
   bool _isPressed(PadSlot slot) => _fingers.containsValue(slot);
 
@@ -142,14 +142,14 @@ class _PadButton extends StatelessWidget {
   });
 
   final PadSlot slot;
-  final PadAction action;
+  final GameAction action;
   final bool pressed;
   final bool showLabel;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final empty = action == PadAction.none;
+    final empty = action == GameAction.none;
     final outer = Radius.circular(size * 0.3);
     final inner = Radius.circular(size * 0.1);
     // The arms are rounded at their outer ends, like one cross-shaped key.
@@ -220,41 +220,43 @@ class _PadButton extends StatelessWidget {
 }
 
 /// The picture of an action on its button.
-IconData padActionIcon(PadAction action) => switch (action) {
-      PadAction.none => Icons.remove,
-      PadAction.moveLeft => Icons.arrow_back_rounded,
-      PadAction.moveRight => Icons.arrow_forward_rounded,
-      PadAction.rotateCW => Icons.rotate_right_rounded,
-      PadAction.rotateCCW => Icons.rotate_left_rounded,
-      PadAction.softDrop => Icons.keyboard_double_arrow_down_rounded,
-      PadAction.hardDrop => Icons.vertical_align_bottom_rounded,
-      PadAction.glassLeft => Icons.turn_left_rounded,
-      PadAction.glassRight => Icons.turn_right_rounded,
-      PadAction.glassOpposite => Icons.swap_vert_rounded,
-      PadAction.pause => Icons.pause_rounded,
+IconData padActionIcon(GameAction action) => switch (action) {
+      GameAction.none => Icons.remove,
+      GameAction.moveLeft => Icons.arrow_back_rounded,
+      GameAction.moveRight => Icons.arrow_forward_rounded,
+      GameAction.rotateCW => Icons.rotate_right_rounded,
+      GameAction.rotateCCW => Icons.rotate_left_rounded,
+      GameAction.softDrop => Icons.keyboard_double_arrow_down_rounded,
+      GameAction.hardDrop => Icons.vertical_align_bottom_rounded,
+      GameAction.glassLeft => Icons.turn_left_rounded,
+      GameAction.glassRight => Icons.turn_right_rounded,
+      GameAction.glassOpposite => Icons.swap_vert_rounded,
+      GameAction.pause => Icons.pause_rounded,
+      GameAction.restart => Icons.refresh_rounded,
     };
 
 /// A word for the action, small under its picture.
-String padActionCaption(PadAction action) => switch (action) {
-      PadAction.none => '',
-      PadAction.moveLeft => 'ВЛЕВО',
-      PadAction.moveRight => 'ВПРАВО',
-      PadAction.rotateCW || PadAction.rotateCCW => 'ПОВОРОТ',
-      PadAction.softDrop => 'БЫСТРЕЕ',
-      PadAction.hardDrop => 'СБРОС',
-      PadAction.glassLeft || PadAction.glassRight => 'СТАКАН',
-      PadAction.glassOpposite => 'НАПРОТИВ',
-      PadAction.pause => 'ПАУЗА',
+String padActionCaption(GameAction action) => switch (action) {
+      GameAction.none => '',
+      GameAction.moveLeft => 'ВЛЕВО',
+      GameAction.moveRight => 'ВПРАВО',
+      GameAction.rotateCW || GameAction.rotateCCW => 'ПОВОРОТ',
+      GameAction.softDrop => 'БЫСТРЕЕ',
+      GameAction.hardDrop => 'СБРОС',
+      GameAction.glassLeft || GameAction.glassRight => 'СТАКАН',
+      GameAction.glassOpposite => 'НАПРОТИВ',
+      GameAction.pause => 'ПАУЗА',
+      GameAction.restart => 'ЗАНОВО',
     };
 
 /// Buttons light up in the colour of what they do: the piece in blue, the
 /// cross in violet, the drop in pink.
-Color padActionTint(PadAction action) => switch (action) {
-      PadAction.hardDrop => Palette.pink,
-      PadAction.glassLeft ||
-      PadAction.glassRight ||
-      PadAction.glassOpposite =>
+Color padActionTint(GameAction action) => switch (action) {
+      GameAction.hardDrop => Palette.pink,
+      GameAction.glassLeft ||
+      GameAction.glassRight ||
+      GameAction.glassOpposite =>
         Palette.violet,
-      PadAction.pause => Palette.warning,
+      GameAction.pause => Palette.warning,
       _ => Palette.accent,
     };

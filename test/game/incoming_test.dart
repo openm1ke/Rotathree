@@ -21,15 +21,15 @@ void main() {
       }
     });
 
-    test('a new game staggers them so TOP is the furthest along', () {
+    test('a new game staggers them: TOP, RIGHT, LEFT, then BOTTOM at the end', () {
       final engine = GameEngine(config: const GameConfig(seed: 1));
-      final rows = [
-        for (final side in Side.values) engine.state.incoming[side]!.row,
-      ];
-      expect(rows[0], greaterThan(rows[1]));
-      expect(rows[1], greaterThan(rows[2]));
-      expect(rows[2], greaterThan(rows[3]));
-      expect(rows[3], 0);
+      final rows = {
+        for (final side in Side.values) side: engine.state.incoming[side]!.row,
+      };
+      expect(rows[Side.top], greaterThan(rows[Side.right]!));
+      expect(rows[Side.right], greaterThan(rows[Side.left]!));
+      expect(rows[Side.left], greaterThan(rows[Side.bottom]!));
+      expect(rows[Side.bottom], 0);
     });
 
     test('the active piece steps once a second, the others every three', () {
@@ -286,12 +286,12 @@ void main() {
           .put(Side.top, horizontal([r, b, y]), column: 3, row: 10);
       engine.moveActive(1);
       expect(piece.column, 3);
-      engine.setActiveColumn(7);
+      engine.incoming.setColumn(engine.activeSide, 7, engine.board);
       expect(piece.column, 3);
 
       // Above the block the way is free.
       piece.row = 8;
-      engine.setActiveColumn(7);
+      engine.incoming.setColumn(engine.activeSide, 7, engine.board);
       expect(piece.column, 7);
     });
 
@@ -300,7 +300,7 @@ void main() {
       engine.board.set(arm + 4, arm + 8, b); // glass row 10, lane 8
       final piece = engine.incoming
           .put(Side.top, horizontal([r, b, y]), column: 1, row: 10);
-      engine.setActiveColumn(7);
+      engine.incoming.setColumn(engine.activeSide, 7, engine.board);
       expect(piece.column, 5); // lanes 5..7, right up against the block
     });
   });
@@ -539,8 +539,8 @@ void main() {
     });
 
     test('false: their wait keeps running', () {
-      // flash 0.18 s + pop 0.22 s of a three-second step.
-      expect(waitGainedDuringMatch(pause: false), closeTo(0.40 / 3, 2e-3));
+      // flash 0.16 s + pop 0.20 s of a three-second step.
+      expect(waitGainedDuringMatch(pause: false), closeTo(0.36 / 3, 2e-3));
     });
   });
 }

@@ -1,16 +1,17 @@
 import 'dart:math' as math;
-import 'dart:ui' show Color;
+import 'dart:ui' show Color, Offset;
 
 import '../../game/engine/game_engine.dart';
 import '../../game/engine/game_event.dart';
+import '../../game/engine/match_detector.dart';
 import '../../game/engine/placement_engine.dart';
 import '../../game/engine/rotation_transform.dart';
-import '../../game/model/color.dart';
 import '../../game/model/incoming_piece.dart';
 import '../../game/model/piece.dart';
 import '../../game/model/position.dart';
 import '../../game/model/side.dart';
 import '../../game/state/game_state.dart';
+import '../data/settings.dart' show ExplosionStyle;
 import '../style.dart';
 
 /// One shard or spark. Positions are in cells, relative to the centre of the
@@ -36,25 +37,23 @@ class Particle {
   double age = 0;
 }
 
-/// An expanding ring where blocks popped.
+/// An expanding ring. A negative age means it has not started yet.
 class Ring {
   Ring({
     required this.x,
     required this.y,
+    required this.age,
     required this.life,
     required this.color,
     required this.reach,
-    this.age = 0,
   });
 
   final double x;
   final double y;
+  double age;
   final double life;
   final Color color;
   final double reach;
-
-  /// Negative while the ring has not started yet.
-  double age;
 }
 
 /// The streak a hard drop leaves down its lane (glass coordinates).
@@ -65,6 +64,7 @@ class Beam {
     required this.width,
     required this.fromRow,
     required this.toRow,
+    required this.life,
   });
 
   final Side side;
@@ -72,24 +72,90 @@ class Beam {
   final int width;
   final int fromRow;
   final int toRow;
-  final double life = 0.32;
   double age = 0;
+  final double life;
 }
 
 /// A piece that has just locked: its cells flash and squash.
 class Landing {
-  Landing(this.placement, {required this.dropped});
+  Landing({required this.placement, required this.life, required this.dropped});
 
   final Placement placement;
-  final bool dropped;
-  final double life = 0.24;
   double age = 0;
+  final double life;
+  final bool dropped;
 }
 
+/// A bar of light laid over a line of popped blocks, in world cells.
+class Flash {
+  Flash({
+    required this.x0,
+    required this.y0,
+    required this.x1,
+    required this.y1,
+    required this.life,
+    required this.color,
+  });
+
+  final double x0;
+  final double y0;
+  final double x1;
+  final double y1;
+  double age = 0;
+  final double life;
+  final Color color;
+}
+
+/// A whole-field wash of light for a triple clear.
+class Veil {
+  Veil({required this.life});
+
+  double age = 0;
+  final double life;
+}
+
+/// How one line of popped blocks explodes.
+class _Signature {
+  const _Signature({
+    required this.shards,
+    required this.speed,
+    required this.rings,
+    required this.flash,
+    required this.shake,
+    required this.gold,
+  });
+
+  final int shards;
+  final double speed;
+  final int rings;
+
+  /// Seconds the bar of light lasts; 0 for no bar.
+  final double flash;
+  final double shake;
+  final bool gold;
+}
+
+/// Explosions per length of line: 3, 4, 5 and 6 or more. Lines of six get the
+/// most, in gold.
+const _signatures = [
+  _Signature(shards: 9, speed: 6.5, rings: 1, flash: 0, shake: 0.04, gold: false),
+  _Signature(shards: 15, speed: 8, rings: 2, flash: 0.18, shake: 0.06, gold: false),
+  _Signature(shards: 22, speed: 9.5, rings: 2, flash: 0.24, shake: 0.08, gold: false),
+  _Signature(shards: 30, speed: 11, rings: 3, flash: 0.3, shake: 0.11, gold: true),
+];
+
+/// The one explosion the "unified" style uses for everything.
+final _unified = _signatures[0];
+
+const _quarter = math.pi / 2;
+
 class _StepTrack {
-  _StepTrack(this.piece, this.steppedAt)
-      : row = piece.row,
-        orientation = piece.piece.orientation;
+  _StepTrack({
+    required this.piece,
+    required this.row,
+    required this.orientation,
+    required this.steppedAt,
+  });
 
   final IncomingPiece piece;
   int row;
@@ -101,14 +167,7 @@ class _StepTrack {
 /// kicks and shakes, particles, flashes. Nothing here feeds back into the
 /// rules.
 class Effects {
-  Effects({math.Random? random}) : _random = random ?? math.Random();
-
-  static const _quarter = math.pi / 2;
-
-  /// Slide of a piece into its next cell, in seconds.
-  static const stepSlideSeconds = 0.07;
-
-  final math.Random _random;
+  final math.Random _random = math.Random();
 
   /// Seconds of animation time.
   double clock = 0;
@@ -116,12 +175,24 @@ class Effects {
   /// Board kicks and shakes can be switched off in the settings.
   bool screenShake = true;
 
-  /// How strongly each glass is lit as the active one, 0..1.
-  final Map<Side, double> activeness = {for (final side in Side.values) side: 0};
+  /// Whether each kind of clear explodes in its own way.
+  ExplosionStyle explosion = ExplosionStyle.varied;
+
+  /// Seconds a quarter turn of the cross takes; 0 turns it at once.
+  double turnSeconds = 0.26;
+
+  /// How fast the cross is turning right now, 0 at rest … 1 at the fastest
+  /// point of a turn. Fine lines fade by it so that they do not flicker.
+  double turnMotion = 0;
+
+  /// How strongly each glass is lit as the active one, 0..1, by side index.
+  final List<double> activeness = [1, 0, 0, 0];
   final List<Particle> particles = [];
   final List<Ring> rings = [];
   final List<Beam> beams = [];
   final List<Landing> landings = [];
+  final List<Flash> flashes = [];
+  final List<Veil> veils = [];
 
   /// Offset of the whole field, in cells: a spring that is kicked by drops
   /// and bumps and pulls itself back.
@@ -130,21 +201,13 @@ class Effects {
   double _kickVx = 0;
   double _kickVy = 0;
 
-  /// Random jitter, in cells; decays quickly.
+  /// Random jitter amplitude, in cells; decays quickly.
   double _shake = 0;
   double shakeX = 0;
   double shakeY = 0;
 
   /// Extra zoom on a combo; decays to 0.
   double punch = 0;
-
-  /// Seconds a quarter turn of the cross takes; 0 turns it at once. Set from
-  /// the settings.
-  double turnSeconds = 0.26;
-
-  /// How fast the cross is turning right now, 0 at rest … 1 at the fastest
-  /// point of a turn. Fine lines fade by it so that they do not flicker.
-  double turnMotion = 0;
 
   // The view angle is counted in quarter turns; negative is anticlockwise.
   double _fromTurns = 0;
@@ -156,7 +219,10 @@ class Effects {
   double _turnDuration = 0;
 
   final Map<Side, _StepTrack> _steps = {};
-  Object? _burstMatch;
+  MatchResult? _burstMatch;
+
+  /// Slide of a piece into its next cell, in seconds.
+  static const stepSlideSeconds = 0.07;
 
   void reset(Side active) {
     clock = 0;
@@ -164,27 +230,38 @@ class Effects {
     rings.clear();
     beams.clear();
     landings.clear();
+    flashes.clear();
+    veils.clear();
     _steps.clear();
     _burstMatch = null;
-    kickX = kickY = _kickVx = _kickVy = 0;
-    _shake = shakeX = shakeY = punch = 0;
-    _fromTurns = _toTurns = -active.index.toDouble();
-    _turnVelocity = turnMotion = 0;
+    kickX = 0;
+    kickY = 0;
+    _kickVx = 0;
+    _kickVy = 0;
+    _shake = 0;
+    shakeX = 0;
+    shakeY = 0;
+    punch = 0;
+    _fromTurns = -active.index.toDouble();
+    _toTurns = _fromTurns;
+    _turnVelocity = 0;
+    turnMotion = 0;
     _turnStartedAt = double.negativeInfinity;
+    _turnDuration = 0;
     for (final side in Side.values) {
-      activeness[side] = side == active ? 1 : 0;
+      activeness[side.index] = side == active ? 1 : 0;
     }
   }
 
   double get _turnProgress {
     if (_turnDuration <= 0) return 1;
-    return ((clock - _turnStartedAt) / _turnDuration).clamp(0.0, 1.0);
+    return ((clock - _turnStartedAt) / _turnDuration).clamp(0.0, 1.0).toDouble();
   }
 
   /// The turn as a cubic that starts at the speed the cross already had and
-  /// comes to rest exactly on its target: from standstill that is a plain
-  /// ease in and out with no overshoot, and a turn ordered while another is
-  /// still running carries on from it without a jerk.
+  /// comes to rest exactly on its target: from standstill that is a plain ease
+  /// in and out with no overshoot, and a turn ordered while another is still
+  /// running carries on from it without a jerk.
   double _turnsAt(double s) {
     final s2 = s * s;
     final s3 = s2 * s;
@@ -197,7 +274,7 @@ class Effects {
   double _turnSpeedAt(double s) {
     if (_turnDuration <= 0 || s >= 1) return 0;
     final s2 = s * s;
-    return (6 * s2 - 6 * s) * (_fromTurns - _toTurns) / _turnDuration +
+    return ((6 * s2 - 6 * s) * (_fromTurns - _toTurns)) / _turnDuration +
         (3 * s2 - 4 * s + 1) * _turnVelocity;
   }
 
@@ -220,48 +297,59 @@ class Effects {
     final active = engine.activeSide;
     for (final event in events) {
       switch (event) {
-        case SideSwitched():
+        case SideSwitched(:final quarterTurns):
           final s = _turnProgress;
           final speed = _turnSpeedAt(s);
           _fromTurns = _turnsAt(s);
-          _toTurns -= event.quarterTurns;
+          _toTurns -= quarterTurns;
           final distance = (_toTurns - _fromTurns).abs();
           // A half turn takes half as long again, not twice as long.
-          _turnDuration = turnSeconds * (1 + 0.5 * math.max(0.0, distance - 1));
+          _turnDuration = turnSeconds * (1 + 0.5 * math.max(0, distance - 1));
           // Faster than this at the start and the curve would swing past its
           // target.
-          final limit = _turnDuration > 0 ? 3 * distance / _turnDuration : 0.0;
-          _turnVelocity = speed.clamp(-limit, limit);
+          final limit = _turnDuration > 0 ? (3 * distance) / _turnDuration : 0.0;
+          _turnVelocity = speed.clamp(-limit, limit).toDouble();
           _turnStartedAt = clock;
-        case PieceMoved():
-          if (event.blocked) _kick(event.direction * 0.14, 0);
-        case PieceRotated():
-          if (event.blocked) _addShake(0.05);
-        case PieceDropped():
+        case PieceMoved(:final direction, :final blocked):
+          if (blocked) _kick(direction * 0.14, 0);
+        case PieceRotated(:final blocked):
+          if (blocked) _addShake(0.05);
+        case PieceDropped(:final side):
           final drop = engine.state.drop;
           if (drop != null) {
             beams.add(Beam(
-              side: event.side,
+              side: side,
               column: drop.placement.column,
-              width: drop.piece.width,
+              width: drop.placement.piece.isHorizontal ? drop.placement.piece.length : 1,
               fromRow: drop.startRow,
               toRow: drop.placement.row,
+              life: 0.32,
             ));
           }
-        case PieceLanded():
-          landings.add(Landing(event.placement, dropped: event.dropped));
+        case PieceLanded(:final placement, :final dropped):
+          landings.add(Landing(placement: placement, life: 0.24, dropped: dropped));
           // The field recoils the way the piece was travelling on screen.
-          final (dx, dy) = _travelOnScreen(
-            RotationTransform.slotOfSide(active, event.placement.side),
-          );
-          final force = event.dropped ? 0.3 : 0.08;
+          final (dx, dy) = _travelOnScreen(RotationTransform.slotOfSide(active, placement.side));
+          final force = dropped ? 0.3 : 0.08;
           _kick(dx * force, dy * force);
-          if (event.dropped) _sparks(event.placement, engine);
-        case MatchScored():
-          _addShake(0.05 + 0.04 * event.combo);
-          if (screenShake) punch = math.min(0.06, 0.012 * event.combo);
-        case CellsPopped():
-        case GameEnded():
+          if (dropped) _sparks(placement, engine);
+        case MatchScored(:final combo):
+          _addShake(0.05 + 0.04 * combo);
+          if (screenShake) punch = math.min(0.06, 0.012 * combo);
+        case GlassAdded(:final side):
+          // A ring runs out from the far end of the glass as it is finished.
+          final config = engine.config;
+          final far = _farEnd(side, config.armLength + config.boardSize / 2);
+          rings.add(Ring(
+            x: far.dx,
+            y: far.dy,
+            age: 0,
+            life: 0.7,
+            color: const Color(0xFF78CDFF),
+            reach: 3,
+          ));
+          _addShake(0.04);
+        default:
           break;
       }
     }
@@ -274,18 +362,15 @@ class Effects {
 
     // The moment matched blocks start to pop, they burst.
     final match = state.activeMatch;
-    if (state.phase == GamePhase.clearing &&
-        match != null &&
-        !identical(match, _burstMatch)) {
+    if (state.phase == GamePhase.clearing && match != null && !identical(match, _burstMatch)) {
       _burstMatch = match;
-      _burst(match.cells, engine);
+      _burst(match, engine);
     }
 
     _trackSteps(engine);
 
-    // A turn from standstill peaks at 1.5 quarter turns per `turnSeconds`.
-    turnMotion =
-        math.min(1.0, _turnSpeedAt(_turnProgress).abs() * turnSeconds / 1.5);
+    // A turn from standstill peaks at 1.5 quarter turns per turnSeconds.
+    turnMotion = math.min(1, (_turnSpeedAt(_turnProgress).abs() * turnSeconds) / 1.5);
 
     // Spring back to rest.
     const stiffness = 520.0;
@@ -320,46 +405,20 @@ class Effects {
       landing.age += seconds;
     }
     landings.removeWhere((landing) => landing.age >= landing.life);
+    for (final flash in flashes) {
+      flash.age += seconds;
+    }
+    flashes.removeWhere((flash) => flash.age >= flash.life);
+    for (final veil in veils) {
+      veil.age += seconds;
+    }
+    veils.removeWhere((veil) => veil.age >= veil.life);
 
     final rate = math.min(1.0, seconds * 18);
     for (final side in Side.values) {
       final target = side == engine.activeSide ? 1.0 : 0.0;
-      activeness[side] = activeness[side]! + (target - activeness[side]!) * rate;
+      activeness[side.index] += (target - activeness[side.index]) * rate;
     }
-  }
-
-  /// A level has been finished: rings roll out from the centre of the cross
-  /// and confetti in the colours in play flies after them.
-  void celebrate(int colors) {
-    for (var i = 0; i < 3; i++) {
-      rings.add(Ring(
-        x: 0,
-        y: 0,
-        age: -0.16 * i,
-        life: 0.9,
-        color: const Color(0xFFFFFFFF),
-        reach: 13,
-      ));
-    }
-    for (var i = 0; i < 150; i++) {
-      final tones = BlockTones.of(BlockColor.values[i % colors]);
-      final angle = _random.nextDouble() * math.pi * 2;
-      final speed = 8 + _random.nextDouble() * 26;
-      particles.add(Particle(
-        x: math.cos(angle) * 0.6,
-        y: math.sin(angle) * 0.6,
-        vx: math.cos(angle) * speed,
-        vy: math.sin(angle) * speed,
-        size: 0.14 + _random.nextDouble() * 0.22,
-        life: 0.7 + _random.nextDouble() * 0.8,
-        color: i % 4 == 0
-            ? const Color(0xFFFFFFFF)
-            : i.isEven
-                ? tones.light
-                : tones.base,
-      ));
-    }
-    if (screenShake) punch = 0.05;
   }
 
   void _kick(double x, double y) {
@@ -380,7 +439,12 @@ class Effects {
         _steps.remove(side);
       } else if (track == null || !identical(track.piece, piece)) {
         // A new piece slides in from beyond the far end.
-        _steps[side] = _StepTrack(piece, clock);
+        _steps[side] = _StepTrack(
+          piece: piece,
+          row: piece.row,
+          orientation: piece.piece.orientation,
+          steppedAt: clock,
+        );
       } else {
         // A rotation also shifts the row; only a plain step down slides.
         if (piece.row > track.row && piece.piece.orientation == track.orientation) {
@@ -392,34 +456,91 @@ class Effects {
     }
   }
 
-  /// Shards and a ring for every popped block.
-  void _burst(Set<CellPosition> cells, GameEngine engine) {
+  /// Every popped block bursts. In the varied style each line shows its own
+  /// kind of explosion; several lines at once send a wave out from each of
+  /// them, and three or more also flash the whole field.
+  void _burst(MatchResult match, GameEngine engine) {
     final board = engine.board;
     final half = board.size / 2;
-    for (final cell in cells) {
-      final color = board.colorAt(cell);
-      if (color == null) continue;
-      final tones = BlockTones.of(color);
-      final x = -half + cell.col + 0.5;
-      final y = -half + cell.row + 0.5;
-      rings.add(Ring(x: x, y: y, life: 0.34, color: tones.base, reach: 1.25));
-      for (var i = 0; i < 9; i++) {
-        final angle = _random.nextDouble() * math.pi * 2;
-        final speed = 2.5 + _random.nextDouble() * 6.5;
-        particles.add(Particle(
-          x: x + (_random.nextDouble() - 0.5) * 0.5,
-          y: y + (_random.nextDouble() - 0.5) * 0.5,
-          vx: math.cos(angle) * speed,
-          vy: math.sin(angle) * speed,
-          size: 0.1 + _random.nextDouble() * 0.16,
-          life: 0.3 + _random.nextDouble() * 0.3,
-          color: i % 3 == 0
-              ? const Color(0xFFFFFFFF)
-              : i % 3 == 1
-                  ? tones.light
-                  : tones.base,
+    Offset at(CellPosition cell) => Offset(-half + cell.col + 0.5, -half + cell.row + 0.5);
+    final varied = explosion == ExplosionStyle.varied;
+    final shot = <CellPosition>{};
+
+    for (final run in match.runs) {
+      final sig = varied ? _signatures[math.min(6, run.length) - 3] : _unified;
+      for (final cell in run.cells) {
+        if (!shot.add(cell)) continue;
+        final color = board.colorAt(cell);
+        if (color == null) continue;
+        final p = at(cell);
+        final tones = BlockTones.of(color);
+        _shards(p, tones, sig);
+        for (var r = 0; r < sig.rings; r++) {
+          rings.add(Ring(
+            x: p.dx,
+            y: p.dy,
+            age: -0.05 * r,
+            life: 0.34 + 0.05 * r,
+            color: tones.base,
+            reach: 1.25 + 0.3 * r,
+          ));
+        }
+      }
+      if (varied) {
+        if (sig.flash > 0) {
+          final a = at(run.cells.first);
+          final b = at(run.cells.last);
+          flashes.add(Flash(
+            x0: math.min(a.dx, b.dx) - 0.5,
+            y0: math.min(a.dy, b.dy) - 0.5,
+            x1: math.max(a.dx, b.dx) + 0.5,
+            y1: math.max(a.dy, b.dy) + 0.5,
+            life: sig.flash,
+            color: sig.gold ? const Color(0xFFFFD76A) : const Color(0xFFFFFFFF),
+          ));
+        }
+        _addShake(sig.shake);
+      }
+    }
+
+    if (varied && match.runs.length >= 2) {
+      for (var i = 1; i < match.runs.length; i++) {
+        final run = match.runs[i];
+        final mid = at(run.cells[run.cells.length ~/ 2]);
+        rings.add(Ring(
+          x: mid.dx,
+          y: mid.dy,
+          age: -0.08 * i,
+          life: 0.55,
+          color: const Color(0xFFFFFFFF),
+          reach: 2.6,
         ));
       }
+      _addShake(0.03 * (match.runs.length - 1));
+    }
+    if (varied && match.runs.length >= 3) veils.add(Veil(life: 0.2));
+  }
+
+  void _shards(Offset p, BlockTones tones, _Signature sig) {
+    for (var i = 0; i < sig.shards; i++) {
+      final angle = _random.nextDouble() * math.pi * 2;
+      final speed = 2.5 + _random.nextDouble() * sig.speed;
+      final gold = sig.gold && i % 4 == 0;
+      particles.add(Particle(
+        x: p.dx + (_random.nextDouble() - 0.5) * 0.5,
+        y: p.dy + (_random.nextDouble() - 0.5) * 0.5,
+        vx: math.cos(angle) * speed,
+        vy: math.sin(angle) * speed,
+        size: 0.1 + _random.nextDouble() * 0.16,
+        life: 0.3 + _random.nextDouble() * 0.3,
+        color: gold
+            ? const Color(0xFFFFD76A)
+            : i % 3 == 0
+                ? const Color(0xFFFFFFFF)
+                : i % 3 == 1
+                    ? tones.light
+                    : tones.base,
+      ));
     }
   }
 
@@ -442,12 +563,18 @@ class Effects {
       }
     }
   }
-
-  /// Screen direction in which a piece shown in [slot] travels.
-  static (double, double) _travelOnScreen(Side slot) => switch (slot) {
-        Side.top => (0, 1),
-        Side.right => (-1, 0),
-        Side.bottom => (0, -1),
-        Side.left => (1, 0),
-      };
 }
+
+/// The point at the far end of a glass, in world cells from the centre.
+Offset _farEnd(Side side, double reach) {
+  final turn = side.index * _quarter;
+  return Offset(reach * math.sin(turn), -reach * math.cos(turn));
+}
+
+/// Screen direction in which a piece shown in [slot] travels.
+(double, double) _travelOnScreen(Side slot) => switch (slot) {
+      Side.top => (0.0, 1.0),
+      Side.right => (-1.0, 0.0),
+      Side.bottom => (0.0, -1.0),
+      Side.left => (1.0, 0.0),
+    };

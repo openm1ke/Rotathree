@@ -1,115 +1,105 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rotathree/game/config/game_config.dart';
-import 'package:rotathree/game/model/side.dart';
-import 'package:rotathree/ui/settings/pad_action.dart';
-import 'package:rotathree/ui/settings/settings.dart';
-import 'package:rotathree/ui/settings/settings_store.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rotathree/game/config/modes.dart';
+import 'package:rotathree/ui/data/bindings.dart';
+import 'package:rotathree/ui/data/progress.dart';
+import 'package:rotathree/ui/data/settings.dart';
+import 'package:rotathree/ui/data/stats.dart';
+import 'package:rotathree/ui/format.dart';
+import 'package:rotathree/ui/input/game_action.dart';
 
 void main() {
-  test('the default pads cover every action but pause', () {
-    final assigned = {...defaultLeftPad.values, ...defaultRightPad.values};
-    expect(
-      assigned,
-      containsAll(PadAction.values.where(
-        (action) => action != PadAction.pause && action != PadAction.none,
-      )),
-    );
-    expect(defaultLeftPad.keys, PadSlot.values);
-    expect(defaultRightPad.keys, PadSlot.values);
+  test('the defaults survive a round trip through JSON', () {
+    final stored = jsonDecode(jsonEncode(Settings.defaults().toJson()));
+    final again = Settings.fromJson(stored);
+    expect(again.bindings[GameAction.hardDrop], [PhysicalKeyboardKey.keyS, PhysicalKeyboardKey.space]);
+    expect(again.leftPad, defaultLeftPad);
+    expect(again.rightPad, defaultRightPad);
+    expect(again.handling.dasMs, 150);
+    expect(again.palettes.active, 'classic');
   });
 
-  test('settings survive a round trip through their text form', () {
-    final settings = const Settings().copyWith(
-      pads: const PadOptions().copyWith(
-        left: {...defaultLeftPad, PadSlot.center: PadAction.pause},
-        right: {...defaultRightPad, PadSlot.up: PadAction.hardDrop},
-        scale: 1.15,
-        opacity: 0.6,
-        dasMs: 90,
-        arrMs: 0,
-        haptics: false,
-        fieldGestures: true,
-      ),
-      game: const GameOptions(
-        activeStepSeconds: 0.75,
-        inactiveStepSeconds: 2,
-        armLength: 8,
-        glassCount: 2,
-        numberOfColors: 6,
-        gravityScope: GravityScope.aboveCleared,
-        settleAfterBoardRotation: true,
-      ),
-      hud: const HudOptions(padLabels: false, score: true, stats: false, opacity: 0.35),
-      turnMs: 420,
-      screenShake: false,
-    );
-    final restored = Settings.decode(settings.encode());
-    expect(restored.toJson(), settings.toJson());
-    expect(restored.pads.left[PadSlot.center], PadAction.pause);
-    expect(restored.game.key, settings.game.key);
-  });
-
-  test('anything missing or out of range falls back to its default', () {
-    final cleaned = Settings.fromJson({
-      'pads': {
-        'left': {'up': 'teleport', 'center': 'pause'},
-        'scale': 9,
-        'dasMs': -5,
-        'arrMs': 'fast',
-      },
-      'game': {'armLength': 99, 'numberOfColors': 7, 'glassCount': 1, 'gravityScope': 'sideways'},
-      'hud': {'padLabels': 'no', 'opacity': 0},
-      'turnMs': 5000,
+  test('a key bound twice keeps its first use', () {
+    final bindings = sanitizeBindings({
+      'moveLeft': [PhysicalKeyboardKey.keyA.usbHidUsage],
+      'moveRight': [PhysicalKeyboardKey.keyA.usbHidUsage],
     });
-    expect(cleaned.pads.left[PadSlot.up], PadAction.hardDrop);
-    expect(cleaned.pads.left[PadSlot.center], PadAction.pause);
-    expect(cleaned.pads.right, defaultRightPad);
-    expect(cleaned.pads.scale, 1.25);
-    expect(cleaned.pads.dasMs, 0);
-    expect(cleaned.pads.arrMs, 35);
-    expect(cleaned.game.armLength, 12);
-    expect(cleaned.game.numberOfColors, 6);
-    expect(cleaned.game.glassCount, 2);
-    expect(cleaned.game.gravityScope, GravityScope.wholeGlass);
-    expect(cleaned.hud.padLabels, isTrue);
-    expect(cleaned.hud.opacity, 0.1);
-    expect(cleaned.turnMs, 800);
-    expect(cleaned.screenShake, isTrue);
-
-    expect(Settings.decode('{broken').toJson(), const Settings().toJson());
-    expect(Settings.decode(null).toJson(), const Settings().toJson());
-    expect(Settings.decode(jsonEncode([1, 2])).toJson(), const Settings().toJson());
+    expect(bindings[GameAction.moveLeft], [PhysicalKeyboardKey.keyA]);
+    expect(bindings[GameAction.moveRight], isEmpty);
   });
 
-  test('the options become an engine configuration', () {
-    final config = const GameOptions(
-      glassCount: 3,
-      numberOfColors: 5,
-      armLength: 6,
-      inactiveStepSeconds: 2,
-    ).toConfig(seed: 11);
-    expect(config.sides, [Side.top, Side.right, Side.left]);
-    expect(config.numberOfColors, 5);
-    expect(config.armLength, 6);
-    expect(config.inactiveStepSeconds, 2);
-    expect(config.seed, 11);
-    // A different rule set is a different game.
-    expect(const GameOptions(glassCount: 3).key, isNot(const GameOptions().key));
-    expect(const GameOptions().key, const GameOptions().key);
+  test('binding a key takes it away from the action it was on', () {
+    final bindings = bindKey(defaultBindings(), GameAction.moveLeft, 0, PhysicalKeyboardKey.keyD);
+    expect(bindings[GameAction.moveLeft], [PhysicalKeyboardKey.keyD]);
+    expect(bindings[GameAction.moveRight], isEmpty);
+    expect(actionForKey(bindings, PhysicalKeyboardKey.keyD), GameAction.moveLeft);
   });
 
-  test('the device store keeps what was saved', () async {
-    SharedPreferences.setMockInitialValues({});
-    final store = DeviceSettingsStore();
-    expect((await store.load()).toJson(), const Settings().toJson());
-    final changed = const Settings().copyWith(
-      turnMs: 100,
-      game: const GameOptions(numberOfColors: 5),
+  test('a slot can be cleared, and the second one is kept', () {
+    final cleared = unbindKey(defaultBindings(), GameAction.hardDrop, 0);
+    expect(cleared[GameAction.hardDrop], [PhysicalKeyboardKey.space]);
+  });
+
+  test('a custom palette keeps its colours, and bad ones fall back', () {
+    final palettes = Palettes.fromJson({
+      'active': 'mine',
+      'sets': [
+        {
+          'id': 'mine',
+          'name': 'Мой',
+          'colours': ['#ff0000', 'nope'],
+        },
+      ],
+    });
+    expect(palettes.sets.length, builtinPalettes.length + 1);
+    expect(palettes.activeSet.id, 'mine');
+    expect(palettes.activeSet.colours[0], const Color(0xFFFF0000));
+    expect(palettes.activeSet.colours[1], builtinPalettes.first.colours[1]);
+  });
+
+  test('colours print as hex and read back', () {
+    expect(colourToHex(const Color(0xFF3B82FF)), '#3b82ff');
+    expect(colourFromHex('#3b82ff'), const Color(0xFF3B82FF));
+    expect(colourFromHex('blue'), isNull);
+  });
+
+  test('a finished level keeps its best score and opens the next one', () {
+    final progress = Progress.initial().levelFinished(0, 1500).levelFinished(0, 900);
+    expect(progress.best[0], 1500);
+    expect(progress.unlocked, 1);
+    expect(progress.completed, isFalse);
+  });
+
+  test('a run is added to its mode and to the recent runs', () {
+    final run = RunRecord(
+      id: 'a',
+      mode: ModeId.custom,
+      at: 0,
+      score: 700,
+      pieces: 20,
+      matches: 4,
+      bestCombo: 2,
+      seconds: 90,
+      level: 1,
+      completed: false,
     );
-    expect(await store.save(changed), isTrue);
-    expect((await DeviceSettingsStore().load()).toJson(), changed.toJson());
+    final stats = Stats.empty().withRun(run);
+    expect(stats.modes[ModeId.custom]!.games, 1);
+    expect(stats.modes[ModeId.custom]!.bestScore, 700);
+    expect(stats.recent.single.id, 'a');
+  });
+
+  test('unreadable stored values fall back to the defaults', () {
+    expect(Settings.fromJson('garbage').handling.arrMs, 35);
+    expect(Progress.fromJson(null).unlocked, 0);
+    expect(Stats.fromJson(42).recent, isEmpty);
+  });
+
+  test('numbers are grouped as the Russian locale does', () {
+    expect(formatNumber(1234567), '1 234 567');
+    expect(formatNumber(-950), '−950');
+    expect(formatDuration(3725), '1:02:05');
   });
 }

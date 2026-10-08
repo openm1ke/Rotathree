@@ -26,38 +26,50 @@ flutter run
 ```
 
 The app opens on a menu: **Campaign** (fifteen levels, each a score target with
-more glasses and colours), **Custom** (your own game), **Statistics** and
-**Settings**. Insane opens after the campaign is finished.
+more glasses and colours), **Custom** (your own game, set up before it starts),
+**Statistics** (per mode: points, pieces, matches, the best combo, and the last
+runs) and **Settings**. **Insane** opens once the campaign is finished.
 
-Controls are two on-screen D-pads in the bottom corners. By default the left
-one steers the piece (left / right, soft drop down, hard drop up) and the
-right one turns things (rotate up / down, switch glass left / right, the glass
-opposite in the middle). What every button does is chosen in the settings.
-Tapping a glass on the field also brings it to the top. With a hardware
-keyboard: ← → move, ↑ / X and Z rotate, ↓ soft drop, space drop, A / D / S
-switch glass, Esc pause.
+Controls are two on-screen D-pads in the bottom corners, the buttons of which
+are chosen in Settings. Tapping a glass on the field also brings it to the top.
+With a hardware keyboard the defaults are the browser version's: A / D move,
+W rotates, S or Space drops, ← / → switch glass, ↑ or ↓ the glass opposite,
+Esc or P pauses, N starts again. Everything can be changed in
+Settings → Controls.
 
-Settings (saved on the device): the pads and auto-repeat; step intervals, arm
-length, 1–3 extra glasses, 3–6 colours and rule variants; turn duration, shake
-and what is written on the field.
+Settings (saved on the device): the keys and pad buttons, the auto-repeat
+timing, the nine block colours with saved palettes, the explosions (a different
+one for each length of line, or one for all), the shake and turn duration, and
+what is written on the field.
 
 ## Checks
 
 ```bash
 flutter analyze
 flutter test
-dart run tool/balance_sim.dart        # bot balance simulation
+dart run tool/balance_sim.dart          # bot balance simulation
+dart run tool/campaign_sim.dart --glasses=2 --colours=4 --profile=average
 ```
 
 ## Layout
 
 - `lib/game` — the engine, pure Dart, no Flutter imports
-  (`config`, `model`, `engine`, `state`, `sim`)
-- `lib/ui` — the Flutter app: menu, game screen, settings, the field painter
-  and its effects, the pads; styled like the browser version (Exo 2 from
-  `assets/fonts`)
-- `test/game` — engine unit tests; `test/ui` — pads, settings, effects;
-  `test/widget_test.dart` — the app driven through its screens
-- `tool/balance_sim.dart` — seeded bot games for comparing configurations
+  (`config`, `model`, `engine`, `state`, `sim`; `session.dart` picks the
+  rules of a campaign level, Insane or a custom game)
+- `lib/ui` — the Flutter app:
+  - `app.dart` — the screens, the route between them, what is kept on the device
+  - `menu/` — main menu, campaign, custom setup, statistics, settings, colour picker
+  - `game/` — the game screen (campaign flow, pauses, results), HUD, banners
+  - `field/` — the field painter and the effects (explosions, shake, turn)
+  - `input/` — the D-pads, the pad controller (auto-repeat), the game actions
+  - `data/` — settings, key bindings, palettes, progress, statistics, storage
+  - `widgets/` — shared controls and the backdrop; styled like the browser
+    version (Exo 2 from `assets/fonts`)
+- `test/game` — engine unit tests and campaign rules;
+  `test/ui` — pads, settings and storage, effects, the game screen (pads,
+  campaign levels, pause); `test/widget_test.dart` — the app through its menus
+- `tool/balance_sim.dart` — seeded bot games for comparing configurations;
+  `tool/campaign_sim.dart` — how long bots of each skill need for the campaign
+  targets
 - `webapp/` — the browser version (Vite + TypeScript + React), with its own
   port of the engine and its own tests

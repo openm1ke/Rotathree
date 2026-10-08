@@ -1,79 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import 'game_screen.dart';
-import 'hud.dart';
-import 'menu_screen.dart';
-import 'settings/settings.dart';
-import 'settings/settings_store.dart';
-import 'settings_panel.dart';
+import '../game/config/modes.dart';
+import '../game/session.dart';
+import 'data/progress.dart';
+import 'data/settings.dart';
+import 'data/stats.dart';
+import 'data/store.dart';
+import 'game/game_screen.dart';
+import 'menu/campaign_screen.dart';
+import 'menu/custom_screen.dart';
+import 'menu/main_menu.dart';
+import 'menu/settings_screen.dart';
+import 'menu/statistics_screen.dart';
 import 'style.dart';
 import 'widgets/backdrop.dart';
 
-/// The whole app: the menu, the game it starts and the settings over either.
-class RotathreeApp extends StatefulWidget {
-  const RotathreeApp({super.key, this.store, this.seed});
-
-  /// Where the settings are kept; the device's own storage by default.
-  final SettingsStore? store;
-
-  /// Fixes the order of the pieces (tests).
-  final int? seed;
-
-  @override
-  State<RotathreeApp> createState() => _RotathreeAppState();
-}
-
-class _RotathreeAppState extends State<RotathreeApp> {
-  late final SettingsStore _store = widget.store ?? DeviceSettingsStore();
-
-  /// Null until the stored settings have been read.
-  Settings? _settings;
-
-  /// False once the device has refused to store the settings.
-  bool _stored = true;
-
-  /// The game being played; null on the menu.
-  GameMode? _mode;
-  bool _settingsOpen = false;
-
-  // The rules cannot change under a running game: new options start a new
-  // one, which is what a new key does.
-  String? _gameId;
-  GlobalKey<GameScreenState> _gameKey = GlobalKey<GameScreenState>();
-
-  @override
-  void initState() {
-    super.initState();
-    _store.load().then((settings) {
-      if (mounted) setState(() => _settings = settings);
-    });
-  }
-
-  /// Every change is written to the device at once.
-  void _update(Settings next) {
-    setState(() => _settings = next);
-    _store.save(next).then((ok) {
-      if (mounted && ok != _stored) setState(() => _stored = ok);
-    });
-  }
-
-  /// The system "back": close what is on top, pause a running game, and only
-  /// leave the app from the menu.
-  void _back() {
-    if (_settingsOpen) {
-      setState(() => _settingsOpen = false);
-    } else if (_mode != null) {
-      final game = _gameKey.currentState;
-      if (game != null && game.status == GameStatus.playing) {
-        game.pause();
-      } else {
-        setState(() => _mode = null);
-      }
-    } else {
-      SystemNavigator.pop();
-    }
-  }
+class RotathreeApp extends StatelessWidget {
+  const RotathreeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -83,84 +26,196 @@ class _RotathreeAppState extends State<RotathreeApp> {
       theme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: true,
+        scaffoldBackgroundColor: Palette.bg,
+        colorScheme: const ColorScheme.dark(primary: Palette.accent, surface: Palette.panelStrong),
         fontFamily: Type.family,
         fontFamilyFallback: Type.fallback,
-        scaffoldBackgroundColor: Palette.bg,
-        colorScheme: const ColorScheme.dark(
-          primary: Palette.accent,
-          surface: Palette.bg,
-        ),
-        splashFactory: NoSplash.splashFactory,
       ),
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        maxScaleFactor: 1.15,
-        child: child!,
-      ),
-      home: PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _back();
+      home: const _AppRoot(),
+    );
+  }
+}
+
+enum _Screen { home, campaign, custom, statistics, settings, play }
+
+/// The app: the screens, the route between them, and everything the player
+/// sets up, kept on the device.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot();
+
+  @override
+  State<_AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<_AppRoot> {
+  AppStore? _store;
+  Settings _settings = Settings.defaults();
+  Progress _progress = Progress.initial();
+  Stats _stats = Stats.empty();
+  CustomSetup _custom = defaultCustom;
+
+  _Screen _screen = _Screen.home;
+  Session? _session;
+  bool _settingsOpen = false;
+
+  /// Changes for every new game, so that each one starts from scratch.
+  int _nonce = 0;
+  bool _stored = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final store = await AppStore.open();
+    if (!mounted) return;
+    setState(() {
+      _store = store;
+      _settings = store.loadSettings();
+      _progress = store.loadProgress();
+      _stats = store.loadStats();
+      _custom = store.loadCustom();
+    });
+    BlockTones.setColours(_settings.palettes.activeSet.colours);
+  }
+
+  void _saved(Future<bool> write) {
+    write.then((ok) {
+      if (mounted && ok != _stored) setState(() => _stored = ok);
+    });
+  }
+
+  void _changeSettings(Settings next) {
+    setState(() => _settings = next);
+    BlockTones.setColours(next.palettes.activeSet.colours);
+    _saved(_store!.saveSettings(next));
+  }
+
+  void _changeProgress(Progress next) {
+    setState(() => _progress = next);
+    _saved(_store!.saveProgress(next));
+  }
+
+  void _recordRun(RunRecord run) {
+    final next = _stats.withRun(run);
+    setState(() => _stats = next);
+    _saved(_store!.saveStats(next));
+  }
+
+  void _changeCustom(CustomSetup next) {
+    setState(() => _custom = next);
+    _saved(_store!.saveCustom(next));
+  }
+
+  void _show(_Screen screen) => setState(() {
+        _screen = screen;
+        _settingsOpen = false;
+      });
+
+  void _start(Session session) => setState(() {
+        _nonce++;
+        _settingsOpen = false;
+        _session = session;
+        _screen = _Screen.play;
+      });
+
+  void _retry(Session session) => setState(() {
+        _nonce++;
+        _session = session;
+      });
+
+  void _back() {
+    if (_settingsOpen) {
+      setState(() => _settingsOpen = false);
+      return;
+    }
+    if (_screen != _Screen.home) _show(_Screen.home);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = _store;
+    final colours = _settings.palettes.activeSet.colours;
+    final body = switch (store) {
+      null => const SizedBox.shrink(),
+      _ => switch (_screen) {
+          _Screen.home => MainMenu(
+              progress: _progress,
+              onCampaign: () => _show(_Screen.campaign),
+              onCustom: () => _show(_Screen.custom),
+              onStatistics: () => _show(_Screen.statistics),
+              onSettings: () => _show(_Screen.settings),
+            ),
+          _Screen.campaign => CampaignScreen(
+              progress: _progress,
+              colours: colours,
+              onStart: (level) => _start(CampaignSession(level)),
+              onInsane: () => _start(const InsaneSession()),
+              onBack: () => _show(_Screen.home),
+            ),
+          _Screen.custom => CustomScreen(
+              setup: _custom,
+              colours: colours,
+              onChange: _changeCustom,
+              onStart: () => _start(CustomSession(_custom)),
+              onBack: () => _show(_Screen.home),
+            ),
+          _Screen.statistics => StatisticsScreen(
+              stats: _stats,
+              progress: _progress,
+              onBack: () => _show(_Screen.home),
+            ),
+          _Screen.settings => SettingsScreen(
+              settings: _settings,
+              stored: _stored,
+              onChange: _changeSettings,
+              onBack: () => _show(_Screen.home),
+            ),
+          _Screen.play => GameScreen(
+              key: ValueKey(_nonce),
+              session: _session!,
+              settings: _settings,
+              progress: _progress,
+              blocked: _settingsOpen,
+              onSettings: () => setState(() => _settingsOpen = true),
+              onExit: () => _show(_Screen.home),
+              onLevels: () => _show(_Screen.campaign),
+              onRetry: _retry,
+              onInsane: () => _start(const InsaneSession()),
+              onCustomise: () => _show(_Screen.custom),
+              onRecord: _recordRun,
+              onProgress: _changeProgress,
+            ),
         },
-        child: Scaffold(
-          backgroundColor: Palette.bg,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              const Backdrop(),
-              if (_settings != null) ..._buildScreens(_settings!),
-            ],
-          ),
+    };
+
+    return PopScope(
+      canPop: _screen == _Screen.home && !_settingsOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      // Material gives every control its ink and its switches an ancestor.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: Backdrop()),
+            Positioned.fill(child: body),
+            if (_settingsOpen && _screen == _Screen.play && store != null)
+              Positioned.fill(
+                child: SettingsScreen(
+                  overlay: true,
+                  settings: _settings,
+                  stored: _stored,
+                  onChange: _changeSettings,
+                  onBack: () => setState(() => _settingsOpen = false),
+                ),
+              ),
+          ],
         ),
       ),
     );
-  }
-
-  List<Widget> _buildScreens(Settings settings) {
-    final mode = _mode;
-    final Widget screen;
-    if (mode == null) {
-      screen = MenuScreen(
-        key: const ValueKey('menu'),
-        onPlay: (mode) => setState(() => _mode = mode),
-        onOpenSettings: () => setState(() => _settingsOpen = true),
-      );
-    } else {
-      final id = '${mode.name}:${settings.game.key}';
-      if (id != _gameId) {
-        _gameId = id;
-        _gameKey = GlobalKey<GameScreenState>();
-      }
-      screen = GameScreen(
-        key: _gameKey,
-        mode: mode,
-        settings: settings,
-        seed: widget.seed,
-        blocked: _settingsOpen,
-        onOpenSettings: () => setState(() => _settingsOpen = true),
-        onExit: () => setState(() => _mode = null),
-      );
-    }
-    return [
-      AnimatedSwitcher(
-        duration: const Duration(milliseconds: 380),
-        switchInCurve: Motion.snap,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.95, end: 1.0).animate(animation),
-            child: child,
-          ),
-        ),
-        child: screen,
-      ),
-      if (_settingsOpen)
-        SettingsPanel(
-          settings: settings,
-          stored: _stored,
-          inGame: mode != null,
-          onChanged: _update,
-          onClose: () => setState(() => _settingsOpen = false),
-        ),
-    ];
   }
 }

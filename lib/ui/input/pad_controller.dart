@@ -1,4 +1,4 @@
-import '../settings/pad_action.dart';
+import 'game_action.dart';
 
 /// What the pads ask of the game.
 abstract class PadSink {
@@ -6,7 +6,7 @@ abstract class PadSink {
   void move(int direction, {required bool toWall});
 
   /// A one-shot action: rotate, drop, switch glass, pause.
-  void press(PadAction action);
+  void press(GameAction action);
 
   void softDrop({required bool held});
 }
@@ -33,7 +33,7 @@ class PadController {
 
   /// How many buttons are holding each held action down: two buttons, one on
   /// each pad, may do the same thing.
-  final Map<PadAction, int> _holders = {};
+  final Map<GameAction, int> _holders = {};
 
   /// Held directions, the most recent last: the latest one pressed wins.
   final List<int> _directions = [];
@@ -41,15 +41,15 @@ class PadController {
   double _repeatCharge = 0;
   bool _atWall = false;
 
-  static int? _directionOf(PadAction action) => switch (action) {
-        PadAction.moveLeft => -1,
-        PadAction.moveRight => 1,
+  static int? _directionOf(GameAction action) => switch (action) {
+        GameAction.moveLeft => -1,
+        GameAction.moveRight => 1,
         _ => null,
       };
 
   /// A button with [action] went down.
-  void down(PadAction action) {
-    if (action == PadAction.none) return;
+  void down(GameAction action) {
+    if (action == GameAction.none) return;
     if (!action.isHeld) {
       sink.press(action);
       return;
@@ -70,7 +70,7 @@ class PadController {
   }
 
   /// A button with [action] was let go.
-  void up(PadAction action) {
+  void up(GameAction action) {
     final holders = _holders[action] ?? 0;
     if (holders == 0) return;
     _holders[action] = holders - 1;
@@ -118,7 +118,7 @@ class PadController {
 
   /// Forgets everything that is held (a pause, a dialog, a lost touch).
   void releaseAll() {
-    final softDrop = (_holders[PadAction.softDrop] ?? 0) > 0;
+    final softDrop = (_holders[GameAction.softDrop] ?? 0) > 0;
     _holders.clear();
     _directions.clear();
     _restartRepeat();

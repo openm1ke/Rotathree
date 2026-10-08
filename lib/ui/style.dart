@@ -23,33 +23,60 @@ abstract final class Palette {
   static const danger = Color(0xFFFF4664);
   static const warning = Color(0xFFFFB03B);
 
-  /// Zen: the level, its bar, the level-up announcement.
-  static const zen = Color(0xFF7DF0C5);
-  static const zenDeep = Color(0xFF12B886);
-  static const zenBlue = Color(0xFF2A6DF4);
-
   /// The gradient of the main button and of everything "go".
   static const go = [Color(0xFFFF2E7E), Color(0xFFA53BFF)];
 }
 
-/// Tones of one block colour.
+/// The colours of the classic set, one per colour slot of [BlockColor].
+const classicColours = <Color>[
+  Color(0xFFFF3D5E),
+  Color(0xFF3B82FF),
+  Color(0xFFFFC531),
+  Color(0xFF2FD985),
+  Color(0xFFA65CFF),
+  Color(0xFFE4EAFA),
+  Color(0xFFFF8A2E),
+  Color(0xFF2EE6F0),
+  Color(0xFFFF5FB0),
+];
+
+/// Tones of one block colour, for the bevel of a block.
 class BlockTones {
   const BlockTones(this.base, this.light, this.dark);
+
+  /// Lighter and darker tones of [base] (theme.ts `toneOf`).
+  factory BlockTones.fromBase(Color base) {
+    final channels = [base.r * 255, base.g * 255, base.b * 255];
+    Color shade(double Function(double channel) change) => Color.fromARGB(
+          255,
+          change(channels[0]).round().clamp(0, 255),
+          change(channels[1]).round().clamp(0, 255),
+          change(channels[2]).round().clamp(0, 255),
+        );
+    return BlockTones(
+      base,
+      shade((c) => c + (255 - c) * 0.45),
+      shade((c) => c * (1 - 0.35)),
+    );
+  }
 
   final Color base;
   final Color light;
   final Color dark;
 
-  static const _tones = {
-    BlockColor.red: BlockTones(Color(0xFFFF3D5E), Color(0xFFFF96A8), Color(0xFFA8132F)),
-    BlockColor.blue: BlockTones(Color(0xFF3B82FF), Color(0xFF93BBFF), Color(0xFF1646B8)),
-    BlockColor.yellow: BlockTones(Color(0xFFFFC531), Color(0xFFFFE696), Color(0xFFB97C00)),
-    BlockColor.green: BlockTones(Color(0xFF2FD985), Color(0xFF93F2C2), Color(0xFF0D8A4D)),
-    BlockColor.purple: BlockTones(Color(0xFFA65CFF), Color(0xFFD6B3FF), Color(0xFF5A1FBD)),
-    BlockColor.white: BlockTones(Color(0xFFE4EAFA), Color(0xFFFFFFFF), Color(0xFF8A94B4)),
-  };
+  static List<BlockTones> _tones = [for (final c in classicColours) BlockTones.fromBase(c)];
+  static int _revision = 0;
 
-  static BlockTones of(BlockColor color) => _tones[color]!;
+  /// Changes whenever the block colours change, so cached pictures can check.
+  static int get revision => _revision;
+
+  /// Replaces the colours of the block slots. [colours] has one per slot.
+  static void setColours(List<Color> colours) {
+    _tones = [for (final c in colours) BlockTones.fromBase(c)];
+    _revision++;
+  }
+
+  static BlockTones of(BlockColor color) => _tones[color.index];
 }
 
 /// Exo 2, as in the browser version. The Latin and the Cyrillic halves of the

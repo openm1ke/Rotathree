@@ -106,7 +106,17 @@ class FieldPainter extends CustomPainter {
     canvas.scale(scale);
     canvas.rotate(fx.viewAngle);
 
-    _drawField(canvas, g, px, engine.sides, 1 - 0.7 * fx.turnMotion);
+    final building = state.phase == GamePhase.building ? state.buildingSide : null;
+    final grow = building == null ? 1.0 : 1 - math.pow(1 - state.phaseProgress, 3).toDouble();
+    _drawField(
+      canvas,
+      g,
+      px,
+      engine.sides,
+      1 - 0.7 * fx.turnMotion,
+      growing: building,
+      grow: grow,
+    );
     _drawActiveGlass(canvas, g, px);
     for (final side in engine.sides) {
       _drawCrowdedWarning(canvas, g, px, side);
@@ -118,6 +128,7 @@ class FieldPainter extends CustomPainter {
       _drawAim(canvas, g, px, piece);
     }
     _drawSettled(canvas, g, state);
+    _drawFlashes(canvas, g);
     _drawRings(canvas, px);
     _drawParticles(canvas);
     for (final piece in state.incoming.values) {
@@ -147,7 +158,14 @@ class FieldPainter extends CustomPainter {
 
   /// One recorded block per colour: flat, with a lit top edge and a shaded
   /// bottom one, a cell wide and centred on the origin.
-  static ui.Picture _sprite(BlockColor color) => _sprites.putIfAbsent(color, () {
+  static int _spriteRevision = -1;
+
+  static ui.Picture _sprite(BlockColor color) {
+    if (_spriteRevision != BlockTones.revision) {
+      _sprites.clear();
+      _spriteRevision = BlockTones.revision;
+    }
+    return _sprites.putIfAbsent(color, () {
         final tones = BlockTones.of(color);
         final recorder = ui.PictureRecorder();
         final g = Canvas(recorder);
@@ -181,7 +199,8 @@ class FieldPainter extends CustomPainter {
             ),
         );
         return recorder.endRecording();
-      });
+    });
+  }
 
   static final _flashShape = RRect.fromRectAndRadius(
     const Rect.fromLTRB(-0.455, -0.455, 0.455, 0.455),
@@ -224,8 +243,10 @@ class FieldPainter extends CustomPainter {
     FieldGeometry g,
     double px,
     List<Side> sides,
-    double lines,
-  ) {
+    double lines, {
+    Side? growing,
+    double grow = 1,
+  }) {
     final half = g.half;
     final reach = g.reach;
     final n = g.n.toDouble();
@@ -237,9 +258,14 @@ class FieldPainter extends CustomPainter {
       ..strokeWidth = px
       ..color = _white.withValues(alpha: 0.045 * lines);
     for (final side in sides) {
+      // A glass being built grows out of the centre.
+      final length = side == growing ? arm * grow : arm;
+      final armRect = Rect.fromLTWH(-half, -half - length, n, length);
       canvas.save();
       canvas.rotate(side.index * _quarter);
-      canvas.drawRect(Rect.fromLTWH(-half, -reach, n, arm), armFill);
+      canvas.drawRect(armRect, armFill);
+      canvas.save();
+      canvas.clipRect(armRect);
       final path = Path();
       for (var i = 1; i < g.n; i++) {
         path
@@ -252,6 +278,22 @@ class FieldPainter extends CustomPainter {
           ..lineTo(half, -reach + j);
       }
       canvas.drawPath(path, armGrid);
+      canvas.restore();
+      canvas.restore();
+    }
+    if (growing != null && grow < 1) {
+      // The leading edge of the glass that is growing.
+      canvas.save();
+      canvas.rotate(growing.index * _quarter);
+      final edge = -half - arm * grow;
+      canvas.drawLine(
+        Offset(-half, edge),
+        Offset(half, edge),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 * px
+          ..color = _accent.withValues(alpha: 0.9 * (1 - grow)),
+      );
       canvas.restore();
     }
 
@@ -287,9 +329,10 @@ class FieldPainter extends CustomPainter {
       canvas.rotate(side.index * _quarter);
       final path = Path()..moveTo(-half, -half);
       if (sides.contains(side)) {
+        final top = side == growing ? -half - arm * grow : -reach;
         path
-          ..lineTo(-half, -reach)
-          ..lineTo(half, -reach)
+          ..lineTo(-half, top)
+          ..lineTo(half, top)
           ..lineTo(half, -half);
       } else {
         path.lineTo(half, -half);
@@ -309,7 +352,7 @@ class FieldPainter extends CustomPainter {
     final half = g.half;
     final reach = g.reach;
     for (final side in Side.values) {
-      final lit = fx.activeness[side]!;
+      final lit = fx.activeness[side.index];
       if (lit < 0.01) continue;
       canvas.save();
       canvas.rotate(side.index * _quarter);
@@ -358,7 +401,7 @@ class FieldPainter extends CustomPainter {
   /// A glass that is nearly full up to its far end pulses red there.
   void _drawCrowdedWarning(Canvas canvas, FieldGeometry g, double px, Side side) {
     final over = engine.isGameOver;
-    if (over ? engine.state.gameOver?.side != side : !engine.isCrowded(side)) {
+    if (over ? engine.state.gameOverSide != side : !engine.isCrowded(side)) {
       return;
     }
     final half = g.half;
@@ -433,7 +476,7 @@ class FieldPainter extends CustomPainter {
     if (placement == null || placement.row == piece.row || engine.isGameOver) {
       return;
     }
-    final lit = fx.activeness[piece.side]!;
+    final lit = fx.activeness[piece.side.index];
     final urgent = (engine.secondsToLock(piece.side) ?? 99) < 6;
     final strength = math.max(lit, urgent ? 0.4 : 0.16);
 
@@ -597,6 +640,23 @@ class FieldPainter extends CustomPainter {
     }
   }
 
+  /// Bars of light over popped lines, and the wash of a triple clear.
+  void _drawFlashes(Canvas canvas, FieldGeometry g) {
+    for (final flash in fx.flashes) {
+      canvas.drawRect(
+        Rect.fromLTRB(flash.x0, flash.y0, flash.x1, flash.y1),
+        Paint()..color = flash.color.withValues(alpha: 0.85 * (1 - flash.age / flash.life)),
+      );
+    }
+    final extent = g.grid.toDouble();
+    for (final veil in fx.veils) {
+      canvas.drawRect(
+        Rect.fromLTWH(-extent, -extent, 2 * extent, 2 * extent),
+        Paint()..color = _white.withValues(alpha: 0.22 * (1 - veil.age / veil.life)),
+      );
+    }
+  }
+
   void _drawRings(Canvas canvas, double px) {
     for (final ring in fx.rings) {
       if (ring.age < 0) continue;
@@ -628,7 +688,7 @@ class FieldPainter extends CustomPainter {
 
   void _drawIncoming(Canvas canvas, FieldGeometry g, double px, IncomingPiece piece) {
     final side = piece.side;
-    final lit = fx.activeness[side]!;
+    final lit = fx.activeness[side.index];
     final secondsLeft = engine.secondsToLock(side) ?? 0;
     final urgent = secondsLeft < 3;
 
@@ -693,15 +753,15 @@ class FieldPainter extends CustomPainter {
     final top = -g.reach + row;
 
     canvas.save();
-    canvas.rotate(drop.side.index * _quarter);
-    final offsets = drop.piece.offsets;
+    canvas.rotate(drop.placement.side.index * _quarter);
+    final offsets = drop.placement.piece.offsets;
     for (var i = 0; i < offsets.length; i++) {
       _block(
         canvas,
-        drop.piece.colors[i],
+        drop.placement.piece.colors[i],
         left + offsets[i].col + 0.5,
         top + offsets[i].row + 0.5,
-        drop.side.index,
+        drop.placement.side.index,
         scaleY: 1 + 0.18 * t,
         flash: 0.25 * t,
       );
@@ -719,7 +779,7 @@ class FieldPainter extends CustomPainter {
   ) {
     if (engine.isGameOver) return;
     final secondsLeft = engine.secondsToLock(piece.side) ?? 0;
-    final lit = fx.activeness[piece.side]!;
+    final lit = fx.activeness[piece.side.index];
     // The piece being steered only needs its timer when it is about to lock.
     if (lit > 0.5 && secondsLeft >= 3) return;
 

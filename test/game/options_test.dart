@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/game/config/game_config.dart';
-import 'package:rotathree/game/config/zen_levels.dart';
 import 'package:rotathree/game/engine/game_event.dart';
 import 'package:rotathree/game/engine/match_detector.dart';
 import 'package:rotathree/game/engine/piece_generator.dart';
@@ -61,7 +60,7 @@ void main() {
     });
 
     test('the default is still all four', () {
-      expect(const GameConfig().sides, Side.values);
+      expect(const GameConfig().sides, [Side.top, Side.right, Side.left, Side.bottom]);
       expect(newEngine().state.incoming.length, 4);
     });
   });
@@ -130,35 +129,6 @@ void main() {
       engine.incoming.put(Side.top, vertical([y, y, b]), column: 4, row: 10);
       engine.rotateActive();
       expect(engine.drainEvents().whereType<PieceRotated>().single.blocked, isTrue);
-    });
-  });
-
-  group('zen levels', () {
-    test('each level asks for a little more than the last', () {
-      expect([1, 2, 3, 4].map(ZenLevels.target), [1000, 1500, 2000, 2500]);
-      expect([1, 2, 3, 4].map(ZenLevels.start), [0, 1000, 2500, 4500]);
-    });
-
-    test('the level follows the total score', () {
-      expect(ZenLevels.levelOf(0), 1);
-      expect(ZenLevels.levelOf(999), 1);
-      expect(ZenLevels.levelOf(1000), 2);
-      expect(ZenLevels.levelOf(2499), 2);
-      expect(ZenLevels.levelOf(2500), 3);
-      // One big cascade can carry the score over more than one line.
-      expect(ZenLevels.levelOf(4600), 4);
-      for (var level = 1; level < 30; level++) {
-        expect(ZenLevels.levelOf(ZenLevels.start(level)), level);
-        expect(ZenLevels.levelOf(ZenLevels.start(level + 1) - 100), level);
-      }
-    });
-
-    test('progress is counted inside the level and never runs past its target', () {
-      expect(ZenLevels.into(0, 1), 0);
-      expect(ZenLevels.into(1300, 2), 300);
-      // Still shown as level 1 while the cascade that finished it plays out.
-      expect(ZenLevels.into(1300, 1), 1000);
-      expect(ZenLevels.into(900, 2), 0);
     });
   });
 }

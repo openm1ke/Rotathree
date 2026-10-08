@@ -3,7 +3,6 @@ import '../engine/match_detector.dart';
 import '../engine/placement_engine.dart';
 import '../model/board.dart';
 import '../model/incoming_piece.dart';
-import '../model/piece.dart';
 import '../model/side.dart';
 
 /// Explicit phases of the engine. Player input is only applied in [playing];
@@ -28,6 +27,9 @@ enum GamePhase {
   /// A follow-up match (combo ×2 and up) is flashing.
   cascading,
 
+  /// A new glass is being built; its first piece appears at the end.
+  building,
+
   gameOver,
 }
 
@@ -39,29 +41,22 @@ class DropInFlight {
 
   /// Row of the piece's top square when the drop began.
   final int startRow;
-
-  Side get side => placement.side;
-  Piece get piece => placement.piece;
-}
-
-class GameOverInfo {
-  const GameOverInfo({required this.side});
-
-  /// The glass that filled up to its far end.
-  final Side side;
 }
 
 /// Everything the UI needs to draw a frame. Owned and mutated by the engine.
 class GameState {
-  GameState({required this.board, required this.incoming});
+  GameState({
+    required this.board,
+    required this.incoming,
+    required this.activeSide,
+  });
 
   final Board board;
 
-  /// The piece currently falling down each glass. A glass has no entry while
-  /// its piece is being locked and the match it made is resolved.
+  /// The piece currently falling down each glass in play.
   final Map<Side, IncomingPiece> incoming;
 
-  Side activeSide = Side.top;
+  Side activeSide;
   GamePhase phase = GamePhase.playing;
   double phaseElapsed = 0;
   double phaseDuration = 0;
@@ -81,7 +76,7 @@ class GameState {
   int selfLocked = 0;
   double elapsedSeconds = 0;
 
-  /// Bumped on every change of [board].
+  /// Bumped on every change of [board], so that plans made on it can tell.
   int boardVersion = 0;
 
   DropInFlight? drop;
@@ -89,11 +84,18 @@ class GameState {
   /// Cells flashing (matching / cascading) or popping (clearing).
   MatchResult? activeMatch;
 
-  /// Blocks falling during [GamePhase.settling]. The board already holds them
+  /// Blocks falling during [GamePhase.settling]; the board already holds them
   /// at their destination.
   List<BlockMove> moves = const [];
 
-  GameOverInfo? gameOver;
+  /// The glass being built during [GamePhase.building].
+  Side? buildingSide;
+
+  /// How many speed-ups the score has earned (0 without a ramp).
+  int speedLevel = 0;
+
+  /// The glass that overflowed, once the game is over.
+  Side? gameOverSide;
 
   /// 0..1 through the current timed phase.
   double get phaseProgress =>
