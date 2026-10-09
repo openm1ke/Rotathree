@@ -68,8 +68,10 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
       </div>
 
       <header className="home__brand">
-        <h1 className="logo">
-          ROTA<span>THREE</span>
+        <h1 className="logo" aria-label="ROTATHREE">
+          ROTA{'THREE'.split('').map((letter, index) => (
+            <span className={`logo__letter logo__letter--${index}`} key={index}>{letter}</span>
+          ))}
         </h1>
         <p className="home__tag">Четыре стакана. Один центр. Три в ряд.</p>
       </header>

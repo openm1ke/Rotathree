@@ -17,5 +17,19 @@
     "web": "SVG and PNG favicons, Apple touch icon, 192/512 px home-screen icons and a maskable icon referenced by site.webmanifest"
   },
   "regenerate": "python3 tool/generate_icons.py",
-  "third_party_artwork": false
+  "third_party_artwork": false,
+  "revisions": [
+    {
+      "date": "2026-10-09",
+      "requested_by": "project owner in this conversation",
+      "change": "Replace the overly neutral almost-black export background with visibly dark navy #0a1b30; faint grid #20354b; regenerate every platform icon."
+    }
+  ],
+  "wordmark": {
+    "reference": "approved-wordmark.png",
+    "sha256": "513136698c20a772d9089adcb2547ccad279cc28701123bf20f909a2eef89d04",
+    "tool": "OpenAI built-in image_gen",
+    "generation_id": "exec-ed9e14e4-2e01-48b5-8afe-8611dc7f7d85",
+    "implementation": "Native Exo 2 text in Flutter and React; white ROTA, then #ff145e, #1689ff, #ffc400, #00d982, #ab50fa."
+  }
 }

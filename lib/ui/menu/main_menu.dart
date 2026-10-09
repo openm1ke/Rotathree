@@ -52,12 +52,13 @@ class MainMenu extends StatelessWidget {
           Text.rich(
             TextSpan(
               style: Type.display(46, spacing: 1),
-              children: [
-                const TextSpan(text: 'ROTA'),
-                TextSpan(
-                  text: 'THREE',
-                  style: TextStyle(color: Palette.accent),
-                ),
+              children: const [
+                TextSpan(text: 'ROTA'),
+                TextSpan(text: 'T', style: TextStyle(color: Palette.brandRed)),
+                TextSpan(text: 'H', style: TextStyle(color: Palette.brandBlue)),
+                TextSpan(text: 'R', style: TextStyle(color: Palette.brandYellow)),
+                TextSpan(text: 'E', style: TextStyle(color: Palette.brandGreen)),
+                TextSpan(text: 'E', style: TextStyle(color: Palette.brandViolet)),
               ],
             ),
             textAlign: TextAlign.center,

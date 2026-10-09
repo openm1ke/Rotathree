@@ -23,6 +23,13 @@ abstract final class Palette {
   static const danger = Color(0xFFFF4664);
   static const warning = Color(0xFFFFB03B);
 
+  // Fixed brand colors from the approved wordmark, independent of player palettes.
+  static const brandRed = Color(0xFFFF145E);
+  static const brandBlue = Color(0xFF1689FF);
+  static const brandYellow = Color(0xFFFFC400);
+  static const brandGreen = Color(0xFF00D982);
+  static const brandViolet = Color(0xFFAB50FA);
+
   /// The gradient of the main button and of everything "go".
   static const go = [Color(0xFFFF2E7E), Color(0xFFA53BFF)];
 }

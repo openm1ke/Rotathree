@@ -1,9 +1,13 @@
 # Rotathree logo
 
-`logo.svg` is the shared production source: nine colored squares, an almost-black
-cool background and a faint grid aligned to the squares. `approved-concept.png`
+`logo.svg` is the shared production source: nine colored squares, a dark navy-blue
+background (`#0a1b30`) and a faint grid (`#20354b`) aligned to the squares. `approved-concept.png`
 preserves the owner's selected concept; `asset-manifest.json` records provenance.
 `logo.png` is the full-bleed 1024 px export.
+
+The menu wordmark retains its heavy italic Exo 2 font: white `ROTA` followed by
+red, blue, yellow, green and violet letters in `THREE`. These brand colors are fixed
+in Flutter's `Palette` and the web CSS tokens, independent of player-selected colors.
 
 Regenerate all platform assets from the repository root:
 

@@ -18,6 +18,12 @@
   --danger: #ff4664;
   --warning: #ffb03b;
 
+  --brand-red: #ff145e;
+  --brand-blue: #1689ff;
+  --brand-yellow: #ffc400;
+  --brand-green: #00d982;
+  --brand-violet: #ab50fa;
+
   --font-display: 'Exo 2', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1);
   --ease-back: cubic-bezier(0.2, 1.6, 0.35, 1);

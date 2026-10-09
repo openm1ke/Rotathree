@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <title>Rotathree</title>
-  <desc>Nine colored squares forming a cross on a dark, faint square grid.</desc>
+  <desc>Nine colored squares forming a cross on a dark navy-blue background with a faint square grid.</desc>
   <defs>
     <pattern id="grid" x="92" y="92" width="168" height="168" patternUnits="userSpaceOnUse">
-      <path d="M168 0H0V168" fill="none" stroke="#1c1d27" stroke-width="3" />
+      <path d="M168 0H0V168" fill="none" stroke="#20354b" stroke-width="3" />
     </pattern>
     <linearGradient id="yellow" x2="0.25" y2="1">
       <stop stop-color="#ffdc27" />
@@ -42,7 +42,7 @@
       <stop offset="1" stop-color="#ff40ad" />
     </linearGradient>
   <clipPath id="icon-mask"><rect width="1024.0" height="1024.0" rx="208" /></clipPath></defs>
-  <g clip-path="url(#icon-mask)"><rect id="background" width="1024" height="1024" fill="#10111b" />
+  <g clip-path="url(#icon-mask)"><rect id="background" width="1024" height="1024" fill="#0a1b30" />
   <rect width="1024" height="1024" fill="url(#grid)" />
   <g id="tiles">
     <rect x="432" y="96" width="160" height="160" rx="14" fill="url(#yellow)" />

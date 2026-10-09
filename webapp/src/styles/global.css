@@ -333,12 +333,11 @@ input:focus-visible {
   animation: rise 520ms var(--ease-snap) both;
 }
 
-.logo span {
-  background: linear-gradient(100deg, var(--pink), var(--orange));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
+.logo__letter--0 { color: var(--brand-red); }
+.logo__letter--1 { color: var(--brand-blue); }
+.logo__letter--2 { color: var(--brand-yellow); }
+.logo__letter--3 { color: var(--brand-green); }
+.logo__letter--4 { color: var(--brand-violet); }
 
 .home__tag {
   margin: 14px 0 0;
