@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'i18n/strings.dart';
@@ -9,6 +11,7 @@ import 'data/settings.dart';
 import 'data/stats.dart';
 import 'data/store.dart';
 import 'data/run_save.dart';
+import 'audio/music_service.dart';
 import 'game/game_screen.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
@@ -72,7 +75,8 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
+  final MusicService _music = MusicService();
   AppStore? _store;
   Settings _settings = Settings.defaults();
   Progress _progress = Progress.initial();
@@ -97,7 +101,24 @@ class _AppRootState extends State<_AppRoot> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_music.start());
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      unawaited(_music.stop());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_music.dispose());
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -118,6 +139,7 @@ class _AppRootState extends State<_AppRoot> {
     });
     widget.onLanguageChanged(_settings.language);
     BlockTones.setColours(_settings.palettes.activeSet.colours);
+    unawaited(_music.update(_settings.audio));
   }
 
   void _saved(String key, Future<bool> write) {
@@ -156,9 +178,12 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   void _changeSettings(Settings next) {
+    final wasMusicEnabled = _settings.audio.music;
     setState(() => _settings = next);
     widget.onLanguageChanged(next.language);
     BlockTones.setColours(next.palettes.activeSet.colours);
+    unawaited(_music.update(next.audio));
+    if (!wasMusicEnabled && next.audio.music) unawaited(_music.start());
     _saved('settings', _store!.saveSettings(next));
   }
 

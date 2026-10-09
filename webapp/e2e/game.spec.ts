@@ -130,9 +130,13 @@ test('web forms are centered and settings tabs scroll and swipe without wrapping
   expect(Math.abs(settingsHead!.width - settings!.width)).toBeLessThan(12);
   await page.getByRole('tab', { name: 'Управление', exact: true }).focus();
   await page.keyboard.press('End');
-  await expect(page.getByRole('tab', { name: 'Интерфейс', exact: true })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Звуки', exact: true })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(page.getByRole('tab', { name: 'Управление', exact: true })).toBeFocused();
+  await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Музыка', exact: true })).toBeVisible();
+  await expect(page.getByRole('slider', { name: 'Громкость музыки', exact: true })).toHaveValue('60');
+  await page.getByRole('tab', { name: 'Управление', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   const tabs = await page.getByRole('tab').all();
   const tops = await Promise.all(tabs.map(async (tab) => (await tab.boundingBox())!.y));

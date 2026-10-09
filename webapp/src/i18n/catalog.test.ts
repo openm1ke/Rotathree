@@ -21,6 +21,7 @@ describe('language selection', () => {
     }
     expect(sanitizeSettings({ handling: { dasMs: 210 } }).language).toBe('auto');
     expect(sanitizeSettings({ language: 'de' }).language).toBe('auto');
+    expect(sanitizeSettings({ audio: { music: false, volume: 2 } }).audio).toEqual({ music: false, musicVolume: 1 });
     expect(languageChoice(null)).toBe('auto');
   });
 });

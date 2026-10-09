@@ -32,6 +32,7 @@ import {
   type Stats,
 } from './services/storage';
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
+import { MusicPlayer } from './services/music';
 
 const routeOf = (target: MenuTarget): Route => ({ name: target }) as Route;
 
@@ -49,6 +50,8 @@ type Route =
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const music = useRef<MusicPlayer | null>(null);
+  if (music.current === null) music.current = new MusicPlayer();
   const i18n = useLanguage(settings.language);
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [stats, setStats] = useState<Stats>(() => loadStats());
@@ -100,6 +103,11 @@ export default function App() {
     const { palettes } = settings;
     return (palettes.sets.find((set) => set.id === palettes.active) ?? palettes.sets[0]).colours;
   }, [settings]);
+
+  useEffect(() => {
+    music.current!.setSettings(settings.audio);
+  }, [settings.audio]);
+  useEffect(() => () => music.current?.dispose(), []);
 
   // Everything the player sets up is written at once, so it survives closing
   // the tab; the block colours follow the active set.
@@ -284,7 +292,11 @@ export default function App() {
 
   return (
     <I18nContext.Provider value={i18n}>
-    <div className="app">
+    <div
+      className="app"
+      onPointerDown={() => music.current?.ensurePlaying()}
+      onKeyDown={() => music.current?.ensurePlaying()}
+    >
       <div className="backdrop" aria-hidden="true">
         <div className="backdrop__glow backdrop__glow--a" />
         <div className="backdrop__glow backdrop__glow--b" />

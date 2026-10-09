@@ -24,13 +24,14 @@ import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
 import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS } from '../input/pads';
 
-type Tab = 'controls' | 'colours' | 'effects' | 'interface';
+type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound';
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['controls', 'Управление'],
   ['colours', 'Цвета'],
   ['effects', 'Эффекты'],
   ['interface', 'Интерфейс'],
+  ['sound', 'Звуки'],
 ];
 
 const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game'];
@@ -331,6 +332,35 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
           <div className="form__start">
             <Button ghost onClick={() => onChange({ ...settings, hud: defaults.hud, effects: defaults.effects })}><T>
               Сбросить интерфейс
+            </T></Button>
+          </div>
+        </>
+      );
+      break;
+    case 'sound':
+      body = (
+        <>
+          <section className="group">
+            <h3><T>Музыка</T></h3>
+            <p className="hint"><T>Треки плавно переходят друг в друга</T></p>
+            <Toggle
+              label="Фоновая музыка"
+              value={settings.audio.music}
+              onChange={(music) => onChange({ ...settings, audio: { ...settings.audio, music } })}
+            />
+            <Slider
+              label="Громкость музыки"
+              value={Math.round(settings.audio.musicVolume * 100)}
+              min={0}
+              max={100}
+              step={5}
+              unit="%"
+              onChange={(percent) => onChange({ ...settings, audio: { ...settings.audio, musicVolume: percent / 100 } })}
+            />
+          </section>
+          <div className="form__start">
+            <Button ghost onClick={() => onChange({ ...settings, audio: defaults.audio })}><T>
+              Сбросить звук
             </T></Button>
           </div>
         </>

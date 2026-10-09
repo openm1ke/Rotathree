@@ -25,6 +25,18 @@ void main() {
     expect(again.palettes.active, 'classic');
   });
 
+  test('music preferences persist and invalid values use safe defaults', () {
+    final settings = Settings.defaults().copyWith(
+      audio: const AudioOptions(music: false, musicVolume: 0.35),
+    );
+    final again = Settings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
+    expect(again.audio.music, isFalse);
+    expect(again.audio.musicVolume, closeTo(0.35, 0.0001));
+    final invalid = Settings.fromJson({'audio': {'music': 'yes', 'volume': 4}});
+    expect(invalid.audio.music, isTrue);
+    expect(invalid.audio.musicVolume, 1);
+  });
+
   test('pad positions persist and stay separate inside a resized control area', () {
     final settings = Settings.defaults().copyWith(
       padPositions: const PadPositions(
@@ -94,7 +106,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final tabs = find.byType(Tab);
-    expect(tabs, findsNWidgets(4));
+    expect(tabs, findsNWidgets(5));
     expect(tester.getTopLeft(tabs.at(0)).dy, tester.getTopLeft(tabs.at(3)).dy);
     final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
     final view = find.byType(TabBarView);
@@ -111,6 +123,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.index, 3);
     expect(find.byKey(const ValueKey('language-auto')), findsOneWidget);
+    await tester.ensureVisible(find.text('Звуки'));
+    await tester.tap(find.text('Звуки'));
+    await tester.pumpAndSettle();
+    expect(controller.index, 4);
+    expect(find.text('Фоновая музыка'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   test('a key bound twice keeps its first use', () {
