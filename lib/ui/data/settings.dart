@@ -63,7 +63,7 @@ class HudOptions {
 
 /// Background music preferences. The volume is stored from 0.0 to 1.0.
 class AudioOptions {
-  const AudioOptions({this.music = true, this.musicVolume = 0.6});
+  const AudioOptions({this.music = true, this.musicVolume = 0.1});
 
   final bool music;
   final double musicVolume;

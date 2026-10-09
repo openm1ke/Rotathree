@@ -15,5 +15,5 @@ directory; do not remove this note if a track is shipped with the game.
 The last author asks to be credited, even though the page lists CC0. Keep the author
 credit if this track is used in a release.
 
-The OGG originals also have MP3 copies with the same base name. The playlist uses
-the MP3 copies so iOS/Safari can play every track.
+The OGG originals also have MP3 copies with the same base name. The game uses the
+normalized AAC/M4A copies in `../playback/` with two-second fades at both ends.

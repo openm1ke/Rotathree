@@ -15,6 +15,79 @@ async function finishLevel(page: Page) {
   await expect(page.getByText('Уровень 1 пройден', { exact: true })).toBeVisible();
 }
 
+test('music volume and toggle survive reload without resetting existing preferences', async ({ page }) => {
+  await page.goto('/');
+  const openSound = async () => {
+    await page.getByRole('button', { name: /Настройки/ }).click();
+    await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
+  };
+  await openSound();
+  const slider = page.getByRole('slider', { name: 'Громкость музыки', exact: true });
+  await expect(slider).toHaveValue('10');
+  await slider.fill('35');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.settings.v2')!).audio.musicVolume)).toBe(0.35);
+  await page.reload();
+  await openSound();
+  await expect(slider).toHaveValue('35');
+  await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
+  await page.reload();
+  await openSound();
+  await expect(slider).toHaveValue('35');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.settings.v2')!).audio.music)).toBe(false);
+  await slider.fill('0');
+  await page.reload();
+  await openSound();
+  await expect(slider).toHaveValue('0');
+});
+
+test('real browser audio uses the chosen gain and advances sequentially', async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[]; musicTestGains: GainNode[] };
+    state.musicTestPlayers = [];
+    state.musicTestGains = [];
+    const NativeAudio = window.Audio;
+    window.Audio = function (src?: string) {
+      const audio = new NativeAudio(src);
+      state.musicTestPlayers.push(audio);
+      return audio;
+    } as typeof Audio;
+    const NativeContext = window.AudioContext;
+    window.AudioContext = class extends NativeContext {
+      createGain(): GainNode {
+        const gain = super.createGain();
+        state.musicTestGains.push(gain);
+        return gain;
+      }
+    };
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /Настройки/ }).click();
+  await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[]; musicTestGains: GainNode[] };
+    return state.musicTestPlayers.some((audio) => !audio.paused && audio.currentTime > 0);
+  })).toBe(true);
+  await page.getByRole('slider', { name: 'Громкость музыки', exact: true }).fill('35');
+  await expect.poll(() => page.evaluate(() => {
+    const state = window as typeof window & { musicTestGains: GainNode[] };
+    return state.musicTestGains.at(-1)?.gain.value;
+  })).toBeCloseTo(0.35, 5);
+  await page.evaluate(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
+    const audio = state.musicTestPlayers.find((player) => !player.paused)!;
+    audio.currentTime = audio.duration - 0.2;
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
+    return state.musicTestPlayers.filter((audio) => !audio.paused).map((audio) => new URL(audio.src).pathname);
+  })).toEqual(['/music/deep-focus-1.m4a']);
+  await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
+    return state.musicTestPlayers.every((audio) => audio.paused);
+  })).toBe(true);
+});
+
 test('tutorial can be completed using only the keyboard with gated, repeat-safe Enter', async ({ page }) => {
   await startCampaign(page, false);
   await expect(page.getByRole('heading', { name: 'Одна фигура — три клетки' })).toBeVisible();
@@ -135,7 +208,7 @@ test('web forms are centered and settings tabs scroll and swipe without wrapping
   await expect(page.getByRole('tab', { name: 'Управление', exact: true })).toBeFocused();
   await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Музыка', exact: true })).toBeVisible();
-  await expect(page.getByRole('slider', { name: 'Громкость музыки', exact: true })).toHaveValue('60');
+  await expect(page.getByRole('slider', { name: 'Громкость музыки', exact: true })).toHaveValue('10');
   await page.getByRole('tab', { name: 'Управление', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   const tabs = await page.getByRole('tab').all();

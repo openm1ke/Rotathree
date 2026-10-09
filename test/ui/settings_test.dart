@@ -23,6 +23,7 @@ void main() {
     expect(again.rightPad, defaultRightPad);
     expect(again.handling.dasMs, 150);
     expect(again.palettes.active, 'classic');
+    expect(again.audio.musicVolume, 0.1);
   });
 
   test('music preferences persist and invalid values use safe defaults', () {
@@ -35,6 +36,7 @@ void main() {
     final invalid = Settings.fromJson({'audio': {'music': 'yes', 'volume': 4}});
     expect(invalid.audio.music, isTrue);
     expect(invalid.audio.musicVolume, 1);
+    expect(Settings.fromJson({}).audio.musicVolume, 0.1);
   });
 
   test('pad positions persist and stay separate inside a resized control area', () {
