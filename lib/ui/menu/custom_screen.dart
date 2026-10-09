@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../game/config/modes.dart';
 import '../../game/config/game_config.dart';
 import '../style.dart';
+import '../format.dart';
 import '../widgets/controls.dart';
 
 /// Everything the custom mode is made of, set before a game starts. These
@@ -40,7 +41,7 @@ class CustomScreen extends StatelessWidget {
           children: [
             OptionGroup<int>(
               square: true,
-              label: 'Дополнительных стаканов',
+              label: 'Дополнительные стаканы',
               note: 'кроме стакана, с которого начинается игра',
               value: setup.extraGlasses,
               options: [for (var n = 0; n <= 3; n++) (value: n, label: '$n')],
@@ -48,7 +49,7 @@ class CustomScreen extends StatelessWidget {
             ),
             OptionGroup<int>(
               square: true,
-              label: 'Цветов',
+              label: 'Цвета',
               value: setup.colours,
               options: [for (var n = 3; n <= 9; n++) (value: n, label: '$n')],
               onChanged: (value) => set(setup.copyWith(colours: value)),
@@ -69,7 +70,8 @@ class CustomScreen extends StatelessWidget {
             ),
             OptionGroup<int>(
               square: true,
-              label: 'Длина рукава, клеток',
+              label: 'Длина рукава',
+              note: 'в клетках',
               value: setup.armLength,
               options: [for (var n = 4; n <= 12; n++) (value: n, label: '$n')],
               onChanged: (value) => set(setup.copyWith(armLength: value)),
@@ -82,7 +84,7 @@ class CustomScreen extends StatelessWidget {
             OptionGroup<double>(
               square: true,
               label: 'Старт: активный стакан',
-              note: 'секунд на шаг фигуры',
+              note: 'время шага, с',
               value: setup.activeStep,
               options: [
                 for (final v in [0.5, 0.75, 1.0, 1.5]) (value: v, label: '$v'),
@@ -92,7 +94,7 @@ class CustomScreen extends StatelessWidget {
             OptionGroup<double>(
               square: true,
               label: 'Старт: остальные стаканы',
-              note: 'секунд на шаг фигуры',
+              note: 'время шага, с',
               value: setup.inactiveStep,
               options: [
                 for (final v in [1.5, 2.0, 3.0, 4.0, 6.0]) (value: v, label: '$v'),
@@ -156,7 +158,7 @@ class CustomScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               LText(
-                '$glasses ${glasses == 1 ? 'стакан' : 'стакана'} · ${setup.colours} цв. · рукав ${setup.armLength}',
+                '${formatGlasses(glasses)} · ${formatColours(setup.colours)} · рукав: ${formatCells(setup.armLength)}',
                 style: Type.body(15, weight: FontWeight.w800),
               ),
               const SizedBox(height: 4),

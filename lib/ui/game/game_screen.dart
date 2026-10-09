@@ -368,7 +368,7 @@ class GameScreenState extends State<GameScreen>
     final to = campaignLevels[next];
     _showBanner(
       kicker: 'Уровень ${index + 1} пройден',
-      title: '${formatNumber(levelScore)} очков',
+      title: formatPoints(levelScore),
       sub: 'Дальше: ${to.colours} цв. · ${to.glasses} ст. · цель ${formatNumber(to.target)}',
       seconds: 2.2,
       blocking: true,
@@ -390,7 +390,7 @@ class GameScreenState extends State<GameScreen>
       _levelBase = 0;
       _showBanner(
         kicker: 'Новый этап',
-        title: '${to.colours} цвета',
+        title: formatColours(to.colours),
         sub: 'стаканы снова по одному',
         colours: _stageColours(to.colours),
         seconds: 2.2,
@@ -402,7 +402,7 @@ class GameScreenState extends State<GameScreen>
         _engine.addGlass();
         _showBanner(
           kicker: 'Новый стакан',
-          title: '${to.glasses} стакана',
+          title: '${to.glasses}-й стакан',
           sub: 'первая фигура уже в пути',
           seconds: 1.6,
           blocking: false,
@@ -908,7 +908,7 @@ class GameScreenState extends State<GameScreen>
       title: 'Пауза',
       note: level == null
           ? null
-          : 'Цель ${formatNumber(level.target)} очков · ${level.colours} цв. · ${level.glasses} ст.',
+          : 'Цель ${formatPoints(level.target)} · ${level.colours} цв. · ${level.glasses} ст.',
       children: [
         _buttons([
           GoButton(label: 'Продолжить', expand: true, onPressed: _togglePause),

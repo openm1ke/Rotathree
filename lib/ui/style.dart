@@ -138,6 +138,15 @@ abstract final class Type {
   }) =>
       _style(size, weight, color: color, height: height);
 
+  /// Upright, equally spaced figures for numeric choices.
+  static TextStyle number(double size, {Color color = Palette.text}) =>
+      _style(size, FontWeight.w800, color: color, height: 1).copyWith(
+        fontFeatures: const [
+          FontFeature.tabularFigures(),
+          FontFeature.liningFigures(),
+        ],
+      );
+
   /// A glow behind bright text.
   static List<Shadow> glow(Color color, double blur) =>
       [Shadow(color: color, blurRadius: blur)];

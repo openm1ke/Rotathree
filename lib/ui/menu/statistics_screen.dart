@@ -60,7 +60,7 @@ class _ModeCard extends StatelessWidget {
     final campaign = mode == ModeId.campaign;
     final lines = [
       ('Партий', '${stats.games}'),
-      if (campaign) ('Кампания пройдена', stats.completed > 0 ? '${stats.completed} раз' : 'нет'),
+      if (campaign) ('Кампания пройдена', stats.completed > 0 ? formatTimes(stats.completed) : 'нет'),
       ('Лучший счёт', formatNumber(stats.bestScore)),
       ('Очков всего', formatNumber(stats.totalScore)),
       ('Фигур всего', formatNumber(stats.totalPieces)),

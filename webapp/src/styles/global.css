@@ -184,6 +184,22 @@ input:focus-visible {
   color: #fff;
 }
 
+.chip--number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 17px;
+  font-weight: 800;
+  font-style: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+}
+
 .chip:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -292,13 +308,21 @@ input:focus-visible {
 .home {
   position: relative;
   height: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
-  grid-template-rows: auto 1fr auto;
-  gap: 0 40px;
-  padding: 5vh 6vw 3vh 7vw;
+  padding: 5vh 6vw 3vh;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.home__content {
+  position: relative;
+  width: 100%;
+  max-width: 920px;
+  min-height: 100%;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-rows: auto 1fr auto;
+  gap: 28px 40px;
 }
 
 .home__drift {
@@ -317,14 +341,15 @@ input:focus-visible {
 }
 
 .home__brand {
-  grid-column: 1;
+  grid-column: 1 / -1;
   position: relative;
   align-self: start;
+  text-align: center;
 }
 
 .logo {
   margin: 0;
-  font-size: clamp(44px, 8vw, 118px);
+  font-size: clamp(40px, 8vw, 100px);
   font-weight: 900;
   font-style: italic;
   line-height: 0.9;
@@ -473,6 +498,7 @@ input:focus-visible {
 .home__foot {
   grid-column: 1 / -1;
   display: flex;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 6px 26px;
   font-size: 13px;
@@ -489,6 +515,7 @@ input:focus-visible {
 /* --------------------------------------------------------------- screens */
 
 .screen {
+  --menu-width: 712px;
   position: relative;
   height: 100%;
   display: flex;
@@ -496,6 +523,10 @@ input:focus-visible {
   gap: 14px;
   padding: 4vh 5vw 2.5vh;
   overflow: hidden;
+}
+
+.screen--settings {
+  --menu-width: 640px;
 }
 
 .screen--overlay {
@@ -515,6 +546,9 @@ input:focus-visible {
   display: flex;
   align-items: center;
   gap: 18px;
+  width: 100%;
+  max-width: var(--menu-width);
+  margin-inline: auto;
 }
 
 .back {
@@ -551,6 +585,9 @@ input:focus-visible {
   min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 28px;
+  width: 100%;
+  max-width: calc(var(--menu-width) + 8px);
+  margin-inline: auto;
 }
 
 .screen__foot {
@@ -560,6 +597,8 @@ input:focus-visible {
   gap: 6px 22px;
   font-size: 12.5px;
   color: var(--text-faint);
+  justify-content: center;
+  text-align: center;
 }
 
 .warn {
@@ -1644,9 +1683,14 @@ input:focus-visible {
 /* The menus on a narrow screen: the side column moves under the list. */
 @media (max-width: 760px) {
   .home {
+    padding: 4vh 6vw 3vh;
+  }
+
+  .home__content {
+    max-width: 640px;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto auto;
-    padding: 4vh 6vw 3vh;
+    gap: 20px;
   }
 
   .home__side {

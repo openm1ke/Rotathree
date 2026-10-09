@@ -42,6 +42,17 @@ const numbers = (value: string) => value
   .replace(/(\d)[\u00a0\u202f](?=\d{3}(?:\D|$))/g, '$1,')
   .replace(/(\d),(\d{1,2})(?=\D|$)/g, '$1.$2');
 
+// Russian singular forms include 21, 31, etc.; English uses them only at one.
+const singular: Record<string, string> = { points: 'point', colors: 'color', glasses: 'glass', cells: 'cell', times: 'time' };
+const quantities = (value: string) => value.replace(
+  /\b(\d[\d,]*(?:\.\d+)?) (points|colors|glasses|cells|times)\b/gi,
+  (match, count: string, noun: string) => {
+    if (Number(count.replaceAll(',', '')) !== 1) return match;
+    const word = singular[noun.toLowerCase()];
+    return `${count} ${noun === noun.toUpperCase() ? word.toUpperCase() : word}`;
+  },
+);
+
 /** Translate only presentation, including Russian banners from older saves. */
 export function translate(source: string, language: Language, depth = 0): string {
   if (language === 'ru' || depth > 4 || !source) return source;
@@ -63,5 +74,5 @@ export function translate(source: string, language: Language, depth = 0): string
   }
   if (result === undefined) return numbers(source);
   if (upper) result = result.toUpperCase();
-  return source.match(/^\s*/)![0] + numbers(result) + source.match(/\s*$/)![0];
+  return source.match(/^\s*/)![0] + quantities(numbers(result)) + source.match(/\s*$/)![0];
 }

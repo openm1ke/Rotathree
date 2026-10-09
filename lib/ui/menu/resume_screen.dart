@@ -22,7 +22,7 @@ class ResumeScreen extends StatelessWidget {
           Section(
             title: modeTitle(mode),
             note:
-                '${save.session is CampaignSession ? 'Уровень ${(save.session as CampaignSession).level + 1} · ' : ''}${formatNumber(save.abandoned().score)} очков · ${formatDuration(save.abandoned().seconds)}',
+                '${save.session is CampaignSession ? 'Уровень ${(save.session as CampaignSession).level + 1} · ' : ''}${formatPoints(save.abandoned().score)} · ${formatDuration(save.abandoned().seconds)}',
             children: [GoButton(label: 'Продолжить ${modeTitle(mode)}', expand: true, onPressed: () => onResume(save))],
           ),
     ],

@@ -5,7 +5,7 @@ import { MODE_NAMES } from '../game/modes';
 import { abandonedRun } from '../services/runSave';
 import { Screen, Button } from './ui';
 import { useScreenKeys } from './nav';
-import { formatDuration, formatNumber } from './format';
+import { formatDuration, formatPoints } from './format';
 
 export function ResumeScreen({
   runs,
@@ -35,7 +35,7 @@ export function ResumeScreen({
             <h3><T>{MODE_NAMES[mode]}</T></h3>
             <p className="hint"><T>
               {save.session.mode === 'campaign' ? `Уровень ${save.session.level + 1} · ` : ''}
-              {formatNumber(totals.score)} очков · {formatDuration(totals.seconds)}
+              {formatPoints(totals.score)} · {formatDuration(totals.seconds)}
             </T></p>
             <Button primary onClick={() => onResume(save)}><T>
               Продолжить {MODE_NAMES[mode]}

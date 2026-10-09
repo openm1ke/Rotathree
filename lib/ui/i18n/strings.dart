@@ -75,8 +75,28 @@ class AppStrings {
     if (upper) translated = translated.toUpperCase();
     final leading = RegExp(r'^\s*').firstMatch(source)![0]!;
     final trailing = RegExp(r'\s*$').firstMatch(source)![0]!;
-    return '$leading${_numbers(translated)}$trailing';
+    return '$leading${_quantities(_numbers(translated))}$trailing';
   }
+
+  // Russian singular forms also occur at 21, 31, etc. English is singular only
+  // at one, so choose its form after numeric template parameters are resolved.
+  String _quantities(String value) => value.replaceAllMapped(
+    RegExp(
+      r'\b(\d[\d,]*(?:\.\d+)?) (points|colors|glasses|cells|times)\b',
+      caseSensitive: false,
+    ),
+    (m) {
+      if (double.tryParse(m[1]!.replaceAll(',', '')) != 1) return m[0]!;
+      final noun = switch (m[2]!.toLowerCase()) {
+        'points' => 'point',
+        'colors' => 'color',
+        'glasses' => 'glass',
+        'cells' => 'cell',
+        _ => 'time',
+      };
+      return '${m[1]} ${m[2] == m[2]!.toUpperCase() ? noun.toUpperCase() : noun}';
+    },
+  );
 
   String _numbers(String value) => value
       .replaceAllMapped(RegExp(r'(\d)[\u00a0\u202f](?=\d{3}(?:\D|$))'), (m) => '${m[1]},')

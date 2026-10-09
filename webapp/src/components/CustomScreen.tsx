@@ -1,5 +1,6 @@
 import { T } from '../i18n/Text';
 import { useRef } from 'react';
+import { formatCells, formatColours, formatGlasses } from './format';
 import { CUSTOM_LIMITS, DEFAULT_CUSTOM, type CustomSetup } from '../game/modes';
 import { Button, Choice, Screen, Toggle } from './ui';
 import { useScreenKeys } from './nav';
@@ -41,14 +42,14 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
       <div className="form-layout">
         <div className="form">
           <Choice
-            label="Дополнительных стаканов"
+            label="Дополнительные стаканы"
             note="кроме стакана, с которого начинается игра"
             value={setup.extraGlasses}
             options={range(CUSTOM_LIMITS.extraGlasses[0], CUSTOM_LIMITS.extraGlasses[1]).map((n) => [n, String(n)] as const)}
             onChange={(extraGlasses) => set({ extraGlasses })}
           />
           <Choice
-            label="Цветов"
+            label="Цвета"
             note={
               <span className="dots">
                 {colours.slice(0, setup.colours).map((colour, i) => (
@@ -61,14 +62,15 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
             onChange={(colours) => set({ colours })}
           />
           <Choice
-            label="Длина рукава, клеток"
+            label="Длина рукава"
+            note="в клетках"
             value={setup.armLength}
             options={range(...CUSTOM_LIMITS.armLength).map((n) => [n, String(n)] as const)}
             onChange={(armLength) => set({ armLength })}
           />
           <Choice
             label="Старт: активный стакан"
-            note="секунд на шаг фигуры"
+            note="время шага, с"
             value={setup.activeStep}
             options={[
               [0.5, '0.5'],
@@ -80,7 +82,7 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
           />
           <Choice
             label="Старт: остальные стаканы"
-            note="секунд на шаг фигуры"
+            note="время шага, с"
             value={setup.inactiveStep}
             options={[
               [1.5, '1.5'],
@@ -132,7 +134,7 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
 
         <div className="summary">
           <strong><T>
-            {glasses} {glasses === 1 ? 'стакан' : 'стакана'} · {setup.colours} цв. · рукав {setup.armLength}
+            {formatGlasses(glasses)} · {formatColours(setup.colours)} · рукав: {formatCells(setup.armLength)}
           </T></strong>
           <span><T>{setup.speedUp ? `ускорение на ${percent}% каждые ${setup.speedUpEvery} очков` : 'скорость не меняется'}</T></span>
         </div>

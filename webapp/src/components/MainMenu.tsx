@@ -70,75 +70,77 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
         ))}
       </div>
 
-      <header className="home__brand">
-        <h1 className="logo" aria-label="ROTATHREE">
-          ROTA{'THREE'.split('').map((letter, index) => (
-            <span className={`logo__letter logo__letter--${index}`} key={index}>{letter}</span>
+      <div className="home__content">
+        <header className="home__brand">
+          <h1 className="logo" aria-label="ROTATHREE">
+            ROTA{'THREE'.split('').map((letter, index) => (
+              <span className={`logo__letter logo__letter--${index}`} key={index}>{letter}</span>
+            ))}
+          </h1>
+        </header>
+
+        <nav className="home__nav" aria-label={t("Главное меню")}>
+          {savedRuns && Object.keys(savedRuns).length > 0 && (
+            <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
+              <span className="navitem__text">
+                <span className="navitem__title"><T>Продолжить</T></span>
+                <span className="navitem__caption"><T>Сохранённые игры</T></span>
+              </span>
+            </button>
+          )}
+          {onTutorial && (
+            <button type="button" data-nav className="navitem" onClick={onTutorial}>
+              <span className="navitem__text">
+                <span className="navitem__title"><T>Обучение</T></span>
+                <span className="navitem__caption"><T>
+                  {tutorialDone ? 'Повторить основы' : 'Правила на практике'}
+                </T></span>
+              </span>
+            </button>
+          )}
+          {ITEMS.map((item, i) => (
+            <button
+              key={item.id}
+              type="button"
+              data-nav
+              className="navitem"
+              autoFocus={i === 0}
+              onClick={() => onOpen(item.id)}
+            >
+              <span className="navitem__text">
+                <span className="navitem__title"><T>{item.title}</T></span>
+                <span className="navitem__caption"><T>
+                  {item.caption}
+                </T></span>
+              </span>
+            </button>
           ))}
-        </h1>
-      </header>
+        </nav>
 
-      <nav className="home__nav" aria-label={t("Главное меню")}>
-        {savedRuns && Object.keys(savedRuns).length > 0 && (
-          <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
-            <span className="navitem__text">
-              <span className="navitem__title"><T>Продолжить</T></span>
-              <span className="navitem__caption"><T>Сохранённые игры</T></span>
-            </span>
-          </button>
-        )}
-        {onTutorial && (
-          <button type="button" data-nav className="navitem" onClick={onTutorial}>
-            <span className="navitem__text">
-              <span className="navitem__title"><T>Обучение</T></span>
-              <span className="navitem__caption"><T>
-                {tutorialDone ? 'Повторить основы' : 'Правила на практике'}
-              </T></span>
-            </span>
-          </button>
-        )}
-        {ITEMS.map((item, i) => (
-          <button
-            key={item.id}
-            type="button"
-            data-nav
-            className="navitem"
-            autoFocus={i === 0}
-            onClick={() => onOpen(item.id)}
-          >
-            <span className="navitem__text">
-              <span className="navitem__title"><T>{item.title}</T></span>
-              <span className="navitem__caption"><T>
-                {item.caption}
-              </T></span>
-            </span>
-          </button>
-        ))}
-      </nav>
-
-      <aside className="home__side">
-        <div className="card">
-          <span className="kicker"><T>Кампания</T></span>
-          <strong><T>
-            {progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1} из ${CAMPAIGN_LAST + 1}`}
-          </T></strong>
-          <div className="progressbar">
-            <i style={{ width: `${(100 * opened) / (CAMPAIGN_LAST + 1)}%` }} />
+        <aside className="home__side">
+          <div className="card">
+            <span className="kicker"><T>Кампания</T></span>
+            <strong><T>
+              {progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1} из ${CAMPAIGN_LAST + 1}`}
+            </T></strong>
+            <div className="progressbar">
+              <i style={{ width: `${(100 * opened) / (CAMPAIGN_LAST + 1)}%` }} />
+            </div>
           </div>
-        </div>
-        <div className={`card ${progress.completed ? '' : 'is-locked'}`}>
-          <span className="kicker"><T>Кошмар</T></span>
-          <strong><T>{progress.completed ? 'открыт' : 'откроется после кампании'}</T></strong>
-        </div>
-      </aside>
+          <div className={`card ${progress.completed ? '' : 'is-locked'}`}>
+            <span className="kicker"><T>Кошмар</T></span>
+            <strong><T>{progress.completed ? 'открыт' : 'откроется после кампании'}</T></strong>
+          </div>
+        </aside>
 
-      {!touch && (
-        <footer className="home__foot">
-          <span><T>↑ ↓ выбрать</T></span>
-          <span><T>Enter открыть</T></span>
-          <span><T>Esc назад в меню</T></span>
-        </footer>
-      )}
+        {!touch && (
+          <footer className="home__foot">
+            <span><T>↑ ↓ выбрать</T></span>
+            <span><T>Enter открыть</T></span>
+            <span><T>Esc назад в меню</T></span>
+          </footer>
+        )}
+      </div>
     </main>
   );
 }

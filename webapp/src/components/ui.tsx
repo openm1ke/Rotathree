@@ -124,17 +124,19 @@ export function Chip({
   onClick,
   children,
   disabled,
+  numeric = false,
 }: {
   active: boolean;
   onClick: () => void;
   children: ReactNode;
   disabled?: boolean;
+  numeric?: boolean;
 }) {
   return (
     <button
       type="button"
       data-nav
-      className={`chip ${active ? 'is-active' : ''}`}
+      className={`chip ${active ? 'is-active' : ''} ${numeric ? 'chip--number' : ''}`}
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
@@ -175,7 +177,7 @@ export function Choice<T extends string | number | boolean>({
     <Row label={label} note={note}>
       <div className="chips">
         {options.map(([option, text]) => (
-          <Chip key={String(option)} active={option === value} onClick={() => onChange(option)}><T>
+          <Chip key={String(option)} numeric={typeof option === 'number'} active={option === value} onClick={() => onChange(option)}><T>
             {text}
           </T></Chip>
         ))}

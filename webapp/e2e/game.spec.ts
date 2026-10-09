@@ -102,16 +102,32 @@ test('tutorial shortcuts respect settings and custom Enter bindings, Backspace s
 
 test('web forms are centered and settings tabs scroll and swipe without wrapping', async ({ page }) => {
   await page.goto('/');
+  await page.evaluate(() => document.fonts.ready);
+  const viewportCenter = 640;
+  for (const selector of ['.home__content', '.logo']) {
+    const box = await page.locator(selector).boundingBox();
+    expect(Math.abs(box!.x + box!.width / 2 - viewportCenter)).toBeLessThan(2);
+  }
+  const menu = await page.getByRole('navigation', { name: 'Главное меню' }).boundingBox();
+  expect(menu!.x).toBeGreaterThan(100);
+  expect(await page.locator('.navitem').first().evaluate((el) => getComputedStyle(el).textAlign)).toBe('left');
   await page.getByRole('button', { name: /Кастом/ }).click();
   const custom = await page.locator('.form-layout').boundingBox();
   expect(custom!.width).toBeLessThanOrEqual(780);
   expect(Math.abs(custom!.x + custom!.width / 2 - 640)).toBeLessThan(12);
+  const customHead = await page.locator('.screen__head').boundingBox();
+  expect(Math.abs(customHead!.x - custom!.x)).toBeLessThan(12);
+  expect(Math.abs(customHead!.width - custom!.width)).toBeLessThan(12);
+  await expect(page.locator('.summary strong')).toHaveText('4 стакана · 3 цвета · рукав: 9 клеток');
   const start = await page.getByRole('button', { name: 'Начать', exact: true }).boundingBox();
   expect(start!.x + start!.width).toBeLessThanOrEqual(custom!.x + custom!.width + 1);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /Настройки/ }).click();
   const settings = await page.locator('.form-layout').boundingBox();
   expect(Math.abs(settings!.x + settings!.width / 2 - 640)).toBeLessThan(12);
+  const settingsHead = await page.locator('.screen__head').boundingBox();
+  expect(Math.abs(settingsHead!.x - settings!.x)).toBeLessThan(12);
+  expect(Math.abs(settingsHead!.width - settings!.width)).toBeLessThan(12);
   await page.getByRole('tab', { name: 'Управление', exact: true }).focus();
   await page.keyboard.press('End');
   await expect(page.getByRole('tab', { name: 'Интерфейс', exact: true })).toBeFocused();

@@ -138,7 +138,7 @@ class GameReadout extends StatelessWidget {
               if (options.score) ...[
                 Row(
                   children: [
-                    Expanded(child: LText('${formatNumber(hud.score)} очков', style: Type.display(20))),
+                    Expanded(child: LText(formatPoints(hud.score), style: Type.display(20))),
                     if (hud.level > 0)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,

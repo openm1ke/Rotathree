@@ -5,7 +5,7 @@ import { MODE_NAMES, type ModeId } from '../game/modes';
 import type { ModeStats, Progress, RunRecord, Stats } from '../services/storage';
 import { Screen } from './ui';
 import { useScreenKeys } from './nav';
-import { formatDuration, formatNumber } from './format';
+import { formatDuration, formatNumber, formatTimes } from './format';
 
 interface Props {
   stats: Stats;
@@ -99,7 +99,7 @@ function ModeCard({ mode, stats, progress }: { mode: ModeId; stats: ModeStats; p
       <dl>
         <Line label="Партий" value={String(stats.games)} />
         {mode === 'campaign' && (
-          <Line label="Кампания пройдена" value={stats.completed > 0 ? `${stats.completed} раз` : 'нет'} />
+          <Line label="Кампания пройдена" value={stats.completed > 0 ? formatTimes(stats.completed) : 'нет'} />
         )}
         <Line label="Лучший счёт" value={formatNumber(stats.bestScore)} main />
         <Line label="Очков всего" value={formatNumber(stats.totalScore)} />

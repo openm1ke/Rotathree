@@ -11,6 +11,27 @@ String formatNumber(int value) {
   return '${value < 0 ? '−' : ''}${groups.join(' ')}';
 }
 
+/// Russian cardinal forms depend on both the last digit and the last two.
+String counted(int value, String one, String few, String many) {
+  final lastTwo = value.abs() % 100;
+  final last = value.abs() % 10;
+  final noun = lastTwo >= 11 && lastTwo <= 14
+      ? many
+      : switch (last) {
+          1 => one,
+          2 || 3 || 4 => few,
+          _ => many,
+        };
+  return '${formatNumber(value)} $noun';
+}
+
+String formatPoints(int value) => counted(value, 'очко', 'очка', 'очков');
+String formatColours(int value) => counted(value, 'цвет', 'цвета', 'цветов');
+String formatGlasses(int value) =>
+    counted(value, 'стакан', 'стакана', 'стаканов');
+String formatCells(int value) => counted(value, 'клетка', 'клетки', 'клеток');
+String formatTimes(int value) => counted(value, 'раз', 'раза', 'раз');
+
 /// Durations as m:ss, or h:mm:ss from an hour on.
 String formatDuration(double seconds) {
   final total = seconds.floor();

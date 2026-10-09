@@ -57,4 +57,36 @@ void main() {
       'The Right glass is full. Level incomplete: retry it or choose another.',
     );
   });
+
+  test(
+    'English quantities are singular only at one and compose in UI messages',
+    () async {
+      final english = AppStrings('en', await AppStrings.catalog());
+      const cases = {
+        '1 очко': '1 point',
+        '2 очка': '2 points',
+        '21 очко': '21 points',
+        '1 001 очко': '1,001 points',
+        '1 000 очков': '1,000 points',
+        '1 цвет': '1 color',
+        '5 цветов': '5 colors',
+        '1 стакан': '1 glass',
+        '3 стакана': '3 glasses',
+        '3-й стакан': 'Glass 3',
+        '1 клетка': '1 cell',
+        '4 клетки': '4 cells',
+        '12 клеток': '12 cells',
+        '1 раз': '1 time',
+        '2 раза': '2 times',
+        '21 раз': '21 times',
+        'Уровень 3 · 21 очко · 0:12': 'Level 3 · 21 points · 0:12',
+        '1 стакан · 5 цветов · рукав: 12 клеток':
+            '1 glass · 5 colors · arm: 12 cells',
+        '1 ОЧКО': '1 POINT',
+      };
+      for (final entry in cases.entries) {
+        expect(english.tr(entry.key), entry.value, reason: entry.key);
+      }
+    },
+  );
 }

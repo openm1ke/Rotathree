@@ -25,7 +25,7 @@ import { Hud } from './Hud';
 import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { Button, Overlay } from './ui';
-import { formatDuration, formatNumber } from './format';
+import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
 
@@ -269,7 +269,7 @@ export function GameScreen(props: Props) {
       showBanner(
         {
           kicker: `Уровень ${index + 1} пройден`,
-          title: `${formatScore(levelScore)} очков`,
+          title: formatPoints(levelScore),
           sub: `Дальше: ${to.colours} цв. · ${to.glasses} ст. · цель ${formatScore(to.target)}`,
         },
         2.2,
@@ -294,7 +294,7 @@ export function GameScreen(props: Props) {
         showBanner(
           {
             kicker: 'Новый этап',
-            title: `${to.colours} цвета`,
+            title: formatColours(to.colours),
             sub: 'стаканы снова по одному',
             colours: stageColours(to.colours),
           },
@@ -306,7 +306,7 @@ export function GameScreen(props: Props) {
         if (to.glasses > from.glasses) {
           engine.addGlass();
           showBanner(
-            { kicker: 'Новый стакан', title: `${to.glasses} стакана`, sub: 'первая фигура уже в пути' },
+            { kicker: 'Новый стакан', title: `${to.glasses}-й стакан`, sub: 'первая фигура уже в пути' },
             1.6,
             false,
           );
@@ -752,7 +752,7 @@ export function GameScreen(props: Props) {
           ) : (
             <>
               <div>
-                <strong><T>{formatScore(hud.score)} очков</T></strong>
+                <strong><T>{formatPoints(hud.score)}</T></strong>
                 <small><T>
                   {campaign
                     ? `Уровень ${level + 1} · ${formatScore(hud.into)} / ${formatScore(hud.target)}`
@@ -832,7 +832,7 @@ export function GameScreen(props: Props) {
             <h2 className="dialog__title"><T>Пауза</T></h2>
             {playingLevel && (
               <p className="dialog__note"><T>
-                Цель {formatScore(playingLevel.target)} очков · {playingLevel.colours} цв. · {playingLevel.glasses} ст.
+                Цель {formatPoints(playingLevel.target)} · {playingLevel.colours} цв. · {playingLevel.glasses} ст.
               </T></p>
             )}
             <div className="dialog__actions">

@@ -158,6 +158,7 @@ class OptionChip extends StatelessWidget {
     this.leading,
     this.translate = true,
     this.square = false,
+    this.numeric = false,
   });
 
   final String label;
@@ -166,6 +167,7 @@ class OptionChip extends StatelessWidget {
   final Widget? leading;
   final bool translate;
   final bool square;
+  final bool numeric;
 
   @override
   Widget build(BuildContext context) {
@@ -186,15 +188,18 @@ class OptionChip extends StatelessWidget {
           onTap: onPressed,
           child: Container(
             constraints: square ? const BoxConstraints(minWidth: 44, minHeight: 44) : null,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            padding: EdgeInsets.symmetric(horizontal: numeric ? 10 : 14, vertical: 9),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (leading != null) ...[leading!, const SizedBox(width: 8)],
                 LText(
                   label,
                   translate: translate,
-                  style: Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
+                  style: numeric
+                      ? Type.number(17, color: selected ? Palette.accent : Palette.text)
+                      : Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
                 ),
               ],
             ),
@@ -289,6 +294,7 @@ class OptionGroup<T> extends StatelessWidget {
               for (final option in options)
                 OptionChip(
                   square: square,
+                  numeric: square && option.value is num,
                   label: option.label,
                   selected: option.value == value,
                   onPressed: () => onChanged(option.value),
