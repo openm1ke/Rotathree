@@ -116,3 +116,20 @@ export function abandonedRun(save: RunSave): RunRecord {
     interrupted: true,
   };
 }
+
+/** Independent resumable slots; version 1's single save migrates in place. */
+export type SavedRuns = Partial<Record<Session['mode'], RunSave>>;
+export function sanitizeSavedRuns(raw: unknown): SavedRuns {
+  const legacy = sanitizeRunSave(raw);
+  if (legacy) return { [legacy.session.mode]: legacy };
+  if (typeof raw !== 'object' || raw === null) return {};
+  const envelope = raw as Record<string, unknown>;
+  if (envelope.version !== 2 || typeof envelope.runs !== 'object' || envelope.runs === null) return {};
+  const runs = envelope.runs as Record<string, unknown>;
+  const result: SavedRuns = {};
+  for (const mode of ['campaign', 'custom', 'insane'] as const) {
+    const save = sanitizeRunSave(runs[mode]);
+    if (save?.session.mode === mode) result[mode] = save;
+  }
+  return result;
+}

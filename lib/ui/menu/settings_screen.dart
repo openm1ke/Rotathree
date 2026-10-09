@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../data/settings.dart';
 import '../input/game_action.dart';
+import '../input/pad_placement.dart';
+import '../input/pad_surface.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import 'colour_picker.dart';
@@ -84,6 +86,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = widget.settings;
     return [
       Section(
+        title: 'Размер и положение',
+        note:
+            'Перетащите крестовины внутри выделенной области под полем. Они остаются в пределах экрана и не перекрывают друг друга.',
+        children: [
+          Container(
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: Palette.bg, borderRadius: BorderRadius.circular(8)),
+            child: Text('Игровое поле', style: Type.body(13, color: Palette.textDim)),
+          ),
+          PadSurface(
+            settings: s,
+            onDown: (_) {},
+            onUp: (_) {},
+            onEdit: (positions) => widget.onChange(s.copyWith(padPositions: positions)),
+          ),
+          for (final side in PadSide.values)
+            SliderRow(
+              label: side == PadSide.left ? 'Размер левой крестовины' : 'Размер правой крестовины',
+              value: s.padPositions[side].size,
+              min: 136,
+              max: 216,
+              step: 4,
+              unit: 'px',
+              onChanged: (value) => widget.onChange(
+                s.copyWith(
+                  padPositions: s.padPositions.withSide(side, s.padPositions[side].copyWith(size: value.toDouble())),
+                ),
+              ),
+            ),
+        ],
+      ),
+      Section(
         title: 'Автоповтор движения',
         children: [
           SliderRow(
@@ -131,7 +166,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: OutlineButton(
           label: 'Сбросить управление',
           onPressed: () => widget.onChange(
-            s.copyWith(handling: const Handling(), leftPad: defaultLeftPad, rightPad: defaultRightPad),
+            s.copyWith(
+              handling: const Handling(),
+              leftPad: defaultLeftPad,
+              rightPad: defaultRightPad,
+              padPositions: const PadPositions(),
+            ),
           ),
         ),
       ),

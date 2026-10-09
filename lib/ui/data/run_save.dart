@@ -165,3 +165,22 @@ class RunSave {
     interrupted: true,
   );
 }
+
+/// Per-mode slots, with migration from the original single-save format.
+Map<ModeId, RunSave> readSavedRuns(Object? raw) {
+  final legacy = RunSave.read(raw);
+  if (legacy != null) return {modeOf(legacy.session): legacy};
+  if (raw is! Map || raw['version'] != 2 || raw['runs'] is! Map) return {};
+  final slots = raw['runs'] as Map;
+  return {
+    for (final mode in ModeId.values)
+      if (RunSave.read(slots[mode.name]) case final RunSave save)
+        if (modeOf(save.session) == mode) mode: save,
+  };
+}
+
+ModeId modeOf(Session session) => switch (session) {
+  CampaignSession() => ModeId.campaign,
+  CustomSession() => ModeId.custom,
+  InsaneSession() => ModeId.insane,
+};

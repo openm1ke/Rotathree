@@ -72,6 +72,11 @@ class AppStore {
   Future<bool> saveCustom(CustomSetup value) => _write(_customKey, value.toJson());
   RunSave? loadRun() => _read(_runKey, RunSave.read);
   Future<bool> saveRun(RunSave? value) => _write(_runKey, value?.toJson());
+  Map<ModeId, RunSave> loadRuns() => _read(_runKey, readSavedRuns);
+  Future<bool> saveRuns(Map<ModeId, RunSave> runs) => _write(_runKey, {
+    'version': 2,
+    'runs': {for (final entry in runs.entries) entry.key.name: entry.value.toJson()},
+  });
   bool loadTutorial() => _read(_tutorialKey, (raw) => raw == true);
   Future<bool> saveTutorial(bool done) => _write(_tutorialKey, done);
 }

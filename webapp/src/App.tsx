@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { CampaignScreen } from './components/CampaignScreen';
 import { CustomScreen } from './components/CustomScreen';
 import { GameScreen } from './components/GameScreen';
+import { ResumeScreen } from './components/ResumeScreen';
 import { MainMenu, type MenuTarget } from './components/MainMenu';
 import { SettingsScreen } from './components/SettingsScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
@@ -19,8 +20,8 @@ import {
   saveProgress,
   saveSettings,
   saveStats,
-  loadRun,
-  saveRun,
+  loadRuns,
+  saveRuns,
   loadTutorial,
   saveTutorial,
   type Progress,
@@ -28,7 +29,7 @@ import {
   type Settings,
   type Stats,
 } from './services/storage';
-import { abandonedRun, type RunSave } from './services/runSave';
+import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
 
 const routeOf = (target: MenuTarget): Route => ({ name: target }) as Route;
 
@@ -37,6 +38,7 @@ type From = 'home' | 'campaign' | 'custom';
 
 type Route =
   | { name: 'home' }
+  | { name: 'resume' }
   | { name: 'campaign' }
   | { name: 'custom' }
   | { name: 'statistics' }
@@ -54,11 +56,12 @@ export default function App() {
   /** Changes for every new game, so that each one starts from scratch. */
   const [nonce, setNonce] = useState(0);
   const [failedWrites, setFailedWrites] = useState<string[]>([]);
-  const [savedRun, setSavedRun] = useState<RunSave | null>(() => {
-    const save = loadRun();
-    return save && !stats.recent.some((run) => run.id === save.id) ? save : null;
-  });
-  const savedRef = useRef(savedRun);
+  const [savedRuns, setSavedRuns] = useState<SavedRuns>(() =>
+    Object.fromEntries(
+      Object.entries(loadRuns()).filter(([, save]) => !stats.recent.some((run) => run.id === save.id)),
+    ),
+  );
+  const savedRef = useRef(savedRuns);
   const [tutorialDone, setTutorialDone] = useState(() => loadTutorial());
   const afterTutorial = useRef<{ session: Session; from: From } | null>(null);
   const stored = failedWrites.length === 0;
@@ -69,10 +72,13 @@ export default function App() {
     });
   }, []);
   const checkpoint = useCallback(
-    (save: RunSave | null) => {
-      savedRef.current = save;
-      setSavedRun(save);
-      written('run', saveRun(save));
+    (mode: Session['mode'], save: RunSave | null) => {
+      const next = { ...savedRef.current };
+      if (save) next[mode] = save;
+      else delete next[mode];
+      savedRef.current = next;
+      setSavedRuns(next);
+      written('run', saveRuns(next));
     },
     [written],
   );
@@ -113,7 +119,7 @@ export default function App() {
     written('progress', saveProgress(progress));
     written('stats', saveStats(stats));
     written('custom', saveCustom(custom));
-    written('run', saveRun(savedRef.current));
+    written('run', saveRuns(savedRef.current));
     written('tutorial', saveTutorial(tutorialDone));
   };
 
@@ -131,10 +137,10 @@ export default function App() {
 
   const openGame = useCallback(
     (session: Session, from: From, restore?: RunSave) => {
-      if (!restore && savedRef.current) {
-        const abandoned = abandonedRun(savedRef.current);
+      if (!restore && savedRef.current[session.mode]) {
+        const abandoned = abandonedRun(savedRef.current[session.mode]!);
         recordRun(abandoned);
-        checkpoint(null);
+        checkpoint(session.mode, null);
       }
       setNonce((n) => n + 1);
       setSettingsOpen(false);
@@ -193,15 +199,18 @@ export default function App() {
       screen = (
         <MainMenu
           progress={progress}
-          savedRun={savedRun}
+          savedRuns={savedRuns}
           tutorialDone={tutorialDone}
           onTutorial={() => openTutorial()}
-          onResume={() => {
-            if (savedRun) openGame(savedRun.session, 'home', savedRun);
-          }}
+          onResume={() => setRoute({ name: 'resume' })}
           onOpen={(target: MenuTarget) => setRoute(routeOf(target))}
           active={!settingsOpen}
         />
+      );
+      break;
+    case 'resume':
+      screen = (
+        <ResumeScreen runs={savedRuns} onResume={(save) => openGame(save.session, 'home', save)} onBack={home} />
       );
       break;
     case 'campaign':
@@ -252,7 +261,7 @@ export default function App() {
           blocked={settingsOpen}
           restore={route.restore}
           tutorial={route.tutorial}
-          onCheckpoint={checkpoint}
+          onCheckpoint={(save) => checkpoint(route.session.mode, save)}
           onTutorialDone={finishTutorial}
           onSettings={() => setSettingsOpen(true)}
           onExit={exit}

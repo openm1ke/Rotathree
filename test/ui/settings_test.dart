@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:rotathree/ui/input/dpad.dart';
+import 'package:rotathree/ui/menu/settings_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/game/config/modes.dart';
 import 'package:rotathree/ui/data/bindings.dart';
@@ -9,6 +12,7 @@ import 'package:rotathree/ui/data/settings.dart';
 import 'package:rotathree/ui/data/stats.dart';
 import 'package:rotathree/ui/format.dart';
 import 'package:rotathree/ui/input/game_action.dart';
+import 'package:rotathree/ui/input/pad_placement.dart';
 
 void main() {
   test('the defaults survive a round trip through JSON', () {
@@ -21,6 +25,61 @@ void main() {
     expect(again.palettes.active, 'classic');
   });
 
+  test('pad positions persist and stay separate inside a resized control area', () {
+    final settings = Settings.defaults().copyWith(
+      padPositions: const PadPositions(
+        left: PadPlacement(size: 200, x: .5, y: 0),
+        right: PadPlacement(size: 180, x: .5, y: 0),
+      ),
+    );
+    final again = Settings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
+    expect(again.padPositions.left.size, 200);
+    expect(again.padPositions.left.y, 0);
+    for (final width in [304.0, 374.0, 884.0]) {
+      final area = Size(width, padAreaHeight(568, again.padPositions, width));
+      final rects = padGeometry(area, again.padPositions);
+      expect(rects[PadSide.left]!.overlaps(rects[PadSide.right]!), isFalse);
+      for (final rect in rects.values) {
+        expect(rect.left >= 0 && rect.top >= 0 && rect.right <= area.width && rect.bottom <= area.height, isTrue);
+        expect(rect.width / 3, greaterThanOrEqualTo(44));
+      }
+      final moved = movePad(again.padPositions, PadSide.left, const Offset(-1000, 1000), area);
+      expect(moved.left.x, 0);
+      expect(moved.left.y, 1);
+    }
+  });
+  testWidgets('dragging the scaled preview changes the saved pad position', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var current = Settings.defaults();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: StatefulBuilder(
+            builder: (context, setState) => SettingsScreen(
+              settings: current,
+              stored: true,
+              onBack: () {},
+              onChange: (next) => setState(() => current = next),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final gesture = await tester.startGesture(tester.getCenter(find.byType(DPad).first));
+    await gesture.moveBy(const Offset(0, -24));
+    await tester.pump();
+    await gesture.moveBy(const Offset(8, -40));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    expect(current.padPositions.left.y, lessThan(1));
+    expect(Settings.fromJson(current.toJson()).padPositions.left.y, current.padPositions.left.y);
+    expect(tester.takeException(), isNull);
+  });
   test('a key bound twice keeps its first use', () {
     final bindings = sanitizeBindings({
       'moveLeft': [PhysicalKeyboardKey.keyA.usbHidUsage],

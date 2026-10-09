@@ -1,3 +1,5 @@
+import { TouchControls } from './TouchControls';
+import { DEFAULT_POSITIONS } from '../input/padPlacement';
 import { useEffect, useRef, useState } from 'react';
 import { COLOUR_NAMES } from '../render/theme';
 import {
@@ -81,8 +83,42 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
           {touch ? (
             <>
               <p className="hint">
-                Левая крестовина управляет фигурой, правая — поворотами и стаканами. Можно нажимать обе одновременно.
+                Назначьте действия кнопкам обеих крестовин. Их можно нажимать одновременно; настройки действуют и в
+                обучении.
               </p>
+              <section className="group">
+                <h3>Размер и положение</h3>
+                <p className="hint">
+                  Перетащите крестовины внутри выделенной области под полем. Они остаются в пределах экрана и не
+                  перекрывают друг друга.
+                </p>
+                <div className="pad-preview-field" aria-hidden="true">
+                  Игровое поле
+                </div>
+                <TouchControls
+                  settings={settings}
+                  onDown={() => {}}
+                  onUp={() => {}}
+                  onEdit={(padPositions) => onChange({ ...settings, padPositions })}
+                />
+                {(['left', 'right'] as const).map((side) => (
+                  <Slider
+                    key={side}
+                    label={side === 'left' ? 'Размер левой крестовины' : 'Размер правой крестовины'}
+                    value={settings.padPositions[side].size}
+                    min={136}
+                    max={216}
+                    step={4}
+                    unit="px"
+                    onChange={(size) =>
+                      onChange({
+                        ...settings,
+                        padPositions: { ...settings.padPositions, [side]: { ...settings.padPositions[side], size } },
+                      })
+                    }
+                  />
+                ))}
+              </section>
               {(['left', 'right'] as const).map((side) => (
                 <section className="group" key={side}>
                   <h3>{side === 'left' ? 'Левая крестовина' : 'Правая крестовина'}</h3>
@@ -180,7 +216,10 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                 onChange({
                   ...settings,
                   ...(touch
-                    ? { pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } } }
+                    ? {
+                        pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
+                        padPositions: structuredClone(DEFAULT_POSITIONS),
+                      }
                     : { bindings: cloneBindings(defaultBindings) }),
                   handling: { ...defaultHandling },
                 })

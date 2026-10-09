@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/ui/app.dart';
+import 'package:rotathree/ui/data/store.dart';
+import 'package:rotathree/game/config/modes.dart';
+import 'package:rotathree/ui/game/game_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The backdrop animates for ever, so the screens are pumped for a while
@@ -62,6 +65,44 @@ void main() {
     expect(find.text('Пауза'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('rotathree.tutorial.v1'), 'true');
+  });
+
+  testWidgets('system Back keeps separate campaign and custom games for Continue', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    await tester.tap(find.text('Campaign'));
+    await settle(tester);
+    await tester.tap(find.text('1'));
+    await settle(tester);
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    final first = (await AppStore.open()).loadRuns()[ModeId.campaign]!;
+    expect(find.text('Campaign'), findsOneWidget);
+    await tester.tap(find.text('Custom'));
+    await settle(tester);
+    await tester.scrollUntilVisible(find.text('Начать'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(find.text('Начать'));
+    await settle(tester);
+    await tester.tap(find.text('Начать'));
+    await settle(tester);
+    expect(find.byType(GameScreen), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    final runs = (await AppStore.open()).loadRuns();
+    expect(runs.keys, containsAll([ModeId.campaign, ModeId.custom]));
+    expect(runs[ModeId.campaign]!.id, first.id);
+    await tester.tap(find.text('Продолжить'));
+    await settle(tester);
+    expect(find.text('Продолжить Кампания'), findsOneWidget);
+    expect(find.text('Продолжить Кастом'), findsOneWidget);
+    await tester.tap(find.text('Продолжить Кампания'));
+    await settle(tester);
+    final state = tester.state<GameScreenState>(find.byType(GameScreen));
+    expect(state.engine.snapshot(), first.engine);
   });
 
   testWidgets('mobile settings show pads without keyboard customization', (tester) async {

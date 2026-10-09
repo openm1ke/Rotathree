@@ -45,13 +45,20 @@ what is written on the field.
 
 New players get six practical lessons before their first game. Training freezes
 automatic falling, requires movement, rotation, a real match and a glass switch,
-and can be skipped or replayed from the menu. Practice does not affect statistics.
+and can be skipped or replayed from the menu. Training uses your selected controls, including pad placement. Practice does not affect statistics.
 
-Games are saved periodically, at significant engine events, on pause and when the
-app goes into the background. **Continue** in the main menu restores the run paused.
-In pause, **Save and menu** keeps the game; **Finish and menu** records an interrupted
-run. System Back opens the pause. A storage failure shows a persistent notice with
-a retry button while the app stays usable in memory. Clearing app data clears saves.
+Games save automatically on menu navigation, system Back, backgrounding and tab
+closure, as well as periodically and at significant engine events. Campaign,
+Custom and Insane have independent slots. **Continue** opens a selection screen
+and restores the chosen run paused. **Finish run** explicitly ends only that run;
+a new game replaces only the save for its own mode. Legacy single saves migrate.
+A storage failure shows a persistent notice with a retry button while the app
+stays usable in memory. Clearing app data clears saves.
+
+Mobile control settings include draggable previews and independent pad sizes
+(136–216 logical/CSS px, capped to fit the screen). Both pads stay in a bounded
+area below the field and cannot overlap. Placement adapts to resizing and is
+shared by regular games and training. Reset controls restores size and placement.
 
 ## Checks
 

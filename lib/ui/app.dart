@@ -11,6 +11,7 @@ import 'game/game_screen.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
 import 'menu/main_menu.dart';
+import 'menu/resume_screen.dart';
 import 'menu/settings_screen.dart';
 import 'menu/statistics_screen.dart';
 import 'style.dart';
@@ -37,7 +38,7 @@ class RotathreeApp extends StatelessWidget {
   }
 }
 
-enum _Screen { home, campaign, custom, statistics, settings, play }
+enum _Screen { home, resume, campaign, custom, statistics, settings, play }
 
 /// The app: the screens, the route between them, and everything the player
 /// sets up, kept on the device.
@@ -61,11 +62,12 @@ class _AppRootState extends State<_AppRoot> {
 
   bool _stored = true;
   final Set<String> _failedWrites = {};
-  RunSave? _savedRun;
+  Map<ModeId, RunSave> _savedRuns = {};
   RunSave? _restore;
   bool _tutorialDone = false;
   bool _tutorial = false;
   Session? _afterTutorial;
+
   /// A fresh key for each run; system Back talks to the current game.
   GlobalKey<GameScreenState> _gameKey = GlobalKey<GameScreenState>();
 
@@ -84,12 +86,10 @@ class _AppRootState extends State<_AppRoot> {
       _progress = store.loadProgress();
       _stats = store.loadStats();
       _custom = store.loadCustom();
-      _savedRun = store.loadRun();
+      _savedRuns = store.loadRuns();
       _tutorialDone = store.loadTutorial();
-      if (_savedRun != null && _stats.recent.any((run) => run.id == _savedRun!.id)) {
-        _savedRun = null;
-        _saved('run', store.saveRun(null));
-      }
+      _savedRuns.removeWhere((_, save) => _stats.recent.any((run) => run.id == save.id));
+      _saved('run', store.saveRuns(_savedRuns));
       if (!store.available) _failedWrites.add('storage');
       _stored = _failedWrites.isEmpty;
     });
@@ -118,13 +118,17 @@ class _AppRootState extends State<_AppRoot> {
     _saved('progress', store.saveProgress(_progress));
     _saved('stats', store.saveStats(_stats));
     _saved('custom', store.saveCustom(_custom));
-    _saved('run', store.saveRun(_savedRun));
+    _saved('run', store.saveRuns(_savedRuns));
     _saved('tutorial', store.saveTutorial(_tutorialDone));
   }
 
-  void _checkpoint(RunSave? save) {
-    _savedRun = save;
-    _saved('run', _store!.saveRun(save));
+  void _checkpoint(ModeId mode, RunSave? save) {
+    if (save == null) {
+      _savedRuns.remove(mode);
+    } else {
+      _savedRuns[mode] = save;
+    }
+    _saved('run', _store!.saveRuns(_savedRuns));
   }
 
   void _changeSettings(Settings next) {
@@ -154,18 +158,19 @@ class _AppRootState extends State<_AppRoot> {
     _settingsOpen = false;
   });
 
-  void _start(Session session, {bool resume = false}) {
-    if (!resume && !_tutorialDone) {
+  void _start(Session session, {RunSave? restore}) {
+    if (restore == null && !_tutorialDone) {
       _openTutorial(after: session);
       return;
     }
-    if (!resume && _savedRun != null) {
-      _recordRun(_savedRun!.abandoned());
-      _checkpoint(null);
+    final mode = modeOf(session);
+    if (restore == null && _savedRuns[mode] != null) {
+      _recordRun(_savedRuns[mode]!.abandoned());
+      _checkpoint(mode, null);
     }
     setState(() {
       _gameKey = GlobalKey<GameScreenState>();
-      _restore = resume ? _savedRun : null;
+      _restore = restore;
       _tutorial = false;
       _settingsOpen = false;
       _session = session;
@@ -222,17 +227,19 @@ class _AppRootState extends State<_AppRoot> {
       _ => switch (_screen) {
         _Screen.home => MainMenu(
           progress: _progress,
-          savedRun: _savedRun,
-          onResume: () {
-            final save = _savedRun;
-            if (save != null) _start(save.session, resume: true);
-          },
+          hasSavedGames: _savedRuns.isNotEmpty,
+          onResume: () => _show(_Screen.resume),
           onTutorial: () => _openTutorial(),
           tutorialDone: _tutorialDone,
           onCampaign: () => _show(_Screen.campaign),
           onCustom: () => _show(_Screen.custom),
           onStatistics: () => _show(_Screen.statistics),
           onSettings: () => _show(_Screen.settings),
+        ),
+        _Screen.resume => ResumeScreen(
+          runs: _savedRuns,
+          onResume: (save) => _start(save.session, restore: save),
+          onBack: () => _show(_Screen.home),
         ),
         _Screen.campaign => CampaignScreen(
           progress: _progress,
@@ -258,7 +265,7 @@ class _AppRootState extends State<_AppRoot> {
         _Screen.play => GameScreen(
           key: _gameKey,
           restore: _restore,
-          onCheckpoint: _checkpoint,
+          onCheckpoint: (save) => _checkpoint(modeOf(_session!), save),
           tutorial: _tutorial,
           onTutorialDone: _finishTutorial,
           session: _session!,

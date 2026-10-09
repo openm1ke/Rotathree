@@ -18,6 +18,8 @@ Future<GameScreenState> pumpGame(
   RunSave? restore,
   bool tutorial = false,
   bool blocked = false,
+  Settings? settings,
+  VoidCallback? onExit,
   ValueChanged<RunSave?>? onCheckpoint,
   ValueChanged<RunRecord>? onRecord,
   Size size = const Size(390, 844),
@@ -30,7 +32,7 @@ Future<GameScreenState> pumpGame(
     MaterialApp(
       home: GameScreen(
         session: session,
-        settings: Settings.defaults(),
+        settings: settings ?? Settings.defaults(),
         progress: Progress.initial(),
         blocked: blocked,
         restore: restore,
@@ -38,7 +40,7 @@ Future<GameScreenState> pumpGame(
         onTutorialDone: onTutorialDone,
         onCheckpoint: onCheckpoint,
         onSettings: () {},
-        onExit: () {},
+        onExit: onExit ?? () {},
         onLevels: () {},
         onRetry: (_) {},
         onInsane: () {},
@@ -137,7 +139,7 @@ void main() {
     final state = await pumpGame(tester, session: const CampaignSession(0), onCheckpoint: (value) => save = value);
     state.engine.state.score = campaignLevels[0].target;
     await pumpFrames(tester, 2);
-    state.handleBack();
+    await tester.tap(find.text('Пауза'));
     await pumpFrames(tester, 80);
     expect(state.engine.sides.length, 1);
     expect(save!.banner!.pendingLevel, 1);
@@ -185,16 +187,52 @@ void main() {
     final records = <RunRecord>[];
     RunSave? save;
     final state = await pumpGame(tester, onCheckpoint: (value) => save = value, onRecord: records.add);
-    state.handleBack();
+    await tester.tap(find.text('Пауза'));
     await tester.pump();
     expect(save, isNotNull);
-    await tester.tap(find.text('Завершить и в меню'));
+    await tester.tap(find.text('Завершить партию'));
     await tester.pump();
     expect(records.single.interrupted, isTrue);
     expect(save, isNull);
     state.handleBack();
     await tester.pump();
     expect(records.length, 1);
+  });
+
+  testWidgets('system Back saves the current field and exits without ending the run', (tester) async {
+    RunSave? saved;
+    var exited = false;
+    final records = <RunRecord>[];
+    final state = await pumpGame(
+      tester,
+      onExit: () => exited = true,
+      onCheckpoint: (value) => saved = value,
+      onRecord: records.add,
+    );
+    state.move(1, toWall: false);
+    state.handleBack();
+    expect(exited, isTrue);
+    expect(saved!.engine, state.engine.snapshot());
+    expect(records, isEmpty);
+  });
+  testWidgets('training uses customized pad bindings and positions', (tester) async {
+    final settings = Settings.defaults().copyWith(
+      leftPad: {...defaultLeftPad, PadSlot.up: GameAction.rotateCW},
+      rightPad: {...defaultRightPad, PadSlot.up: GameAction.hardDrop},
+    );
+    final state = await pumpGame(tester, tutorial: true, settings: settings);
+    final left = tester.widget<DPad>(find.byType(DPad).first);
+    expect(left.layout[PadSlot.up], GameAction.rotateCW);
+    await tester.tap(find.text('Дальше'));
+    await tester.pump();
+    state.move(1, toWall: false);
+    await tester.pump();
+    await tester.tap(find.text('✓ Дальше'));
+    await tester.pump();
+    await tester.tapAt(padButton(tester, 0, .5, 1 / 6));
+    await tester.pump();
+    expect(find.text('✓ Дальше'), findsOneWidget);
+    expect(find.textContaining('Левая крестовина · вверх'), findsOneWidget);
   });
 
   testWidgets('phone tutorial requires each action and resolves a real match', (tester) async {

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rotathree/game/engine/game_engine.dart';
+import 'package:rotathree/game/config/modes.dart';
 import 'package:rotathree/game/session.dart';
 import 'package:rotathree/ui/data/run_save.dart';
 import 'package:rotathree/ui/data/stats.dart';
@@ -32,6 +33,36 @@ void main() {
     expect(stats.withRun(run), same(stats));
     expect(await store.saveRun(null), isTrue);
     expect(store.loadRun(), isNull);
+  });
+  test('per-mode slots coexist and migrate an existing single save', () async {
+    RunSave save(Session session, String id) => RunSave(
+      id: id,
+      session: session,
+      engine: GameEngine(config: planFor(session).config).snapshot(),
+      carry: RunTotals.none,
+      levelBase: 0,
+      savedAt: 100,
+    );
+    final campaign = save(const CampaignSession(0), 'campaign');
+    final custom = save(const CustomSession(defaultCustom), 'custom');
+    SharedPreferences.setMockInitialValues({'rotathree.run.mobile.v1': jsonEncode(campaign.toJson())});
+    final store = await AppStore.open();
+    expect(store.loadRuns().keys, [ModeId.campaign]);
+    await store.saveRuns({ModeId.campaign: campaign, ModeId.custom: custom});
+    final again = (await AppStore.open()).loadRuns();
+    expect(again.keys, containsAll([ModeId.campaign, ModeId.custom]));
+    await store.saveRuns({ModeId.custom: custom});
+    expect(store.loadRuns().keys, [ModeId.custom]);
+    expect(
+      readSavedRuns({
+        'version': 2,
+        'runs': {
+          'campaign': {'broken': true},
+          'custom': custom.toJson(),
+        },
+      }).keys,
+      [ModeId.custom],
+    );
   });
   test('unavailable storage retains data in memory and reports failed writes', () async {
     final store = AppStore(null);

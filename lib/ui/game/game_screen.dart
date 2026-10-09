@@ -22,7 +22,7 @@ import '../data/run_save.dart';
 import '../field/effects.dart';
 import '../field/field_painter.dart';
 import '../format.dart';
-import '../input/dpad.dart';
+import '../input/pad_surface.dart';
 import '../input/game_action.dart';
 import '../input/pad_controller.dart';
 import '../style.dart';
@@ -221,6 +221,7 @@ class GameScreenState extends State<GameScreen>
     );
     WidgetsBinding.instance.addObserver(this);
     _ticker.start();
+    _checkpoint();
   }
 
   @override
@@ -442,7 +443,9 @@ class GameScreenState extends State<GameScreen>
   }
 
   void _checkpoint() {
-    if (widget.tutorial || _finished || _engine.isGameOver || widget.onCheckpoint == null) return;
+    if (widget.tutorial || _finished || _engine.isGameOver || widget.onCheckpoint == null) {
+      return;
+    }
     final b = _banner;
     widget.onCheckpoint!(
       RunSave(
@@ -468,7 +471,7 @@ class GameScreenState extends State<GameScreen>
     _saveCharge = 0;
   }
 
-  void _leave(VoidCallback destination, {bool save = false}) {
+  void _leave(VoidCallback destination, {bool save = true}) {
     _pads.releaseAll();
     if (save) {
       _checkpoint();
@@ -479,14 +482,8 @@ class GameScreenState extends State<GameScreen>
     destination();
   }
 
-  /// System Back opens the pause, and never throws away the field.
-  void handleBack() {
-    if (_status == _Status.over || _status == _Status.done) {
-      _leave(widget.onExit);
-    } else {
-      _togglePause();
-    }
-  }
+  /// Back captures the exact field before returning to the menu.
+  void handleBack() => _leave(widget.onExit);
 
   bool _tutorialAllows(GameAction action) =>
       !widget.tutorial ||
@@ -500,7 +497,9 @@ class GameScreenState extends State<GameScreen>
             _ => false,
           });
   void _performed() {
-    if (widget.tutorial && !_tutorialPerformed) setState(() => _tutorialPerformed = true);
+    if (widget.tutorial && !_tutorialPerformed) {
+      setState(() => _tutorialPerformed = true);
+    }
   }
 
   void _tutorialNext() {
@@ -527,7 +526,9 @@ class GameScreenState extends State<GameScreen>
 
   @override
   void move(int direction, {required bool toWall}) {
-    if (!_acceptsInput || !_tutorialAllows(direction < 0 ? GameAction.moveLeft : GameAction.moveRight)) return;
+    if (!_acceptsInput || !_tutorialAllows(direction < 0 ? GameAction.moveLeft : GameAction.moveRight)) {
+      return;
+    }
     final before = _engine.activePiece?.column;
     _engine.moveActive(toWall ? direction * _engine.config.boardSize : direction);
     if (_engine.activePiece?.column != before) _performed();
@@ -629,7 +630,9 @@ class GameScreenState extends State<GameScreen>
 
     if (_status == _Status.playing && !holding) {
       _pads.update(seconds);
-      if (!widget.tutorial || _engine.phase != GamePhase.playing) _engine.update(seconds);
+      if (!widget.tutorial || _engine.phase != GamePhase.playing) {
+        _engine.update(seconds);
+      }
     }
 
     // Banners share the pause/settings gate with gameplay.
@@ -661,7 +664,9 @@ class GameScreenState extends State<GameScreen>
       }
     }
 
-    if (widget.tutorial && _tutorialMatch && _tutorialStep == 3 && _engine.phase == GamePhase.playing) _performed();
+    if (widget.tutorial && _tutorialMatch && _tutorialStep == 3 && _engine.phase == GamePhase.playing) {
+      _performed();
+    }
 
     if (_isCampaign &&
         !_finished &&
@@ -675,7 +680,9 @@ class GameScreenState extends State<GameScreen>
     _hud.value = _currentHud();
     if (_status == _Status.playing && !frozen) _saveCharge += seconds;
     if (_saveCharge >= 2 ||
-        events.any((event) => event is PieceLanded || event is MatchScored || event is GlassAdded || event is SpeedUp)) {
+        events.any(
+          (event) => event is PieceLanded || event is MatchScored || event is GlassAdded || event is SpeedUp,
+        )) {
       _checkpoint();
     }
 
@@ -690,6 +697,20 @@ class GameScreenState extends State<GameScreen>
       _repaint.touch();
     }
   }
+
+  List<GameAction> get _lessonActions => switch (_tutorialStep) {
+    1 => [GameAction.moveLeft, GameAction.moveRight],
+    2 => [GameAction.rotateCW, GameAction.rotateCCW],
+    3 => [GameAction.hardDrop],
+    4 => [GameAction.glassLeft, GameAction.glassRight, GameAction.glassOpposite],
+    _ => [],
+  };
+  List<String> get _tutorialControls => [
+    for (final side in [false, true])
+      for (final slot in PadSlot.values)
+        if (_lessonActions.contains((side ? widget.settings.rightPad : widget.settings.leftPad)[slot]))
+          '${side ? 'Правая' : 'Левая'} крестовина · ${slot.label.toLowerCase()}',
+  ];
 
   // ------------------------------------------------------------------- build
 
@@ -709,7 +730,6 @@ class GameScreenState extends State<GameScreen>
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final padSize = math.min(math.max(constraints.maxWidth * 0.36, 132.0), 150.0);
                 return Column(
                   children: [
                     Padding(
@@ -754,34 +774,23 @@ class GameScreenState extends State<GameScreen>
                         child: TutorialPanel(
                           step: _tutorialStep,
                           performed: _tutorialPerformed,
+                          controls: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
+                              ? 'Действие не назначено. Попробуйте его кнопкой ниже или назначьте в настройках.'
+                              : _tutorialControls.join(' / '),
+                          onPractice: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
+                              ? () {
+                                  _pads.down(_lessonActions.first);
+                                  _pads.up(_lessonActions.first);
+                                }
+                              : null,
                           onNext: _tutorialNext,
                           onSkip: () => widget.onTutorialDone?.call(),
                         ),
                       ),
-                    // The pads are a layer of their own: the field is drawn
-                    // again every frame, and they need not be.
                     RepaintBoundary(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            DPad(
-                              layout: widget.tutorial ? defaultLeftPad : settings.leftPad,
-                              showLabels: widget.tutorial || settings.hud.keyHints,
-                              size: padSize,
-                              onDown: _pads.down,
-                              onUp: _pads.up,
-                            ),
-                            DPad(
-                              layout: widget.tutorial ? defaultRightPad : settings.rightPad,
-                              showLabels: widget.tutorial || settings.hud.keyHints,
-                              size: padSize,
-                              onDown: _pads.down,
-                              onUp: _pads.up,
-                            ),
-                          ],
-                        ),
+                        child: PadSurface(settings: settings, onDown: _pads.down, onUp: _pads.up),
                       ),
                     ),
                   ],
@@ -886,11 +895,10 @@ class GameScreenState extends State<GameScreen>
           if (custom && !widget.tutorial)
             OutlineButton(label: 'Изменить режим', onPressed: () => _leave(widget.onCustomise)),
           if (!custom) OutlineButton(label: 'К уровням', onPressed: () => _leave(widget.onLevels)),
-          if (!widget.tutorial)
-            OutlineButton(label: 'Сохранить и в меню', onPressed: () => _leave(widget.onExit, save: true)),
+          if (!widget.tutorial) OutlineButton(label: 'В меню', onPressed: () => _leave(widget.onExit)),
           OutlineButton(
-            label: widget.tutorial ? 'В меню' : 'Завершить и в меню',
-            onPressed: () => _leave(widget.onExit),
+            label: widget.tutorial ? 'В меню' : 'Завершить партию',
+            onPressed: () => _leave(widget.onExit, save: false),
           ),
         ]),
       ],

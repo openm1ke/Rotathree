@@ -38,3 +38,37 @@ it('storage errors are observable by the app', () => {
   ).toBe(false);
   expect(loadRun({ getItem: () => '{ broken' })).toBeNull();
 });
+
+it('per-mode slots coexist, migrate the legacy save and isolate corrupt slots', async () => {
+  const { loadRuns, saveRuns } = await import('../services/storage');
+  const session: Session = { mode: 'campaign', level: 0 };
+  const engine = new GameEngine(planFor(session).config);
+  const campaign: RunSave = {
+    version: 1,
+    id: 'campaign-slot',
+    session,
+    engine: engine.snapshot(),
+    carry: { score: 0, pieces: 0, matches: 0, bestCombo: 0, seconds: 0 },
+    levelBase: 0,
+    savedAt: Date.now(),
+    banner: null,
+  };
+  expect(saveRun(campaign)).toBe(true);
+  expect(loadRuns()).toEqual({ campaign });
+  const customSession: Session = { mode: 'custom', setup: (await import('../game/modes')).DEFAULT_CUSTOM };
+  const custom = {
+    ...campaign,
+    id: 'custom-slot',
+    session: customSession,
+    engine: new GameEngine(planFor(customSession).config).snapshot(),
+  };
+  expect(saveRuns({ campaign, custom })).toBe(true);
+  expect(loadRuns()).toEqual({ campaign, custom });
+  expect(saveRuns({ custom })).toBe(true);
+  expect(loadRuns()).toEqual({ custom });
+  localStorage.setItem(
+    'rotathree.run.web.v1',
+    JSON.stringify({ version: 2, runs: { campaign: { ...campaign, engine: {} }, custom } }),
+  );
+  expect(loadRuns()).toEqual({ custom });
+});

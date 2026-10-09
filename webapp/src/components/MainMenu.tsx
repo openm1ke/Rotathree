@@ -2,9 +2,8 @@ import { useRef } from 'react';
 import { CAMPAIGN_LAST } from '../game/campaign';
 import type { Progress } from '../services/storage';
 import { useScreenKeys } from './nav';
-import type { RunSave } from '../services/runSave';
+import type { SavedRuns } from '../services/runSave';
 import { useTouchControls } from '../input/touch';
-import { MODE_NAMES } from '../game/modes';
 
 export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
 
@@ -39,14 +38,14 @@ interface Props {
   onOpen: (target: MenuTarget) => void;
   /** False while the settings are open over the menu. */
   active: boolean;
-  savedRun?: RunSave | null;
+  savedRuns?: SavedRuns;
   tutorialDone?: boolean;
   onResume?: () => void;
   onTutorial?: () => void;
 }
 
 /** The first screen: a column of large entries, the progress on the side. */
-export function MainMenu({ progress, onOpen, active, savedRun, tutorialDone, onResume, onTutorial }: Props) {
+export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, onResume, onTutorial }: Props) {
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, () => {});
@@ -76,12 +75,12 @@ export function MainMenu({ progress, onOpen, active, savedRun, tutorialDone, onR
       </header>
 
       <nav className="home__nav" aria-label="Главное меню">
-        {savedRun && (
+        {savedRuns && Object.keys(savedRuns).length > 0 && (
           <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
             <span className="navitem__no">▶</span>
             <span className="navitem__text">
               <span className="navitem__title">Продолжить</span>
-              <span className="navitem__caption">{MODE_NAMES[savedRun.session.mode]} · сохранённая партия</span>
+              <span className="navitem__caption">Выберите сохранённую игру</span>
             </span>
           </button>
         )}

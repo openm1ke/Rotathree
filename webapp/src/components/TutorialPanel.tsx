@@ -21,7 +21,7 @@ export const TUTORIAL_LESSONS = [
   ],
   [
     'Следите за всеми стаканами',
-    'В настоящей игре фигуры падают одновременно: в активном стакане быстрее, в остальных медленнее. Переключайтесь до переполнения рукава. Новые совпадения после оседания дают комбо. Пауза позволяет сохранить партию.',
+    'В настоящей игре фигуры падают одновременно: в активном стакане быстрее, в остальных медленнее. Переключайтесь до переполнения рукава. Новые совпадения после оседания дают комбо. При выходе партия сохраняется автоматически.',
   ],
 ] as const;
 
@@ -29,12 +29,14 @@ export function TutorialPanel({
   step,
   performed,
   controls,
+  onPractice,
   onNext,
   onSkip,
 }: {
   step: number;
   performed: boolean;
   controls: string;
+  onPractice?: () => void;
   onNext: () => void;
   onSkip: () => void;
 }) {
@@ -48,6 +50,11 @@ export function TutorialPanel({
         <h2>{title}</h2>
         <p>{body}</p>
         {controls && <p className="tutorial__controls">{controls}</p>}
+        {onPractice && (
+          <button type="button" className="chip" onClick={onPractice}>
+            Попробовать действие
+          </button>
+        )}
       </div>
       <div className="tutorial__actions">
         <button type="button" className="button button--ghost" onClick={onSkip}>

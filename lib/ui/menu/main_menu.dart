@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../game/config/campaign.dart';
 import '../data/progress.dart';
 import '../style.dart';
-import '../data/run_save.dart';
 import '../widgets/controls.dart';
 
 /// The first screen: a column of large entries, the progress on the side.
@@ -15,7 +14,7 @@ class MainMenu extends StatelessWidget {
     required this.onCustom,
     required this.onStatistics,
     required this.onSettings,
-    this.savedRun,
+    this.hasSavedGames = false,
     this.onResume,
     this.onTutorial,
     this.tutorialDone = false,
@@ -26,7 +25,7 @@ class MainMenu extends StatelessWidget {
   final VoidCallback onCustom;
   final VoidCallback onStatistics;
   final VoidCallback onSettings;
-  final RunSave? savedRun;
+  final bool hasSavedGames;
   final VoidCallback? onResume, onTutorial;
   final bool tutorialDone;
 
@@ -70,8 +69,8 @@ class MainMenu extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          if (savedRun != null && onResume != null) ...[
-            GoButton(label: 'Продолжить партию', expand: true, onPressed: onResume),
+          if (hasSavedGames && onResume != null) ...[
+            GoButton(label: 'Продолжить', expand: true, onPressed: onResume),
             const SizedBox(height: 12),
           ],
           if (onTutorial != null)

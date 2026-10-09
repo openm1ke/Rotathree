@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../input/game_action.dart';
+import '../input/pad_placement.dart';
 import '../style.dart';
 import 'bindings.dart';
 
@@ -224,6 +225,7 @@ class Settings {
     required this.hud,
     required this.leftPad,
     required this.rightPad,
+    this.padPositions = const PadPositions(),
   });
 
   factory Settings.defaults() => Settings(
@@ -251,6 +253,7 @@ class Settings {
     final hud = section('hud');
     final pads = section('pads');
     return Settings(
+      padPositions: PadPositions.fromJson(map['padPositions']),
       bindings: sanitizeBindings(map['bindings']),
       handling: Handling(
         dasMs: _intIn(handling['dasMs'], 0, 400, base.handling.dasMs),
@@ -280,6 +283,7 @@ class Settings {
   final HudOptions hud;
   final PadLayout leftPad;
   final PadLayout rightPad;
+  final PadPositions padPositions;
 
   Settings copyWith({
     Bindings? bindings,
@@ -289,6 +293,7 @@ class Settings {
     HudOptions? hud,
     PadLayout? leftPad,
     PadLayout? rightPad,
+    PadPositions? padPositions,
   }) =>
       Settings(
         bindings: bindings ?? this.bindings,
@@ -298,6 +303,7 @@ class Settings {
         hud: hud ?? this.hud,
         leftPad: leftPad ?? this.leftPad,
         rightPad: rightPad ?? this.rightPad,
+        padPositions: padPositions ?? this.padPositions,
       );
 
   Map<String, Object?> toJson() => {
@@ -318,6 +324,7 @@ class Settings {
           'stats': hud.stats,
           'opacity': hud.opacity,
         },
+        'padPositions': padPositions.toJson(),
         'pads': {
           'left': {for (final slot in PadSlot.values) slot.name: leftPad[slot]!.name},
           'right': {for (final slot in PadSlot.values) slot.name: rightPad[slot]!.name},

@@ -69,18 +69,21 @@ test('pause traps focus, Space activates Continue, saved transition resumes afte
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   const pause = page.getByRole('dialog', { name: 'Пауза', exact: true });
   await expect(pause).toBeVisible();
-  await page.getByRole('button', { name: 'Завершить и в меню' }).focus();
+  await page.getByRole('button', { name: 'Завершить партию' }).focus();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Продолжить', exact: true })).toBeFocused();
   await page.waitForTimeout(2400);
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.sides.length)).toBe(
     1,
   );
-  await page.getByRole('button', { name: 'Сохранить и в меню' }).click();
-  const save = await page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.run.web.v1')!) as RunSave);
+  await page.getByRole('button', { name: 'В меню', exact: true }).click();
+  const save = await page.evaluate(
+    () => (JSON.parse(localStorage.getItem('rotathree.run.web.v1')!) as { runs: { campaign: RunSave } }).runs.campaign,
+  );
   expect(save.banner?.pendingLevel).toBe(1);
   await page.reload();
-  await page.getByRole('button', { name: /Продолжить.*сохранённая партия/ }).click();
+  await page.getByRole('button', { name: /Продолжить.*Выберите сохранённую игру/ }).click();
+  await page.getByRole('button', { name: 'Продолжить Кампания', exact: true }).click();
   await expect(pause).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(
     save.engine,
@@ -102,13 +105,13 @@ test('settings freeze campaign banners and ending a run records statistics', asy
   );
   await page.getByRole('button', { name: '← Назад', exact: true }).click();
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
-  await page.getByRole('button', { name: 'Завершить и в меню' }).click();
+  await page.getByRole('button', { name: 'Завершить партию' }).click();
   await expect
     .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.stats.v1')!).modes.campaign.games))
     .toBe(1);
-  expect(await page.evaluate(() => localStorage.getItem('rotathree.run.web.v1'))).toBe('null');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.run.web.v1')!).runs)).toEqual({});
   await page.reload();
-  await expect(page.getByRole('button', { name: /Продолжить.*сохранённая партия/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Продолжить.*Выберите сохранённую игру/ })).toHaveCount(0);
 });
 
 test('unavailable storage warns the player while the app remains usable', async ({ page }) => {

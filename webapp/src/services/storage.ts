@@ -3,8 +3,9 @@ import { defaultBindings, cloneBindings, sanitizeBindings, type Bindings } from 
 import { defaultHandling, type Handling } from '../input/keyboard';
 import { CAMPAIGN } from '../game/campaign';
 import { DEFAULT_CUSTOM, sanitizeCustom, type CustomSetup, type ModeId } from '../game/modes';
-import { sanitizeRunSave, type RunSave } from './runSave';
+import { sanitizeRunSave, sanitizeSavedRuns, type RunSave, type SavedRuns } from './runSave';
 import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
+import { DEFAULT_POSITIONS, sanitizePositions, type PadPositions } from '../input/padPlacement';
 import { ACTIONS } from '../input/bindings';
 
 /** How the explosion of a match looks: one animation for everything, or one
@@ -50,6 +51,7 @@ export interface Settings {
   effects: Effects;
   hud: HudOptions;
   pads: { left: PadLayout; right: PadLayout };
+  padPositions: PadPositions;
 }
 
 export const BUILTIN_PALETTES: PaletteSet[] = [
@@ -75,6 +77,7 @@ export const defaultSettings = (): Settings => ({
   effects: { explosion: 'varied', screenShake: true, turnMs: 260 },
   hud: { keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
+  padPositions: structuredClone(DEFAULT_POSITIONS),
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -127,6 +130,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   };
   return {
     bindings: sanitizeBindings(stored.bindings),
+    padPositions: sanitizePositions(stored.padPositions),
     pads: { left: pad(pads.left, DEFAULT_PADS.left), right: pad(pads.right, DEFAULT_PADS.right) },
     handling: {
       dasMs: numberIn(handling.dasMs, 0, 400, base.handling.dasMs),
@@ -361,5 +365,7 @@ export const loadCustom = (storage = browserStorage()): CustomSetup =>
 export const saveCustom = (value: CustomSetup, storage = browserStorage()) => write(KEYS.custom, value, storage);
 export const loadRun = (storage = browserStorage()) => read(KEYS.run, sanitizeRunSave, storage);
 export const saveRun = (value: RunSave | null, storage = browserStorage()) => write(KEYS.run, value, storage);
+export const loadRuns = (storage = browserStorage()) => read(KEYS.run, sanitizeSavedRuns, storage);
+export const saveRuns = (runs: SavedRuns, storage = browserStorage()) => write(KEYS.run, { version: 2, runs }, storage);
 export const loadTutorial = (storage = browserStorage()) => read(KEYS.tutorial, (raw) => raw === true, storage);
 export const saveTutorial = (value: boolean, storage = browserStorage()) => write(KEYS.tutorial, value, storage);

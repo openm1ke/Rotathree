@@ -8,11 +8,12 @@ import { MODE_NAMES, type RunPlan } from '../game/modes';
 import type { Side } from '../game/side';
 import { KeyboardController } from '../input/keyboard';
 import { keyLabel, type Action } from '../input/bindings';
-import { DEFAULT_PADS, PadController, type PadAction } from '../input/pads';
+import { PadController, type PadAction } from '../input/pads';
 import { useTouchControls } from '../input/touch';
 import { makePiece } from '../game/piece';
 import type { RunSave, RunTotals } from '../services/runSave';
-import { DPad } from './DPad';
+import { TouchControls } from './TouchControls';
+import { PAD_SLOTS, SLOT_LABELS } from '../input/pads';
 import { TutorialPanel, TUTORIAL_LESSONS } from './TutorialPanel';
 import { Effects } from '../render/effects';
 import { AdaptiveQuality } from '../render/quality';
@@ -89,7 +90,8 @@ export function GameScreen(props: Props) {
     down: (_action: PadAction) => {},
     up: (_action: PadAction) => {},
     nextLesson: () => {},
-    leave: (_destination: () => void, _save = false) => {},
+    practice: (_action: Action) => {},
+    leave: (_destination: () => void, _save = true) => {},
   });
 
   const [size, setSize] = useState(0);
@@ -413,9 +415,13 @@ export function GameScreen(props: Props) {
     actions.current = {
       togglePause,
       retry,
+      practice: (action) => {
+        pads.down(action);
+        pads.up(action);
+      },
       down: (action) => pads.down(action),
       up: (action) => pads.up(action),
-      leave: (destination, save = false) => {
+      leave: (destination, save = true) => {
         keyboard.releaseAll();
         pads.releaseAll();
         if (save) checkpoint();
@@ -536,7 +542,8 @@ export function GameScreen(props: Props) {
       if (document.hidden) onBlur();
     };
     document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', checkpoint);
+    window.addEventListener('pagehide', onBlur);
+    checkpoint();
 
     let raf = 0;
     let last = performance.now();
@@ -675,7 +682,7 @@ export function GameScreen(props: Props) {
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', checkpoint);
+      window.removeEventListener('pagehide', onBlur);
       keyboard.releaseAll();
       pads.releaseAll();
       rendererRef.current = null;
@@ -700,6 +707,24 @@ export function GameScreen(props: Props) {
   const retryLabel = campaign ? 'Повторить уровень' : 'Заново';
   const mode = tutorial ? 'Обучение' : MODE_NAMES[session.mode];
   const playingLevel = campaign ? CAMPAIGN[level] : undefined;
+  const lessonActions: Action[] =
+    tutorialStep === 1
+      ? ['moveLeft', 'moveRight']
+      : tutorialStep === 2
+        ? ['rotateCW', 'rotateCCW']
+        : tutorialStep === 3
+          ? ['hardDrop']
+          : tutorialStep === 4
+            ? ['glassLeft', 'glassRight', 'glassOpposite']
+            : [];
+  const tutorialControls = touch
+    ? (['left', 'right'] as const).flatMap((side) =>
+        PAD_SLOTS.filter((slot) => lessonActions.includes(settings.pads[side][slot] as Action)).map(
+          (slot) => `${side === 'left' ? 'Левая' : 'Правая'} крестовина · ${SLOT_LABELS[slot].toLowerCase()}`,
+        ),
+      )
+    : lessonActions.flatMap((action) => settings.bindings[action].map(keyLabel));
+  const missingControl = lessonActions.length > 0 && tutorialControls.length === 0;
 
   return (
     <main
@@ -762,37 +787,20 @@ export function GameScreen(props: Props) {
           step={tutorialStep}
           performed={performed}
           controls={
-            touch
-              ? 'Левая крестовина — движение и сброс. Правая — повороты и стаканы.'
-              : tutorialStep === 1
-                ? `${settings.bindings.moveLeft.map(keyLabel).join(' / ')} и ${settings.bindings.moveRight.map(keyLabel).join(' / ')} — движение`
-                : tutorialStep === 2
-                  ? `${settings.bindings.rotateCW.map(keyLabel).join(' / ')} — поворот`
-                  : tutorialStep === 3
-                    ? `${settings.bindings.hardDrop.map(keyLabel).join(' / ')} — сброс`
-                    : tutorialStep === 4
-                      ? `${[...settings.bindings.glassLeft, ...settings.bindings.glassRight].map(keyLabel).join(' / ')} — стаканы`
-                      : ''
+            missingControl
+              ? 'Действие не назначено. Попробуйте его кнопкой ниже или назначьте в настройках.'
+              : tutorialControls.join(' / ')
           }
+          onPractice={missingControl ? () => actions.current.practice(lessonActions[0]) : undefined}
           onNext={() => actions.current.nextLesson()}
           onSkip={() => props.onTutorialDone?.()}
         />
       )}
       {touch && (
         <div className="touch-controls">
-          <DPad
-            label="Левая крестовина"
-            layout={tutorial ? DEFAULT_PADS.left : settings.pads.left}
+          <TouchControls
+            settings={settings}
             disabled={status !== 'playing' || blocked}
-            showLabels={tutorial || settings.hud.keyHints}
-            onDown={(action) => actions.current.down(action)}
-            onUp={(action) => actions.current.up(action)}
-          />
-          <DPad
-            label="Правая крестовина"
-            layout={tutorial ? DEFAULT_PADS.right : settings.pads.right}
-            disabled={status !== 'playing' || blocked}
-            showLabels={tutorial || settings.hud.keyHints}
             onDown={(action) => actions.current.down(action)}
             onUp={(action) => actions.current.up(action)}
           />
@@ -824,11 +832,9 @@ export function GameScreen(props: Props) {
               {session.mode !== 'custom' && (
                 <Button onClick={() => actions.current.leave(props.onLevels)}>К уровням</Button>
               )}
-              {!tutorial && (
-                <Button onClick={() => actions.current.leave(props.onExit, true)}>Сохранить и в меню</Button>
-              )}
-              <Button ghost onClick={() => actions.current.leave(props.onExit)}>
-                {tutorial ? 'В меню' : 'Завершить и в меню'}
+              {!tutorial && <Button onClick={() => actions.current.leave(props.onExit, true)}>В меню</Button>}
+              <Button ghost onClick={() => actions.current.leave(props.onExit, false)}>
+                {tutorial ? 'В меню' : 'Завершить партию'}
               </Button>
             </div>
           </div>

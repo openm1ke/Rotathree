@@ -1833,36 +1833,6 @@ select:focus-visible {
 .game--touch .level-banner {
   max-width: 92%;
 }
-@media (max-height: 600px) and (orientation: landscape) {
-  .game--touch {
-    padding-right: 152px;
-    padding-left: 152px;
-  }
-  .game--touch .touch-hud {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 2;
-  }
-  .game--touch .game__frame {
-    padding-top: 56px;
-  }
-  .game--touch .touch-controls {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-  }
-  .game--touch .dpad {
-    pointer-events: auto;
-  }
-  .game--touch .tutorial {
-    max-height: 42vh;
-    overflow-y: auto;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1888,3 +1858,15 @@ select:focus-visible {
 .game[data-frozen='true'] .banner * {
   animation-play-state: paused;
 }
+
+/* The editor and running game share one bounded control surface. */
+.touch-controls { display: block; }
+.pad-surface { width: 100%; position: relative; flex-shrink: 0; }
+.pad-surface__space { position: absolute; left: 0; top: 0; transform-origin: top left; }
+.pad-surface__pad { position: absolute; }
+.pad-surface__pad > div, .pad-surface__pad .dpad { width: 100%; height: 100%; }
+.pad-surface--editor { border: 1px dashed var(--accent); border-radius: 8px; background: var(--bg); overflow: hidden; }
+.pad-surface--editor .pad-surface__pad { cursor: grab; touch-action: none; }
+.pad-surface--editor .pad-surface__pad:active { cursor: grabbing; }
+.pad-surface--editor .pad-surface__pad:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pad-preview-field { display: grid; place-items: center; height: 56px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim); background: var(--bg); font-size: 13px; }
