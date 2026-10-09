@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 
-const NAV_ITEMS = 'button:not(:disabled), input[type="range"], input[type="checkbox"], input[type="color"]';
+const NAV_ITEMS = 'button:not(:disabled):not([tabindex="-1"]), input[type="range"], input[type="checkbox"], input[type="color"]';
 
 /** Keyboard use of the menus. Arrows and W/S move between the controls of the
  * screen, Enter and Space press them, Esc and Backspace go back. Inside a text

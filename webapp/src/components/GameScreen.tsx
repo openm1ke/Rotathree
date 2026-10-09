@@ -436,6 +436,7 @@ export function GameScreen(props: Props) {
         destination();
       },
       nextLesson: () => {
+        if (current !== 'playing' || live.current.blocked || (lesson > 0 && lesson < TUTORIAL_LESSONS.length - 1 && !lessonPerformed)) return;
         if (lesson === TUTORIAL_LESSONS.length - 1) {
           live.current.onTutorialDone?.();
           return;
@@ -527,11 +528,20 @@ export function GameScreen(props: Props) {
       }
       if (current !== 'playing') return;
       const target = event.target as HTMLElement | null;
-      if (
-        target?.closest('input, select, textarea, [role="dialog"]') ||
-        (target?.closest('button') && ['Space', 'Enter'].includes(event.code))
-      )
+      if (target?.closest('input, select, textarea, [contenteditable], [role="dialog"]')) return;
+      if (tutorial && ['Enter', 'NumpadEnter', 'Backspace'].includes(event.code)) {
+        // Focused header/practice/skip buttons retain their normal Enter action.
+        if (event.code !== 'Backspace' && target?.closest('button:not(.tutorial__next)')) return;
+        event.preventDefault();
+        if (event.repeat) return;
+        if (event.code === 'Backspace') live.current.onTutorialDone?.();
+        else if (lesson > 0 && lesson < TUTORIAL_LESSONS.length - 1 && !lessonPerformed) {
+          // A custom Enter binding can still perform the lesson's required action.
+          keyboard.keyDown(event.code, false);
+        } else actions.current.nextLesson();
         return;
+      }
+      if (target?.closest('button') && ['Space', 'Enter', 'NumpadEnter'].includes(event.code)) return;
       if (keyboard.keyDown(event.code, event.repeat)) event.preventDefault();
     };
     const onKeyUp = (event: KeyboardEvent) => keyboard.keyUp(event.code);
@@ -790,6 +800,7 @@ export function GameScreen(props: Props) {
         <TutorialPanel
           step={tutorialStep}
           performed={performed}
+          keyboard={!touch}
           controls={
             missingControl
               ? 'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.'

@@ -30,11 +30,10 @@ class DPad extends StatefulWidget {
   final ValueChanged<GameAction> onUp;
 
   /// The button under a point of a pad [size] wide.
-  static PadSlot slotAt(Offset point, double size, PadLayout layout) {
+  static PadSlot slotAt(Offset point, double size) {
     final dx = point.dx - size / 2;
     final dy = point.dy - size / 2;
-    final hasCenter = layout[PadSlot.center] != GameAction.none;
-    if (hasCenter && dx * dx + dy * dy < size * size * 0.028) {
+    if (dx * dx + dy * dy < size * size * 0.028) {
       return PadSlot.center;
     }
     if (dx.abs() > dy.abs()) return dx > 0 ? PadSlot.right : PadSlot.left;
@@ -53,7 +52,7 @@ class _DPadState extends State<DPad> {
 
   bool _isPressed(PadSlot slot) => _fingers.containsValue(slot);
 
-  PadSlot _slotAt(Offset point) => DPad.slotAt(point, widget.size, widget.layout);
+  PadSlot _slotAt(Offset point) => DPad.slotAt(point, widget.size);
 
   void _down(PointerDownEvent event) {
     final slot = _slotAt(event.localPosition);

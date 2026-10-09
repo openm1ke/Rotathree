@@ -45,8 +45,20 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  _Tab _tab = _Tab.controls;
+class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: _Tab.values.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,30 +68,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
         kicker: widget.overlay ? 'В игре' : 'Меню',
         title: 'Настройки',
         onBack: widget.onBack,
-        footer: widget.stored
-            ? 'Всё сохраняется на этом устройстве сразу'
-            : 'Не удалось сохранить данные на устройстве. Проверьте свободное место.',
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final tab in _Tab.values)
-                OptionChip(label: _tabNames[tab]!, selected: _tab == tab, onPressed: () => setState(() => _tab = tab)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...switch (_tab) {
-            _Tab.controls => _controls(),
-            _Tab.colours => _colours(),
-            _Tab.effects => _effects(),
-            _Tab.interface => _interface(),
-          },
-        ],
+        body: Column(
+          children: [
+            TabBar(
+              controller: _tabs,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+              labelColor: Palette.accent,
+              unselectedLabelColor: Palette.textDim,
+              labelStyle: Type.body(14, weight: FontWeight.w800),
+              indicatorColor: Palette.accent,
+              dividerColor: Palette.line,
+              tabs: [for (final tab in _Tab.values) Tab(child: LText(_tabNames[tab]!))],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [for (final tab in _Tab.values) _page(tab)],
+              ),
+            ),
+          ],
+        ),
       ),
     );
     if (!widget.overlay) return frame;
     return ColoredBox(color: const Color(0xF2070710), child: frame);
+  }
+
+  Widget _page(_Tab tab) {
+    return ListView(
+      key: PageStorageKey(tab),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      children: [
+        ...switch (tab) {
+          _Tab.controls => _controls(),
+          _Tab.colours => _colours(),
+          _Tab.effects => _effects(),
+          _Tab.interface => _interface(),
+        },
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: LText(
+            widget.stored
+                ? 'Всё сохраняется на этом устройстве сразу'
+                : 'Не удалось сохранить данные на устройстве. Проверьте свободное место.',
+            style: Type.body(12, color: Palette.textDim),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
   }
 
   // --------------------------------------------------------------- controls

@@ -33,6 +33,9 @@ runs) and **Настройки**. **Кошмар** opens once the campaign is fi
 
 Controls are two on-screen D-pads in the bottom corners, the buttons of which
 are chosen in Settings. Tapping a glass on the field also brings it to the top.
+The left pad defaults to clockwise rotation at the top, left/right movement,
+instant drop at the bottom and an unassigned center. Settings tabs scroll on
+one row, and their pages can be swiped horizontally.
 With a hardware keyboard the defaults are the browser version's: A / D move,
 W rotates, S or Space drops, ← / → switch glass, ↑ or ↓ the glass opposite,
 Esc or P pauses, N starts again. The mobile settings configure the D-pads

@@ -80,6 +80,39 @@ void main() {
     expect(Settings.fromJson(current.toJson()).padPositions.left.y, current.padPositions.left.y);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('settings tabs stay on one row and swipe between pages', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: SettingsScreen(settings: Settings.defaults(), stored: true, onBack: () {}, onChange: (_) {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final tabs = find.byType(Tab);
+    expect(tabs, findsNWidgets(4));
+    expect(tester.getTopLeft(tabs.at(0)).dy, tester.getTopLeft(tabs.at(3)).dy);
+    final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
+    final view = find.byType(TabBarView);
+    await tester.flingFrom(tester.getTopLeft(view) + const Offset(280, 24), const Offset(-250, 0), 800);
+    await tester.pumpAndSettle();
+    expect(controller.index, 1);
+    expect(find.text('НАБОРЫ'), findsOneWidget);
+    await tester.flingFrom(tester.getTopLeft(view) + const Offset(40, 24), const Offset(250, 0), 800);
+    await tester.pumpAndSettle();
+    expect(controller.index, 0);
+    expect(find.text('РАЗМЕР И ПОЛОЖЕНИЕ'), findsOneWidget);
+    await tester.ensureVisible(find.text('Интерфейс'));
+    await tester.tap(find.text('Интерфейс'));
+    await tester.pumpAndSettle();
+    expect(controller.index, 3);
+    expect(find.byKey(const ValueKey('language-auto')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   test('a key bound twice keeps its first use', () {
     final bindings = sanitizeBindings({
       'moveLeft': [PhysicalKeyboardKey.keyA.usbHidUsage],

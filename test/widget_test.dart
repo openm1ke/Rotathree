@@ -128,7 +128,11 @@ void main() {
     await tester.ensureVisible(find.text('Настройки'));
     await tester.tap(find.text('Настройки'));
     await settle(tester);
-    await tester.scrollUntilVisible(find.text('ЭКРАННЫЕ КНОПКИ'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('ЭКРАННЫЕ КНОПКИ'),
+      200,
+      scrollable: find.byWidgetPredicate((widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down).first,
+    );
     expect(find.text('ЭКРАННЫЕ КНОПКИ'), findsOneWidget);
     expect(find.textContaining('новую клавишу'), findsNothing);
     expect(find.textContaining('Клавиши'), findsNothing);
@@ -142,6 +146,7 @@ void main() {
     await tester.ensureVisible(find.text('Settings'));
     await tester.tap(find.text('Settings'));
     await settle(tester);
+    await tester.ensureVisible(find.text('Interface'));
     await tester.tap(find.text('Interface'));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('language-ru')));
@@ -155,6 +160,7 @@ void main() {
     await tester.ensureVisible(find.text('Настройки'));
     await tester.tap(find.text('Настройки'));
     await settle(tester);
+    await tester.ensureVisible(find.text('Интерфейс'));
     await tester.tap(find.text('Интерфейс'));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('language-auto')));
@@ -176,6 +182,7 @@ void main() {
     await tester.tap(find.text('Настройки'));
     await settle(tester);
     final snapshot = state.engine.snapshot();
+    await tester.ensureVisible(find.text('Интерфейс'));
     await tester.tap(find.text('Интерфейс'));
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('language-en')));

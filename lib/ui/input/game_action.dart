@@ -63,10 +63,10 @@ typedef PadLayout = Map<PadSlot, GameAction>;
 /// The left pad steers the piece, the way a D-pad does in any falling-block
 /// game.
 const PadLayout defaultLeftPad = {
-  PadSlot.up: GameAction.hardDrop,
+  PadSlot.up: GameAction.rotateCW,
   PadSlot.left: GameAction.moveLeft,
   PadSlot.right: GameAction.moveRight,
-  PadSlot.down: GameAction.softDrop,
+  PadSlot.down: GameAction.hardDrop,
   PadSlot.center: GameAction.none,
 };
 

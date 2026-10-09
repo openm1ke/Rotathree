@@ -12,7 +12,8 @@ class ScreenFrame extends StatelessWidget {
     super.key,
     required this.kicker,
     required this.title,
-    required this.children,
+    this.children = const [],
+    this.body,
     this.onBack,
     this.actions = const [],
     this.footer,
@@ -21,6 +22,8 @@ class ScreenFrame extends StatelessWidget {
   final String kicker;
   final String title;
   final List<Widget> children;
+  /// A custom scrollable body. Its pages are responsible for their footers.
+  final Widget? body;
   final VoidCallback? onBack;
   final List<Widget> actions;
   final String? footer;
@@ -55,7 +58,7 @@ class ScreenFrame extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView(
+            child: body ?? ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
                 ...children,

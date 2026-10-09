@@ -138,12 +138,14 @@ class ColourSwatch extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LText(name, style: Type.body(13, weight: FontWeight.w800)),
-                  LText(colourToHex(colour).toUpperCase(), style: Type.body(11, color: Palette.textDim)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LText(name, style: Type.body(13, weight: FontWeight.w800)),
+                    LText(colourToHex(colour).toUpperCase(), style: Type.body(11, color: Palette.textDim)),
+                  ],
+                ),
               ),
             ],
           ),

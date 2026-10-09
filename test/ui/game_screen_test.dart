@@ -103,10 +103,18 @@ void main() {
     expect(state.engine.activePiece!.column, before + 1);
   });
 
-  testWidgets('the top button of the left pad drops the piece', (tester) async {
+  testWidgets('left pad rotates at the top, drops at the bottom and leaves its center unassigned', (tester) async {
     final state = await pumpGame(tester);
     expect(state.engine.state.piecesPlaced, 0);
+    final before = state.engine.activePiece!.piece.orientation;
     await tester.tapAt(padButton(tester, 0, 1 / 2, 1 / 6));
+    await tester.pump();
+    expect(state.engine.activePiece!.piece.orientation, before.clockwise);
+    await tester.tapAt(padButton(tester, 0, 1 / 2, 1 / 2));
+    await tester.pump();
+    expect(state.engine.state.piecesPlaced, 0);
+    expect(state.engine.activePiece!.piece.orientation, before.clockwise);
+    await tester.tapAt(padButton(tester, 0, 1 / 2, 5 / 6));
     for (var i = 0; i < 20 && state.engine.state.piecesPlaced == 0; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
@@ -243,22 +251,22 @@ void main() {
   });
   testWidgets('training uses customized pad bindings and positions', (tester) async {
     final settings = Settings.defaults().copyWith(
-      leftPad: {...defaultLeftPad, PadSlot.up: GameAction.rotateCW},
+      leftPad: {...defaultLeftPad, PadSlot.up: GameAction.none, PadSlot.down: GameAction.rotateCW},
       rightPad: {...defaultRightPad, PadSlot.up: GameAction.hardDrop},
     );
     final state = await pumpGame(tester, tutorial: true, settings: settings);
     final left = tester.widget<DPad>(find.byType(DPad).first);
-    expect(left.layout[PadSlot.up], GameAction.rotateCW);
+    expect(left.layout[PadSlot.down], GameAction.rotateCW);
     await tester.tap(find.text('Дальше'));
     await tester.pump();
     state.move(1, toWall: false);
     await tester.pump();
     await tester.tap(find.text('✓ Дальше'));
     await tester.pump();
-    await tester.tapAt(padButton(tester, 0, .5, 1 / 6));
+    await tester.tapAt(padButton(tester, 0, .5, 5 / 6));
     await tester.pump();
     expect(find.text('✓ Дальше'), findsOneWidget);
-    expect(find.textContaining('Левая: ↑'), findsOneWidget);
+    expect(find.textContaining('Левая: ↓'), findsOneWidget);
   });
 
   testWidgets('phone tutorial requires each action and resolves a real match', (tester) async {

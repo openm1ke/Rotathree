@@ -53,10 +53,22 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   const { t } = useI18n();
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
+  const tabsRef = useRef<HTMLElement>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
   const [tab, setTab] = useState<Tab>('controls');
   /** The key slot waiting for its new key. */
   const [capture, setCapture] = useState<{ action: Action; slot: number } | null>(null);
   useScreenKeys(rootRef, active && capture === null, onBack);
+
+  const selectTab = (next: Tab, focus = false) => {
+    setCapture(null);
+    setTab(next);
+    if (focus) tabsRef.current?.querySelector<HTMLElement>(`#settings-tab-${next}`)?.focus();
+  };
+
+  useEffect(() => {
+    tabsRef.current?.querySelector<HTMLElement>(`#settings-tab-${tab}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
 
   // While a slot waits, the very next key is its new key.
   useEffect(() => {
@@ -329,7 +341,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   return (
     <Screen
       rootRef={rootRef}
-      className={overlay ? 'screen--overlay' : ''}
+      className={`screen--settings ${overlay ? 'screen--overlay' : ''}`}
       kicker={overlay ? 'В игре' : 'Меню'}
       title="Настройки"
       onBack={onBack}
@@ -341,14 +353,46 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
         )
       }
     >
-      <nav className="tabs" aria-label={t("Разделы настроек")}>
-        {TABS.map(([id, title]) => (
-          <Chip key={id} active={tab === id} onClick={() => setTab(id)}><T>
-            {title}
-          </T></Chip>
-        ))}
-      </nav>
-      {body}
+      <div className="form-layout">
+        <nav className="tabs" ref={tabsRef} role="tablist" aria-label={t("Разделы настроек")}
+          onKeyDown={(event) => {
+            if (!active || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const index = TABS.findIndex(([id]) => id === tab);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1
+              : (index + (event.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length;
+            selectTab(TABS[next][0], true);
+          }}>
+          {TABS.map(([id, title]) => (
+            <button key={id} type="button" role="tab" id={`settings-tab-${id}`}
+              className={`settings-tab ${tab === id ? 'is-active' : ''}`}
+              aria-selected={tab === id} aria-controls="settings-panel" tabIndex={tab === id ? 0 : -1}
+              onClick={() => selectTab(id)}><T>
+                {title}
+              </T></button>
+          ))}
+        </nav>
+        <div className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            swipe.current = null;
+            if (!active || event.pointerType !== 'touch' || !event.isPrimary ||
+              (event.target as HTMLElement).closest('button, input, select, textarea, .pad-surface')) return;
+            swipe.current = { x: event.clientX, y: event.clientY };
+          }}
+          onPointerCancel={() => { swipe.current = null; }}
+          onPointerUp={(event) => {
+            const start = swipe.current;
+            swipe.current = null;
+            if (!start || !active) return;
+            const dx = event.clientX - start.x, dy = event.clientY - start.y;
+            if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const index = TABS.findIndex(([id]) => id === tab);
+            selectTab(TABS[Math.max(0, Math.min(TABS.length - 1, index + (dx < 0 ? 1 : -1)))][0]);
+          }}>
+          {body}
+        </div>
+      </div>
     </Screen>
   );
 }

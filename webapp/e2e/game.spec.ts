@@ -15,23 +15,34 @@ async function finishLevel(page: Page) {
   await expect(page.getByText('Уровень 1 пройден', { exact: true })).toBeVisible();
 }
 
-test('first game offers practical training before starting the chosen mode', async ({ page }) => {
+test('tutorial can be completed using only the keyboard with gated, repeat-safe Enter', async ({ page }) => {
   await startCampaign(page, false);
   await expect(page.getByRole('heading', { name: 'Одна фигура — три клетки' })).toBeVisible();
-  await page.getByRole('button', { name: 'Дальше', exact: true }).click();
+  await expect(page.locator('.tutorial__action kbd')).toHaveText(['Backspace', 'Enter']);
+  await expect(page.locator('.tutorial__next')).toHaveClass(/is-ready/);
+  await page.keyboard.down('Enter');
+  await page.keyboard.down('Enter');
+  await page.keyboard.up('Enter');
   await expect(page.getByRole('button', { name: 'Дальше', exact: true })).toBeDisabled();
+  await expect(page.locator('.tutorial__next')).not.toHaveClass(/is-ready/);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
   await page.keyboard.press('KeyD');
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
+  await expect(page.locator('.tutorial__next')).toBeEnabled();
+  await page.keyboard.press('Enter');
   await page.keyboard.press('KeyW');
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
+  await expect(page.locator('.tutorial__next')).toBeEnabled();
+  await page.keyboard.press('Enter');
   await page.keyboard.press('Space');
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
+  await expect(page.locator('.tutorial__next')).toBeEnabled();
+  await page.keyboard.press('Enter');
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase))
     .toBe('playing');
   await page.keyboard.press('ArrowRight');
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
-  await page.getByRole('button', { name: 'Играть', exact: true }).click();
+  await expect(page.locator('.tutorial__next')).toBeEnabled();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
   await expect(page.getByText('Уровень 1 / 15', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
 });
@@ -42,6 +53,9 @@ test('phone-sized browser gets touch controls and a complete tutorial', async ({
   await page.getByRole('button', { name: /Обучение/ }).click();
   const left = page.getByRole('group', { name: 'Левая крестовина' });
   const right = page.getByRole('group', { name: 'Правая крестовина' });
+  await expect(page.locator('.tutorial kbd')).toHaveCount(0);
+  await expect(left.locator('.dpad__button--up')).toHaveAttribute('aria-label', 'Повернуть фигуру на четверть оборота');
+  await expect(left.locator('.dpad__button--down')).toHaveAttribute('aria-label', 'Мгновенно поставить фигуру');
   await expect(left).toBeVisible();
   await expect(right).toBeVisible();
   await page.getByRole('button', { name: 'Дальше', exact: true }).click();
@@ -61,6 +75,69 @@ test('phone-sized browser gets touch controls and a complete tutorial', async ({
   await expect(page.getByRole('heading', { name: 'Левая крестовина' })).toBeVisible();
   await expect(page.locator('.bind__key')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('tutorial shortcuts respect settings and custom Enter bindings, Backspace skips', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('rotathree.settings.v2', JSON.stringify({
+    bindings: { moveRight: ['Enter'] },
+  })));
+  await startCampaign(page, false);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
+  await page.getByRole('button', { name: 'Настройки', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible();
+  await page.keyboard.press('Backspace');
+  await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
+  await page.getByLabel('Игровое поле').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: '✓ Дальше', exact: true })).toBeEnabled();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Поверните фигуру' })).toBeVisible();
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('.tutorial')).toHaveCount(0);
+  await expect(page.getByText('Уровень 1 / 15', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
+});
+
+test('web forms are centered and settings tabs scroll and swipe without wrapping', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /Кастом/ }).click();
+  const custom = await page.locator('.form-layout').boundingBox();
+  expect(custom!.width).toBeLessThanOrEqual(780);
+  expect(Math.abs(custom!.x + custom!.width / 2 - 640)).toBeLessThan(12);
+  const start = await page.getByRole('button', { name: 'Начать', exact: true }).boundingBox();
+  expect(start!.x + start!.width).toBeLessThanOrEqual(custom!.x + custom!.width + 1);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /Настройки/ }).click();
+  const settings = await page.locator('.form-layout').boundingBox();
+  expect(Math.abs(settings!.x + settings!.width / 2 - 640)).toBeLessThan(12);
+  await page.getByRole('tab', { name: 'Управление', exact: true }).focus();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('tab', { name: 'Интерфейс', exact: true })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('tab', { name: 'Управление', exact: true })).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const tabs = await page.getByRole('tab').all();
+  const tops = await Promise.all(tabs.map(async (tab) => (await tab.boundingBox())!.y));
+  expect(new Set(tops).size).toBe(1);
+  const touch = await page.context().newCDPSession(page);
+  const swipe = async (from: number, to: number) => {
+    const heading = await page.getByRole('tabpanel').getByRole('heading').first().boundingBox();
+    const y = heading!.y + heading!.height / 2;
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from, y }] });
+    for (let step = 1; step <= 5; step++) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from + (to - from) * step / 5, y }] });
+    }
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await swipe(300, 70);
+  await expect(page.getByRole('tab', { name: 'Цвета', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await swipe(70, 300);
+  await expect(page.getByRole('tab', { name: 'Управление', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Интерфейс', exact: true }).click();
+  expect(await page.locator('.tabs').evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('pause traps focus, Space activates Continue, saved transition resumes after reload', async ({ page }) => {
@@ -158,10 +235,10 @@ test('manual language applies immediately, persists and preserves a frozen game'
   await startCampaign(page);
   await finishLevel(page);
   await page.getByRole('button', { name: 'Настройки', exact: true }).click();
-  await page.getByRole('button', { name: 'Интерфейс', exact: true }).click();
+  await page.getByRole('tab', { name: 'Интерфейс', exact: true }).click();
   const snapshot = await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot());
   await page.locator('[data-language="en"]').click();
-  await expect(page.getByRole('button', { name: 'Interface', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Interface', exact: true })).toBeVisible();
   await expectEnglish(page);
   expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(snapshot);
@@ -175,9 +252,9 @@ test('manual language applies immediately, persists and preserves a frozen game'
   await expect(page.getByRole('dialog', { name: 'Pause', exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(snapshot);
   await page.getByRole('dialog', { name: 'Pause', exact: true }).getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Interface', exact: true }).click();
+  await page.getByRole('tab', { name: 'Interface', exact: true }).click();
   await page.locator('[data-language="auto"]').click();
-  await expect(page.getByRole('button', { name: 'Интерфейс', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Интерфейс', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.lang)).toBe('ru');
 });
 
@@ -191,10 +268,10 @@ test.describe('automatic English locale', () => {
       await expectEnglish(page);
       if (title === 'Settings') {
         for (const tab of ['Colors', 'Effects', 'Interface', 'Controls']) {
-          await page.getByRole('button', { name: tab, exact: true }).click();
+          await page.getByRole('tab', { name: tab, exact: true }).click();
           await expectEnglish(page);
         }
-        await page.getByRole('button', { name: 'Colors', exact: true }).click();
+        await page.getByRole('tab', { name: 'Colors', exact: true }).click();
         await page.getByRole('button', { name: 'Copy current palette', exact: true }).click();
         await expect(page.getByRole('button', { name: 'My palette 1', exact: true })).toBeVisible();
         await expectEnglish(page);

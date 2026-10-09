@@ -721,6 +721,30 @@ input:focus-visible {
   max-width: 780px;
 }
 
+.screen--custom .screen__body,
+.screen--settings .screen__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-layout {
+  width: 100%;
+  max-width: 712px;
+  margin: auto;
+  flex: none;
+}
+
+.screen--settings .form-layout {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.screen--custom .screen__foot,
+.screen--settings .screen__foot {
+  justify-content: center;
+  text-align: center;
+}
+
 .form__start {
   display: flex;
   justify-content: flex-end;
@@ -920,28 +944,41 @@ input:focus-visible {
 /* --------------------------------------------------------------- settings */
 
 .tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  width: fit-content;
-  max-width: 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  width: 100%;
   margin-bottom: 16px;
-  padding: 4px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-strong);
 }
 
-.tabs .chip {
+.settings-tab {
+  flex: none;
+  min-height: 48px;
   border: 0;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  padding: 0.55em 1.1em;
-  font-style: italic;
-  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.tabs .chip.is-active {
-  background: rgba(120, 205, 255, 0.2);
+.settings-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: rgba(120, 205, 255, 0.08);
 }
+
+.settings-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+.settings-panel { touch-action: pan-y; }
+.settings-panel:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
 .hint {
   max-width: 60em;
@@ -1830,6 +1867,13 @@ select:focus-visible {
   padding: 8px 12px;
   font-size: 13px;
 }
+.tutorial__action { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.tutorial__action kbd { color: var(--text-dim); font-size: 11px; }
+.tutorial__next.is-ready {
+  box-shadow: 0 0 18px rgba(255, 42, 134, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+.tutorial__next { transition: box-shadow 180ms ease; }
+.tutorial__next:disabled { box-shadow: none; }
 .game--touch .level-banner {
   max-width: 92%;
 }

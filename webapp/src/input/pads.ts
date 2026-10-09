@@ -13,7 +13,7 @@ export const SLOT_LABELS: Record<PadSlot, string> = {
   center: 'Центр',
 };
 export const DEFAULT_PADS = {
-  left: { up: 'hardDrop', left: 'moveLeft', right: 'moveRight', down: 'softDrop', center: 'none' } as PadLayout,
+  left: { up: 'rotateCW', left: 'moveLeft', right: 'moveRight', down: 'hardDrop', center: 'none' } as PadLayout,
   right: {
     up: 'rotateCW',
     left: 'glassLeft',

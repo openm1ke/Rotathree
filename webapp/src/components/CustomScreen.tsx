@@ -38,107 +38,109 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
       }
       footer={<span><T>Настройки этого режима действуют только в нём</T></span>}
     >
-      <div className="form">
-        <Choice
-          label="Дополнительных стаканов"
-          note="кроме стакана, с которого начинается игра"
-          value={setup.extraGlasses}
-          options={range(CUSTOM_LIMITS.extraGlasses[0], CUSTOM_LIMITS.extraGlasses[1]).map((n) => [n, String(n)] as const)}
-          onChange={(extraGlasses) => set({ extraGlasses })}
-        />
-        <Choice
-          label="Цветов"
-          note={
-            <span className="dots">
-              {colours.slice(0, setup.colours).map((colour, i) => (
-                <i key={i} style={{ background: colour }} />
-              ))}
-            </span>
-          }
-          value={setup.colours}
-          options={range(CUSTOM_LIMITS.colours[0], CUSTOM_LIMITS.colours[1]).map((n) => [n, String(n)] as const)}
-          onChange={(colours) => set({ colours })}
-        />
-        <Choice
-          label="Длина рукава, клеток"
-          value={setup.armLength}
-          options={range(...CUSTOM_LIMITS.armLength).map((n) => [n, String(n)] as const)}
-          onChange={(armLength) => set({ armLength })}
-        />
-        <Choice
-          label="Старт: активный стакан"
-          note="секунд на шаг фигуры"
-          value={setup.activeStep}
-          options={[
-            [0.5, '0.5'],
-            [0.75, '0.75'],
-            [1, '1'],
-            [1.5, '1.5'],
-          ]}
-          onChange={(activeStep) => set({ activeStep })}
-        />
-        <Choice
-          label="Старт: остальные стаканы"
-          note="секунд на шаг фигуры"
-          value={setup.inactiveStep}
-          options={[
-            [1.5, '1.5'],
-            [2, '2'],
-            [3, '3'],
-            [4, '4'],
-            [6, '6'],
-          ]}
-          onChange={(inactiveStep) => set({ inactiveStep })}
-        />
-        <Toggle label="Ускорять падение" value={setup.speedUp} onChange={(speedUp) => set({ speedUp })} />
-        {setup.speedUp && (
-          <>
-            <Choice
-              label="Шаг ускорения"
-              note="на сколько быстрее каждый раз"
-              value={setup.speedUpStep}
-              options={[
-                [0.05, '5%'],
-                [0.1, '10%'],
-                [0.15, '15%'],
-                [0.2, '20%'],
-              ]}
-              onChange={(speedUpStep) => set({ speedUpStep })}
-            />
-            <Choice
-              label="Ускорять каждые"
-              note="очков"
-              value={setup.speedUpEvery}
-              options={[
-                [1000, '1000'],
-                [2000, '2000'],
-                [3000, '3000'],
-              ]}
-              onChange={(speedUpEvery) => set({ speedUpEvery })}
-            />
-          </>
-        )}
-        <Choice
-          label="После хлопка падает"
-          value={setup.gravityScope}
-          options={[
-            ['wholeGlass', 'всё без опоры'],
-            ['aboveCleared', 'только над дырой'],
-          ]}
-          onChange={(gravityScope) => set({ gravityScope })}
-        />
-      </div>
+      <div className="form-layout">
+        <div className="form">
+          <Choice
+            label="Дополнительных стаканов"
+            note="кроме стакана, с которого начинается игра"
+            value={setup.extraGlasses}
+            options={range(CUSTOM_LIMITS.extraGlasses[0], CUSTOM_LIMITS.extraGlasses[1]).map((n) => [n, String(n)] as const)}
+            onChange={(extraGlasses) => set({ extraGlasses })}
+          />
+          <Choice
+            label="Цветов"
+            note={
+              <span className="dots">
+                {colours.slice(0, setup.colours).map((colour, i) => (
+                  <i key={i} style={{ background: colour }} />
+                ))}
+              </span>
+            }
+            value={setup.colours}
+            options={range(CUSTOM_LIMITS.colours[0], CUSTOM_LIMITS.colours[1]).map((n) => [n, String(n)] as const)}
+            onChange={(colours) => set({ colours })}
+          />
+          <Choice
+            label="Длина рукава, клеток"
+            value={setup.armLength}
+            options={range(...CUSTOM_LIMITS.armLength).map((n) => [n, String(n)] as const)}
+            onChange={(armLength) => set({ armLength })}
+          />
+          <Choice
+            label="Старт: активный стакан"
+            note="секунд на шаг фигуры"
+            value={setup.activeStep}
+            options={[
+              [0.5, '0.5'],
+              [0.75, '0.75'],
+              [1, '1'],
+              [1.5, '1.5'],
+            ]}
+            onChange={(activeStep) => set({ activeStep })}
+          />
+          <Choice
+            label="Старт: остальные стаканы"
+            note="секунд на шаг фигуры"
+            value={setup.inactiveStep}
+            options={[
+              [1.5, '1.5'],
+              [2, '2'],
+              [3, '3'],
+              [4, '4'],
+              [6, '6'],
+            ]}
+            onChange={(inactiveStep) => set({ inactiveStep })}
+          />
+          <Toggle label="Ускорять падение" value={setup.speedUp} onChange={(speedUp) => set({ speedUp })} />
+          {setup.speedUp && (
+            <>
+              <Choice
+                label="Шаг ускорения"
+                note="на сколько быстрее каждый раз"
+                value={setup.speedUpStep}
+                options={[
+                  [0.05, '5%'],
+                  [0.1, '10%'],
+                  [0.15, '15%'],
+                  [0.2, '20%'],
+                ]}
+                onChange={(speedUpStep) => set({ speedUpStep })}
+              />
+              <Choice
+                label="Ускорять каждые"
+                note="очков"
+                value={setup.speedUpEvery}
+                options={[
+                  [1000, '1000'],
+                  [2000, '2000'],
+                  [3000, '3000'],
+                ]}
+                onChange={(speedUpEvery) => set({ speedUpEvery })}
+              />
+            </>
+          )}
+          <Choice
+            label="После хлопка падает"
+            value={setup.gravityScope}
+            options={[
+              ['wholeGlass', 'всё без опоры'],
+              ['aboveCleared', 'только над дырой'],
+            ]}
+            onChange={(gravityScope) => set({ gravityScope })}
+          />
+        </div>
 
-      <div className="summary">
-        <strong><T>
-          {glasses} {glasses === 1 ? 'стакан' : 'стакана'} · {setup.colours} цв. · рукав {setup.armLength}
-        </T></strong>
-        <span><T>{setup.speedUp ? `ускорение на ${percent}% каждые ${setup.speedUpEvery} очков` : 'скорость не меняется'}</T></span>
-      </div>
-      <div className="form__start">
-        <Button primary onClick={onStart}><T>
-          Начать
-        </T></Button>
+        <div className="summary">
+          <strong><T>
+            {glasses} {glasses === 1 ? 'стакан' : 'стакана'} · {setup.colours} цв. · рукав {setup.armLength}
+          </T></strong>
+          <span><T>{setup.speedUp ? `ускорение на ${percent}% каждые ${setup.speedUpEvery} очков` : 'скорость не меняется'}</T></span>
+        </div>
+        <div className="form__start">
+          <Button primary onClick={onStart}><T>
+            Начать
+          </T></Button>
+        </div>
       </div>
     </Screen>
   );

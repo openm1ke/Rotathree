@@ -31,6 +31,7 @@ export function TutorialPanel({
   step,
   performed,
   controls,
+  keyboard,
   onPractice,
   onNext,
   onSkip,
@@ -38,12 +39,14 @@ export function TutorialPanel({
   step: number;
   performed: boolean;
   controls: string;
+  keyboard: boolean;
   onPractice?: () => void;
   onNext: () => void;
   onSkip: () => void;
 }) {
   const { t } = useI18n();
   const [title, body] = TUTORIAL_LESSONS[step];
+  const nextEnabled = step === 0 || step === TUTORIAL_LESSONS.length - 1 || performed;
   return (
     <section className="tutorial" aria-label={t("Обучение")}>
       <div aria-live="polite">
@@ -60,17 +63,24 @@ export function TutorialPanel({
         )}
       </div>
       <div className="tutorial__actions">
-        <button type="button" className="button button--ghost" onClick={onSkip}><T>
-          Пропустить
-        </T></button>
-        <button
-          type="button"
-          className="button button--primary"
-          disabled={step !== 0 && step !== TUTORIAL_LESSONS.length - 1 && !performed}
-          onClick={onNext}
-        ><T>
-          {step === TUTORIAL_LESSONS.length - 1 ? 'Играть' : performed ? '✓ Дальше' : 'Дальше'}
-        </T></button>
+        <div className="tutorial__action">
+          <button type="button" className="button button--ghost" aria-keyshortcuts="Backspace" onClick={onSkip}><T>
+            Пропустить
+          </T></button>
+          {keyboard && <kbd>Backspace</kbd>}
+        </div>
+        <div className="tutorial__action">
+          <button
+            type="button"
+            className={`button button--primary tutorial__next ${nextEnabled ? 'is-ready' : ''}`}
+            aria-keyshortcuts="Enter"
+            disabled={!nextEnabled}
+            onClick={onNext}
+          ><T>
+            {step === TUTORIAL_LESSONS.length - 1 ? 'Играть' : performed ? '✓ Дальше' : 'Дальше'}
+          </T></button>
+          {keyboard && <kbd>Enter</kbd>}
+        </div>
       </div>
     </section>
   );
