@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'webapp/**'
+      - 'assets/i18n/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 

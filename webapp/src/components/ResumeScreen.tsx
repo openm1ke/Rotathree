@@ -1,3 +1,4 @@
+import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import type { RunSave, SavedRuns } from '../services/runSave';
 import { MODE_NAMES } from '../game/modes';
@@ -23,7 +24,7 @@ export function ResumeScreen({
       kicker="Сохранённые игры"
       title="Продолжить"
       onBack={onBack}
-      footer={<span>Каждый режим сохраняется автоматически. Другие партии остаются на месте.</span>}
+      footer={<span><T>Каждый режим сохраняется автоматически. Другие партии остаются на месте.</T></span>}
     >
       {(['campaign', 'custom', 'insane'] as const).map((mode) => {
         const save = runs[mode];
@@ -31,14 +32,14 @@ export function ResumeScreen({
         const totals = abandonedRun(save);
         return (
           <section className="group" key={mode}>
-            <h3>{MODE_NAMES[mode]}</h3>
-            <p className="hint">
+            <h3><T>{MODE_NAMES[mode]}</T></h3>
+            <p className="hint"><T>
               {save.session.mode === 'campaign' ? `Уровень ${save.session.level + 1} · ` : ''}
               {formatNumber(totals.score)} очков · {formatDuration(totals.seconds)}
-            </p>
-            <Button primary onClick={() => onResume(save)}>
+            </T></p>
+            <Button primary onClick={() => onResume(save)}><T>
               Продолжить {MODE_NAMES[mode]}
-            </Button>
+            </T></Button>
           </section>
         );
       })}

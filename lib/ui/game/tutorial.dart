@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
@@ -57,20 +58,20 @@ class TutorialPanel extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(title, style: Type.body(14, weight: FontWeight.w800)),
+                          child: LText(title, style: Type.body(14, weight: FontWeight.w800)),
                         ),
                         const SizedBox(width: 8),
-                        Text('${step + 1} / ${tutorialLessons.length}', style: Type.label(10, color: Palette.accent)),
+                        LText('${step + 1} / ${tutorialLessons.length}', style: Type.label(10, color: Palette.accent)),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(body, style: Type.body(12)),
+                    LText(body, style: Type.body(12)),
                     if (controls.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(controls, style: Type.body(11, color: Palette.accent)),
+                        child: LText(controls, style: Type.body(11, color: Palette.accent)),
                       ),
-                    if (onPractice != null) TextButton(onPressed: onPractice, child: const Text('Попробовать')),
+                    if (onPractice != null) TextButton(onPressed: onPractice, child: const LText('Попробовать')),
                   ],
                 ),
               ),
@@ -79,7 +80,7 @@ class TutorialPanel extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: TextButton(onPressed: onSkip, child: const Text('Пропустить')),
+                  child: TextButton(onPressed: onSkip, child: const LText('Пропустить')),
                 ),
                 const SizedBox(width: 8),
                 Expanded(

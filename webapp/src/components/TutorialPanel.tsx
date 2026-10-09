@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
 export const TUTORIAL_LESSONS = [
   [
     'Одна фигура — три клетки',
@@ -40,34 +42,35 @@ export function TutorialPanel({
   onNext: () => void;
   onSkip: () => void;
 }) {
+  const { t } = useI18n();
   const [title, body] = TUTORIAL_LESSONS[step];
   return (
-    <section className="tutorial" aria-label="Обучение">
+    <section className="tutorial" aria-label={t("Обучение")}>
       <div aria-live="polite">
         <div className="tutorial__heading">
-          <h2>{title}</h2>
-          <span className="kicker">{step + 1} / {TUTORIAL_LESSONS.length}</span>
+          <h2><T>{title}</T></h2>
+          <span className="kicker"><T>{step + 1} / {TUTORIAL_LESSONS.length}</T></span>
         </div>
-        <p>{body}</p>
-        {controls && <p className="tutorial__controls">{controls}</p>}
+        <p><T>{body}</T></p>
+        {controls && <p className="tutorial__controls"><T>{controls}</T></p>}
         {onPractice && (
-          <button type="button" className="chip" onClick={onPractice}>
+          <button type="button" className="chip" onClick={onPractice}><T>
             Попробовать
-          </button>
+          </T></button>
         )}
       </div>
       <div className="tutorial__actions">
-        <button type="button" className="button button--ghost" onClick={onSkip}>
+        <button type="button" className="button button--ghost" onClick={onSkip}><T>
           Пропустить
-        </button>
+        </T></button>
         <button
           type="button"
           className="button button--primary"
           disabled={step !== 0 && step !== TUTORIAL_LESSONS.length - 1 && !performed}
           onClick={onNext}
-        >
+        ><T>
           {step === TUTORIAL_LESSONS.length - 1 ? 'Играть' : performed ? '✓ Дальше' : 'Дальше'}
-        </button>
+        </T></button>
       </div>
     </section>
   );

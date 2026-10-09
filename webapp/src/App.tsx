@@ -1,3 +1,5 @@
+import { T } from './i18n/Text';
+import { I18nContext, useLanguage } from './i18n/context';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CampaignScreen } from './components/CampaignScreen';
 import { CustomScreen } from './components/CustomScreen';
@@ -47,6 +49,7 @@ type Route =
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const i18n = useLanguage(settings.language);
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [stats, setStats] = useState<Stats>(() => loadStats());
   const statsRef = useRef(stats);
@@ -280,6 +283,7 @@ export default function App() {
   }
 
   return (
+    <I18nContext.Provider value={i18n}>
     <div className="app">
       <div className="backdrop" aria-hidden="true">
         <div className="backdrop__glow backdrop__glow--a" />
@@ -290,10 +294,10 @@ export default function App() {
       <div className="app__content">{screen}</div>
       {!stored && (
         <div className="storage-notice" role="status">
-          <span>Не удалось сохранить данные. Они пока доступны только в этой вкладке.</span>
-          <button type="button" className="chip" onClick={retryStorage}>
+          <span><T>Не удалось сохранить данные. Они пока доступны только в этой вкладке.</T></span>
+          <button type="button" className="chip" onClick={retryStorage}><T>
             Повторить
-          </button>
+          </T></button>
         </div>
       )}
 
@@ -310,5 +314,6 @@ export default function App() {
         </Overlay>
       )}
     </div>
+    </I18nContext.Provider>
   );
 }

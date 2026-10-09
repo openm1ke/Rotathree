@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'i18n/strings.dart';
 
 import '../game/config/modes.dart';
 import '../game/session.dart';
@@ -17,13 +19,29 @@ import 'menu/statistics_screen.dart';
 import 'style.dart';
 import 'widgets/backdrop.dart';
 
-class RotathreeApp extends StatelessWidget {
+class RotathreeApp extends StatefulWidget {
   const RotathreeApp({super.key});
+
+  @override
+  State<RotathreeApp> createState() => _RotathreeAppState();
+}
+
+class _RotathreeAppState extends State<RotathreeApp> {
+  LanguageChoice _language = LanguageChoice.auto;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Rotathree',
+      locale: _language == LanguageChoice.auto ? null : Locale(_language.name),
+      supportedLocales: const [Locale('ru'), Locale('en')],
+      localizationsDelegates: const [
+        AppStrings.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      localeListResolutionCallback: (preferred, _) => resolveLanguage(_language, preferred ?? const []),
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -33,7 +51,11 @@ class RotathreeApp extends StatelessWidget {
         fontFamily: Type.family,
         fontFamilyFallback: Type.fallback,
       ),
-      home: const _AppRoot(),
+      home: _AppRoot(
+        onLanguageChanged: (language) {
+          if (_language != language) setState(() => _language = language);
+        },
+      ),
     );
   }
 }
@@ -43,7 +65,8 @@ enum _Screen { home, resume, campaign, custom, statistics, settings, play }
 /// The app: the screens, the route between them, and everything the player
 /// sets up, kept on the device.
 class _AppRoot extends StatefulWidget {
-  const _AppRoot();
+  const _AppRoot({required this.onLanguageChanged});
+  final ValueChanged<LanguageChoice> onLanguageChanged;
 
   @override
   State<_AppRoot> createState() => _AppRootState();
@@ -93,6 +116,7 @@ class _AppRootState extends State<_AppRoot> {
       if (!store.available) _failedWrites.add('storage');
       _stored = _failedWrites.isEmpty;
     });
+    widget.onLanguageChanged(_settings.language);
     BlockTones.setColours(_settings.palettes.activeSet.colours);
   }
 
@@ -133,6 +157,7 @@ class _AppRootState extends State<_AppRoot> {
 
   void _changeSettings(Settings next) {
     setState(() => _settings = next);
+    widget.onLanguageChanged(next.language);
     BlockTones.setColours(next.palettes.activeSet.colours);
     _saved('settings', _store!.saveSettings(next));
   }
@@ -310,12 +335,12 @@ class _AppRootState extends State<_AppRoot> {
                         child: Row(
                           children: [
                             const Expanded(
-                              child: Text(
+                              child: LText(
                                 'Не удалось сохранить данные. Они пока доступны только в этой сессии.',
                                 style: TextStyle(fontSize: 12),
                               ),
                             ),
-                            TextButton(onPressed: _retryStorage, child: const Text('Повторить')),
+                            TextButton(onPressed: _retryStorage, child: const LText('Повторить')),
                           ],
                         ),
                       ),

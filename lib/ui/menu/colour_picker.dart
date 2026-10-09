@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../data/settings.dart' show colourToHex;
@@ -41,7 +42,7 @@ class _ColourDialogState extends State<_ColourDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.name.toUpperCase(), style: Type.label(11, color: Palette.accent)),
+            LText(widget.name.toUpperCase(), style: Type.label(11, color: Palette.accent)),
             const SizedBox(height: 10),
             Container(
               height: 56,
@@ -52,7 +53,7 @@ class _ColourDialogState extends State<_ColourDialog> {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
+            LText(
               colourToHex(colour).toUpperCase(),
               style: Type.body(13, color: Palette.textDim),
               textAlign: TextAlign.center,
@@ -89,7 +90,7 @@ class _ColourDialogState extends State<_ColourDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700)),
+          LText(label, style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700)),
           Slider(
             value: value.clamp(min, max),
             min: min,
@@ -140,8 +141,8 @@ class ColourSwatch extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: Type.body(13, weight: FontWeight.w800)),
-                  Text(colourToHex(colour).toUpperCase(), style: Type.body(11, color: Palette.textDim)),
+                  LText(name, style: Type.body(13, weight: FontWeight.w800)),
+                  LText(colourToHex(colour).toUpperCase(), style: Type.body(11, color: Palette.textDim)),
                 ],
               ),
             ],

@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../style.dart';
@@ -35,7 +36,7 @@ class ScreenFrame extends StatelessWidget {
               children: [
                 if (onBack != null)
                   IconButton(
-                    tooltip: 'Назад',
+                    tooltip: context.tr('Назад'),
                     onPressed: onBack,
                     icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Palette.text),
                   ),
@@ -44,8 +45,8 @@ class ScreenFrame extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
-                      Text(title, style: Type.display(28)),
+                      LText(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
+                      LText(title, style: Type.display(28)),
                     ],
                   ),
                 ),
@@ -62,7 +63,7 @@ class ScreenFrame extends StatelessWidget {
                 if (footer != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
+                    child: LText(
                       footer!,
                       style: Type.body(12, color: Palette.textDim),
                       textAlign: TextAlign.center,
@@ -104,7 +105,7 @@ class GoButton extends StatelessWidget {
             onTap: onPressed,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-              child: Text(label, style: Type.display(17, spacing: 0.4), textAlign: TextAlign.center),
+              child: LText(label, style: Type.display(17, spacing: 0.4), textAlign: TextAlign.center),
             ),
           ),
         ),
@@ -139,7 +140,7 @@ class OutlineButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(square ? 4 : 12)),
       ),
-      child: Text(label, style: Type.body(14, weight: FontWeight.w800)),
+      child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
     );
   }
 }
@@ -152,6 +153,7 @@ class OptionChip extends StatelessWidget {
     required this.selected,
     required this.onPressed,
     this.leading,
+    this.translate = true,
     this.square = false,
   });
 
@@ -159,6 +161,7 @@ class OptionChip extends StatelessWidget {
   final bool selected;
   final VoidCallback? onPressed;
   final Widget? leading;
+  final bool translate;
   final bool square;
 
   @override
@@ -185,8 +188,9 @@ class OptionChip extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (leading != null) ...[leading!, const SizedBox(width: 8)],
-                Text(
+                LText(
                   label,
+                  translate: translate,
                   style: Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
                 ),
               ],
@@ -200,9 +204,10 @@ class OptionChip extends StatelessWidget {
 
 /// A titled block of rows on a card.
 class Section extends StatelessWidget {
-  const Section({super.key, required this.title, required this.children, this.note});
+  const Section({super.key, required this.title, required this.children, this.note, this.translateTitle = true});
 
   final String title;
+  final bool translateTitle;
   final String? note;
   final List<Widget> children;
 
@@ -220,10 +225,14 @@ class Section extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title.toUpperCase(), style: Type.label(11, color: Palette.textDim)),
+            LText(
+              title.toUpperCase(),
+              translate: translateTitle,
+              style: Type.label(11, color: Palette.textDim),
+            ),
             if (note != null) ...[
               const SizedBox(height: 4),
-              Text(
+              LText(
                 note!,
                 style: Type.body(12, color: Palette.textDim, weight: FontWeight.w500),
               ),
@@ -263,9 +272,9 @@ class OptionGroup<T> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Type.body(14, weight: FontWeight.w800)),
+          LText(label, style: Type.body(14, weight: FontWeight.w800)),
           if (note != null)
-            Text(
+            LText(
               note!,
               style: Type.body(12, color: Palette.textDim, weight: FontWeight.w500),
             ),
@@ -329,9 +338,9 @@ class SliderRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(label, style: Type.body(14, weight: FontWeight.w800)),
+                child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
               ),
-              Text(
+              LText(
                 '$text${unit.isEmpty ? '' : ' $unit'}${note == null ? '' : ' · $note'}',
                 style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
               ),
@@ -397,9 +406,9 @@ class SwitchRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: Type.body(14, weight: FontWeight.w800)),
+            child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
           ),
-          Text(
+          LText(
             value ? on : off,
             style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700),
           ),
@@ -440,7 +449,7 @@ class Keycap extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: waiting ? Palette.warning : Palette.lineStrong),
         ),
-        child: Text(
+        child: LText(
           label,
           style: Type.body(13, weight: FontWeight.w800, color: color),
           textAlign: TextAlign.center,
@@ -483,10 +492,13 @@ class DialogCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
+            LText(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
             const SizedBox(height: 4),
-            Text(title, style: Type.display(30, color: danger ? Palette.danger : Palette.text)),
-            if (note != null) ...[const SizedBox(height: 8), Text(note!, style: Type.body(14, color: Palette.textDim))],
+            LText(title, style: Type.display(30, color: danger ? Palette.danger : Palette.text)),
+            if (note != null) ...[
+              const SizedBox(height: 8),
+              LText(note!, style: Type.body(14, color: Palette.textDim)),
+            ],
             const SizedBox(height: 14),
             ...children,
           ],

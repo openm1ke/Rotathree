@@ -1,3 +1,4 @@
+import { languageChoice, type LanguageChoice } from '../i18n/catalog';
 import { DEFAULT_COLOURS, COLOUR_NAMES } from '../render/theme';
 import { defaultBindings, cloneBindings, sanitizeBindings, type Bindings } from '../input/bindings';
 import { defaultHandling, type Handling } from '../input/keyboard';
@@ -45,6 +46,7 @@ export interface Effects {
 }
 
 export interface Settings {
+  language: LanguageChoice;
   bindings: Bindings;
   handling: Handling;
   palettes: Palettes;
@@ -71,6 +73,7 @@ export const BUILTIN_PALETTES: PaletteSet[] = [
 ];
 
 export const defaultSettings = (): Settings => ({
+  language: 'auto',
   bindings: cloneBindings(defaultBindings),
   handling: { ...defaultHandling },
   palettes: { active: 'classic', sets: BUILTIN_PALETTES.map((set) => ({ ...set, colours: [...set.colours] })) },
@@ -129,6 +132,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     ) as PadLayout;
   };
   return {
+    language: languageChoice(stored.language),
     bindings: sanitizeBindings(stored.bindings),
     padPositions: sanitizePositions(stored.padPositions),
     pads: { left: pad(pads.left, DEFAULT_PADS.left), right: pad(pads.right, DEFAULT_PADS.right) },

@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -11,6 +13,7 @@ export function Overlay({
   onDismiss?: () => void;
   label?: string;
 }) {
+  const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(document.activeElement as HTMLElement | null);
   useEffect(() => {
@@ -38,7 +41,7 @@ export function Overlay({
       className="overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={label}
+      aria-label={t(label)}
       tabIndex={-1}
       onKeyDown={(event) => {
         if (event.defaultPrevented) return;
@@ -100,12 +103,12 @@ export function Screen({
   return (
     <main className={`screen ${className}`} ref={rootRef as RefObject<HTMLElement>}>
       <header className="screen__head">
-        <button type="button" className="back" data-nav onClick={onBack}>
+        <button type="button" className="back" data-nav onClick={onBack}><T>
           ← Назад
-        </button>
+        </T></button>
         <div className="screen__title">
-          {kicker && <span className="kicker">{kicker}</span>}
-          <h1>{title}</h1>
+          {kicker && <span className="kicker"><T>{kicker}</T></span>}
+          <h1><T>{title}</T></h1>
         </div>
         <div className="screen__actions">{actions}</div>
       </header>
@@ -136,7 +139,7 @@ export function Chip({
       disabled={disabled}
       onClick={onClick}
     >
-      {children}
+      <T>{children}</T>
     </button>
   );
 }
@@ -146,8 +149,8 @@ export function Row({ label, note, children }: { label: string; note?: ReactNode
   return (
     <div className="row">
       <div className="row__label">
-        <span>{label}</span>
-        {note && <small>{note}</small>}
+        <span><T>{label}</T></span>
+        {note && <small><T>{note}</T></small>}
       </div>
       <div className="row__control">{children}</div>
     </div>
@@ -172,9 +175,9 @@ export function Choice<T extends string | number | boolean>({
     <Row label={label} note={note}>
       <div className="chips">
         {options.map(([option, text]) => (
-          <Chip key={String(option)} active={option === value} onClick={() => onChange(option)}>
+          <Chip key={String(option)} active={option === value} onClick={() => onChange(option)}><T>
             {text}
-          </Chip>
+          </T></Chip>
         ))}
       </div>
     </Row>
@@ -201,11 +204,12 @@ export function Slider({
   note?: string;
   onChange: (value: number) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Row label={label} note={note}>
       <div className="slider">
         <input
-          aria-label={label}
+          aria-label={t(label)}
           type="range"
           min={min}
           max={max}
@@ -213,9 +217,9 @@ export function Slider({
           value={value}
           onChange={(event) => onChange(Number(event.target.value))}
         />
-        <output>
+        <output><T>
           {Number.isInteger(value) ? value : value.toFixed(2)} {unit}
-        </output>
+        </T></output>
       </div>
     </Row>
   );
@@ -273,7 +277,7 @@ export function Button({
       className={`button ${primary ? 'button--primary' : ''} ${ghost ? 'button--ghost' : ''}`}
       onClick={onClick}
     >
-      {children}
+      <T>{children}</T>
     </button>
   );
 }

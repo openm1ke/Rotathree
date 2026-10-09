@@ -134,6 +134,7 @@ test('controls follow viewport changes and remain visible in a mobile landscape 
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.locator('.dpad')).toHaveCount(0);
   const context = await browser.newContext({
+    locale: 'ru-RU',
     userAgent: 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36',
     viewport: { width: 900, height: 500 },
   });
@@ -146,4 +147,81 @@ test('controls follow viewport changes and remain visible in a mobile landscape 
   const canvas = await mobile.getByLabel('Игровое поле').boundingBox();
   expect(canvas!.y + canvas!.height).toBeLessThanOrEqual(501);
   await context.close();
+});
+
+async function expectEnglish(page: Page) {
+  const russian = (await page.locator('body').innerText()).replaceAll('Русский', '');
+  expect(russian).not.toMatch(/[А-Яа-яЁё]/);
+}
+
+test('manual language applies immediately, persists and preserves a frozen game', async ({ page }) => {
+  await startCampaign(page);
+  await finishLevel(page);
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await page.getByRole('button', { name: 'Интерфейс', exact: true }).click();
+  const snapshot = await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot());
+  await page.locator('[data-language="en"]').click();
+  await expect(page.getByRole('button', { name: 'Interface', exact: true })).toBeVisible();
+  await expectEnglish(page);
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+  expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(snapshot);
+  await page.getByRole('button', { name: '← Back', exact: true }).click();
+  await expect(page.getByText('Level 1 complete', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.getByRole('button', { name: 'Main menu', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: /Continue.*Saved games/ }).click();
+  await page.getByRole('button', { name: 'Continue Campaign', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Pause', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(snapshot);
+  await page.getByRole('dialog', { name: 'Pause', exact: true }).getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Interface', exact: true }).click();
+  await page.locator('[data-language="auto"]').click();
+  await expect(page.getByRole('button', { name: 'Интерфейс', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe('ru');
+});
+
+test.describe('automatic English locale', () => {
+  test.use({ locale: 'en-GB' });
+  test('every menu and settings tab has English text', async ({ page }) => {
+    await page.goto('/');
+    for (const title of ['Campaign', 'Custom', 'Statistics', 'Settings']) {
+      await page.getByRole('button', { name: new RegExp(title) }).click();
+      await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+      await expectEnglish(page);
+      if (title === 'Settings') {
+        for (const tab of ['Colors', 'Effects', 'Interface', 'Controls']) {
+          await page.getByRole('button', { name: tab, exact: true }).click();
+          await expectEnglish(page);
+        }
+        await page.getByRole('button', { name: 'Colors', exact: true }).click();
+        await page.getByRole('button', { name: 'Copy current palette', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'My palette 1', exact: true })).toBeVisible();
+        await expectEnglish(page);
+      }
+      await page.getByRole('button', { name: '← Back', exact: true }).click();
+    }
+  });
+  test('phone tutorial translates instructions and accessible D-pad actions', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto('/');
+    await page.getByRole('button', { name: /Tutorial/ }).click();
+    const left = page.getByRole('group', { name: 'Left D-pad' });
+    const right = page.getByRole('group', { name: 'Right D-pad' });
+    await expectEnglish(page);
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await left.getByRole('button', { name: 'Move the piece right', exact: true }).click();
+    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await right.getByRole('button', { name: 'Rotate the piece a quarter turn', exact: true }).click();
+    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await left.getByRole('button', { name: 'Drop the piece instantly', exact: true }).click();
+    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase)).toBe('playing');
+    await right.getByRole('button', { name: 'Bring the right glass to the top', exact: true }).click();
+    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await expectEnglish(page);
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: /Campaign/ })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
 });

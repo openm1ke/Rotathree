@@ -6,6 +6,7 @@ export default defineConfig({
   workers: 2,
   fullyParallel: true,
   use: {
+    locale: 'ru-RU',
     baseURL: 'http://127.0.0.1:5183',
     // Local Chrome is already installed; CI installs Playwright Chromium.
     channel: process.env.CI ? undefined : 'chrome',

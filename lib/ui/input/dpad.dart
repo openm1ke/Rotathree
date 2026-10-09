@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import 'game_action.dart';
@@ -100,7 +101,7 @@ class _DPadState extends State<DPad> {
       child: Semantics(
         button: true,
         enabled: _actionOf(slot) != GameAction.none,
-        label: _actionOf(slot).hint,
+        label: context.tr(_actionOf(slot).hint),
         excludeSemantics: true,
         onTap: _actionOf(slot) == GameAction.none
             ? null
@@ -207,7 +208,7 @@ class _PadButton extends StatelessWidget {
                     if (showLabel && slot != PadSlot.center)
                       Padding(
                         padding: EdgeInsets.only(top: size * 0.02),
-                        child: Text(
+                        child: LText(
                           padActionCaption(action),
                           maxLines: 1,
                           overflow: TextOverflow.clip,

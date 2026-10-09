@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -761,16 +762,16 @@ class GameScreenState extends State<GameScreen>
                             TextButton.icon(
                               onPressed: handleBack,
                               icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                              label: const Text('Назад'),
+                              label: const LText('Назад'),
                             ),
                             const Spacer(),
                           ] else ...[
                             Expanded(
-                              child: Text(modeTitle(_mode), style: Type.body(14, weight: FontWeight.w800)),
+                              child: LText(modeTitle(_mode), style: Type.body(14, weight: FontWeight.w800)),
                             ),
-                            TextButton(onPressed: _togglePause, child: const Text('Пауза')),
+                            TextButton(onPressed: _togglePause, child: const LText('Пауза')),
                           ],
-                          TextButton(onPressed: widget.onSettings, child: const Text('Настройки')),
+                          TextButton(onPressed: widget.onSettings, child: const LText('Настройки')),
                         ],
                       ),
                     ),
@@ -996,8 +997,8 @@ class _RunStats extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
-                Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                Expanded(child: LText(label, style: const TextStyle(fontSize: 14))),
+                LText(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
               ],
             ),
           ),

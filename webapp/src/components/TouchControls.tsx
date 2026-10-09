@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n/context';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { Settings } from '../services/storage';
 import { movePad, padAreaHeight, padGeometry, type PadPositions, type PadSide } from '../input/padPlacement';
@@ -17,6 +18,7 @@ export function TouchControls({
   onUp: (action: PadAction) => void;
   onEdit?: (positions: PadPositions) => void;
 }) {
+  const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState({
     width: Math.max(280, window.innerWidth - 16),
@@ -80,7 +82,7 @@ export function TouchControls({
               style={{ left: r.x, top: r.y, width: r.size, height: r.size }}
               role={onEdit ? 'button' : undefined}
               tabIndex={onEdit ? 0 : undefined}
-              aria-label={onEdit ? `Переместить: ${label}` : undefined}
+              aria-label={onEdit ? t(`Переместить: ${label}`) : undefined}
               onPointerDown={
                 onEdit
                   ? (event) => {

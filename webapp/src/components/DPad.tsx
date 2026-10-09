@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS } from '../input/bindings';
 import { PAD_SLOTS, type PadAction, type PadLayout } from '../input/pads';
@@ -46,6 +48,7 @@ export function DPad({
   onDown: (action: PadAction) => void;
   onUp: (action: PadAction) => void;
 }) {
+  const { t } = useI18n();
   const held = useRef(new Map<number, PadAction>());
   const callbacks = useRef({ onDown, onUp });
   callbacks.current = { onDown, onUp };
@@ -70,7 +73,7 @@ export function DPad({
     setPressed([...held.current.values()]);
   };
   return (
-    <div className="dpad" role="group" aria-label={label}>
+    <div className="dpad" role="group" aria-label={t(label)}>
       {PAD_SLOTS.map((slot) => {
         const action = layout[slot];
         return (
@@ -79,7 +82,7 @@ export function DPad({
             type="button"
             className={`dpad__button dpad__button--${slot} ${pressed.includes(action) ? 'is-pressed' : ''}`}
             disabled={disabled || action === 'none'}
-            aria-label={ACTIONS.find((a) => a.id === action)?.hint ?? 'Не назначено'}
+            aria-label={t(ACTIONS.find((a) => a.id === action)?.hint ?? 'Не назначено')}
             onPointerDown={(event) => {
               if (event.button !== 0 || disabled || action === 'none') return;
               event.preventDefault();
@@ -101,7 +104,7 @@ export function DPad({
             <span aria-hidden="true" className="dpad__icon">
               {ICONS[action]}
             </span>
-            {showLabels && <small aria-hidden="true">{CAPTIONS[action]}</small>}
+            {showLabels && <small aria-hidden="true"><T>{CAPTIONS[action]}</T></small>}
           </button>
         );
       })}

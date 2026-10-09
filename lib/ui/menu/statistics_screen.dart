@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../../game/config/modes.dart';
@@ -33,7 +34,7 @@ class StatisticsScreen extends StatelessWidget {
           title: 'Последние партии',
           children: [
             if (stats.recent.isEmpty)
-              Text(
+              LText(
                 'Пока ни одной партии. Первая появится здесь после конца игры.',
                 style: Type.body(13, color: Palette.textDim),
               )
@@ -75,7 +76,7 @@ class _ModeCard extends StatelessWidget {
           : 'Режим',
       note: _descriptions[mode],
       children: [
-        Text(modeTitle(mode), style: Type.display(22)),
+        LText(modeTitle(mode), style: Type.display(22)),
         const SizedBox(height: 8),
         for (final (label, value) in lines)
           Padding(
@@ -83,9 +84,9 @@ class _ModeCard extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(label, style: Type.body(13, color: Palette.textDim)),
+                  child: LText(label, style: Type.body(13, color: Palette.textDim)),
                 ),
-                Text(value, style: Type.body(14, weight: FontWeight.w800)),
+                LText(value, style: Type.body(14, weight: FontWeight.w800)),
               ],
             ),
           ),
@@ -107,10 +108,13 @@ class _RunRow extends StatelessWidget {
     return 'скорость ${run.level}';
   }
 
-  String get _when {
+  String _when(BuildContext context) {
     final at = DateTime.fromMillisecondsSinceEpoch(run.at);
     String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(at.day)}.${two(at.month)} ${two(at.hour)}:${two(at.minute)}';
+    final date = AppStrings.of(context).language == 'en'
+        ? '${two(at.month)}/${two(at.day)}'
+        : '${two(at.day)}.${two(at.month)}';
+    return '$date ${two(at.hour)}:${two(at.minute)}';
   }
 
   @override
@@ -121,21 +125,21 @@ class _RunRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 84,
-            child: Text(_when, style: Type.body(12, color: Palette.textDim)),
+            child: LText(_when(context), style: Type.body(12, color: Palette.textDim)),
           ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${modeTitle(run.mode)} · $_outcome', style: Type.body(13, weight: FontWeight.w800)),
-                Text(
+                LText('${modeTitle(run.mode)} · $_outcome', style: Type.body(13, weight: FontWeight.w800)),
+                LText(
                   '${formatDuration(run.seconds)} · ${run.pieces} фиг. · ×${run.bestCombo}',
                   style: Type.body(12, color: Palette.textDim),
                 ),
               ],
             ),
           ),
-          Text(
+          LText(
             formatNumber(run.score),
             style: Type.body(15, weight: FontWeight.w900, color: Palette.accent),
           ),

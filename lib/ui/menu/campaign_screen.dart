@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -115,11 +116,11 @@ class _LevelTile extends StatelessWidget {
       button: true,
       enabled: !locked,
       excludeSemantics: true,
-      label: 'Уровень ${index + 1}, цель ${level.target}',
-      hint: description,
+      label: context.tr('Уровень ${index + 1}, цель ${level.target}'),
+      hint: context.tr(description),
       onTap: locked ? null : onTap,
       child: Tooltip(
-        message: description,
+        message: context.tr(description),
         child: Opacity(
           opacity: locked ? 0.45 : 1,
           child: Material(
@@ -138,7 +139,7 @@ class _LevelTile extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text((index + 1).toString().padLeft(2, '0'), style: Type.display(24)),
+                        LText((index + 1).toString().padLeft(2, '0'), style: Type.display(24)),
                         Icon(
                           locked
                               ? Icons.lock_outline_rounded
@@ -173,9 +174,9 @@ class _LevelTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('${level.glasses} ст. · $step с/шаг', style: Type.body(11)),
+                    LText('${level.glasses} ст. · $step с/шаг', style: Type.body(11)),
                     const SizedBox(height: 8),
-                    Text('Цель ${formatNumber(level.target)}', style: Type.body(12, color: Palette.textDim)),
+                    LText('Цель ${formatNumber(level.target)}', style: Type.body(12, color: Palette.textDim)),
                   ],
                 ),
               ),

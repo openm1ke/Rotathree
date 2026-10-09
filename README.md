@@ -60,6 +60,17 @@ Mobile control settings include draggable previews and independent pad sizes
 area below the field and cannot overlap. Placement adapts to resizing and is
 shared by regular games and training. Reset controls restores size and placement.
 
+The interface supports Russian and English. Settings → Interface offers Auto,
+Русский (Russian flag) and English (UK flag). Auto uses the first supported
+language in the device/browser preference list, falling back to English. The
+choice is saved locally and takes effect without restarting a game.
+
+Both frontends share `assets/i18n/en.json`: Russian source messages are keys;
+English translations are values. Named `{parameters}` describe formatted UI
+messages and also translate banners restored from older saves. Add messages to
+this catalog and render them with Flutter `LText` / `context.tr` or React `T` /
+`useI18n().t`. Keep user palette names outside translation.
+
 ## Checks
 
 ```bash

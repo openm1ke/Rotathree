@@ -1,3 +1,6 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
+import { LanguagePicker } from '../i18n/LanguagePicker';
 import { TouchControls } from './TouchControls';
 import { DEFAULT_POSITIONS } from '../input/padPlacement';
 import { useEffect, useRef, useState } from 'react';
@@ -47,6 +50,7 @@ interface Props {
 const newId = (): string => `custom-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 export function SettingsScreen({ settings, stored, overlay, active, onChange, onBack }: Props) {
+  const { t } = useI18n();
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   const [tab, setTab] = useState<Tab>('controls');
@@ -82,19 +86,19 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
         <>
           {touch ? (
             <>
-              <p className="hint">
+              <p className="hint"><T>
                 Назначьте действия кнопкам обеих крестовин. Их можно нажимать одновременно; настройки действуют и в
                 обучении.
-              </p>
+              </T></p>
               <section className="group">
-                <h3>Размер и положение</h3>
-                <p className="hint">
+                <h3><T>Размер и положение</T></h3>
+                <p className="hint"><T>
                   Перетащите крестовины внутри выделенной области под полем. Они остаются в пределах экрана и не
                   перекрывают друг друга.
-                </p>
-                <div className="pad-preview-field" aria-hidden="true">
+                </T></p>
+                <div className="pad-preview-field" aria-hidden="true"><T>
                   Игровое поле
-                </div>
+                </T></div>
                 <TouchControls
                   settings={settings}
                   onDown={() => {}}
@@ -121,10 +125,10 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               </section>
               {(['left', 'right'] as const).map((side) => (
                 <section className="group" key={side}>
-                  <h3>{side === 'left' ? 'Левая крестовина' : 'Правая крестовина'}</h3>
+                  <h3><T>{side === 'left' ? 'Левая крестовина' : 'Правая крестовина'}</T></h3>
                   {PAD_SLOTS.map((slot) => (
                     <label className="row" key={slot}>
-                      <span className="row__label">{SLOT_LABELS[slot]}</span>
+                      <span className="row__label"><T>{SLOT_LABELS[slot]}</T></span>
                       <select
                         className="pad-select"
                         value={settings.pads[side][slot]}
@@ -135,11 +139,11 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                           })
                         }
                       >
-                        <option value="none">Не назначено</option>
+                        <option value="none"><T>Не назначено</T></option>
                         {ACTIONS.map((action) => (
-                          <option key={action.id} value={action.id}>
+                          <option key={action.id} value={action.id}><T>
                             {action.label}
-                          </option>
+                          </T></option>
                         ))}
                       </select>
                     </label>
@@ -149,18 +153,18 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
             </>
           ) : (
             <>
-              <p className="hint">
+              <p className="hint"><T>
                 Нажмите на действие, затем на новую клавишу. Esc — отмена, Backspace — очистить. Клавиша, занятая другим
                 действием, переходит к новому. Клавиша поворота против часовой и мягкий сброс по умолчанию не назначены.
-              </p>
+              </T></p>
               {GROUPS.map((group) => (
                 <section className="group" key={group}>
-                  <h3>{GROUP_TITLES[group]}</h3>
+                  <h3><T>{GROUP_TITLES[group]}</T></h3>
                   {ACTIONS.filter((action) => action.group === group).map((action) => (
                     <div className="bind" key={action.id}>
                       <div className="bind__name">
-                        <span>{action.label}</span>
-                        <small>{action.hint}</small>
+                        <span><T>{action.label}</T></span>
+                        <small><T>{action.hint}</T></small>
                       </div>
                       <div className="bind__keys">
                         {Array.from({ length: SLOTS_PER_ACTION }, (_, slot) => {
@@ -175,9 +179,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                               data-nav
                               className={`bind__key ${waiting ? 'is-waiting' : ''} ${code ? '' : 'is-empty'}`}
                               onClick={() => setCapture(waiting ? null : { action: action.id, slot })}
-                            >
+                            ><T>
                               {waiting ? 'нажмите…' : code ? keyLabel(code) : '+'}
-                            </button>
+                            </T></button>
                           );
                         })}
                       </div>
@@ -188,7 +192,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
             </>
           )}
           <section className="group">
-            <h3>Автоповтор движения</h3>
+            <h3><T>Автоповтор движения</T></h3>
             <Slider
               label="Задержка перед повтором (DAS)"
               value={settings.handling.dasMs}
@@ -224,9 +228,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                   handling: { ...defaultHandling },
                 })
               }
-            >
+            ><T>
               Сбросить управление
-            </Button>
+            </T></Button>
           </div>
         </>
       );
@@ -238,7 +242,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
       body = (
         <>
           <section className="group">
-            <h3>Взрывы</h3>
+            <h3><T>Взрывы</T></h3>
             <Choice<ExplosionStyle>
               label="Анимация взрыва"
               note="как взрываются линии после исчезновения фигур"
@@ -249,13 +253,13 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               ]}
               onChange={(explosion) => onChange({ ...settings, effects: { ...settings.effects, explosion } })}
             />
-            <p className="hint">
+            <p className="hint"><T>
               Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой.
               Одновременные линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.
-            </p>
+            </T></p>
           </section>
           <section className="group">
-            <h3>Поле</h3>
+            <h3><T>Поле</T></h3>
             <Toggle
               label="Толчки и тряска поля"
               value={settings.effects.screenShake}
@@ -278,8 +282,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
     case 'interface':
       body = (
         <>
+          <LanguagePicker value={settings.language} onChange={(language) => onChange({ ...settings, language })} />
           <section className="group">
-            <h3>Надписи на поле</h3>
+            <h3><T>Надписи на поле</T></h3>
             <Toggle
               label={touch ? 'Подписи экранных кнопок' : 'Подсказки клавиш'}
               value={settings.hud.keyHints}
@@ -312,9 +317,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
             />
           </section>
           <div className="form__start">
-            <Button ghost onClick={() => onChange({ ...settings, hud: defaults.hud, effects: defaults.effects })}>
+            <Button ghost onClick={() => onChange({ ...settings, hud: defaults.hud, effects: defaults.effects })}><T>
               Сбросить интерфейс
-            </Button>
+            </T></Button>
           </div>
         </>
       );
@@ -330,17 +335,17 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
       onBack={onBack}
       footer={
         stored ? (
-          <span>Всё сохраняется на этом устройстве сразу</span>
+          <span><T>Всё сохраняется на этом устройстве сразу</T></span>
         ) : (
-          <span className="warn">Браузер не даёт сохранить настройки: после перезагрузки они сбросятся</span>
+          <span className="warn"><T>Браузер не даёт сохранить настройки: после перезагрузки они сбросятся</T></span>
         )
       }
     >
-      <nav className="tabs" aria-label="Разделы настроек">
+      <nav className="tabs" aria-label={t("Разделы настроек")}>
         {TABS.map(([id, title]) => (
-          <Chip key={id} active={tab === id} onClick={() => setTab(id)}>
+          <Chip key={id} active={tab === id} onClick={() => setTab(id)}><T>
             {title}
-          </Chip>
+          </T></Chip>
         ))}
       </nav>
       {body}
@@ -351,13 +356,14 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
 /** The palettes: pick one, copy it, delete a copy, and change its colours. A
  * built-in set is copied before it is changed. */
 function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (next: Settings) => void }) {
+  const { t } = useI18n();
   const palettes: Palettes = settings.palettes;
   const active = palettes.sets.find((set) => set.id === palettes.active) ?? palettes.sets[0];
 
   const copy = () => {
     const set = {
       id: newId(),
-      name: `Мой набор ${palettes.sets.length - 2}`,
+      name: t(`Мой набор ${palettes.sets.length - 2}`),
       colours: [...active.colours],
       builtin: false,
     };
@@ -376,7 +382,7 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
     if (active.builtin) {
       const set = {
         id: newId(),
-        name: `${active.name} · мой`.slice(0, 24),
+        name: t(`${t(active.name)} · мой`).slice(0, 24),
         colours: active.colours.map((colour, i) => (i === slot ? hex : colour)),
         builtin: false,
       };
@@ -392,7 +398,7 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
   return (
     <>
       <section className="group">
-        <h3>Наборы</h3>
+        <h3><T>Наборы</T></h3>
         <div className="chips">
           {palettes.sets.map((set) => (
             <Chip
@@ -400,35 +406,35 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
               active={set.id === active.id}
               onClick={() => onChange({ ...settings, palettes: { ...palettes, active: set.id } })}
             >
-              {set.name}
+              <T translate={set.builtin}>{set.name}</T>
             </Chip>
           ))}
         </div>
         <div className="chips chips--spaced">
-          <Button onClick={copy}>Новый набор из текущего</Button>
+          <Button onClick={copy}><T>Новый набор из текущего</T></Button>
           {!active.builtin && (
-            <Button ghost onClick={remove}>
+            <Button ghost onClick={remove}><T>
               Удалить набор
-            </Button>
+            </T></Button>
           )}
         </div>
       </section>
 
       <section className="group">
-        <h3>Цвета фигур · {active.name}</h3>
-        <p className="hint">Стандартные наборы не меняются: изменяя цвет, вы получаете свою копию.</p>
+        <h3><T>Цвета фигур</T> · <T translate={active.builtin}>{active.name}</T></h3>
+        <p className="hint"><T>Стандартные наборы не меняются: изменяя цвет, вы получаете свою копию.</T></p>
         <div className="swatches">
           {COLOUR_NAMES.map((name, slot) => (
             <label className="swatch" key={slot}>
               <input
                 type="color"
                 value={active.colours[slot]}
-                aria-label={name}
+                aria-label={t(name)}
                 onChange={(event) => edit(slot, event.target.value)}
               />
               <span className="swatch__text">
-                <span className="swatch__name">{name}</span>
-                <code>{active.colours[slot].toUpperCase()}</code>
+                <span className="swatch__name"><T>{name}</T></span>
+                <code><T>{active.colours[slot].toUpperCase()}</T></code>
               </span>
             </label>
           ))}
@@ -436,7 +442,7 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
       </section>
 
       <section className="group">
-        <h3>Так это выглядит</h3>
+        <h3><T>Так это выглядит</T></h3>
         <div className="preview">
           {active.colours.map((colour, i) => (
             <div key={i} className="preview__block" style={{ background: colour }} />

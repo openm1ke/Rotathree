@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../input/game_action.dart';
+import '../i18n/strings.dart';
 import '../input/pad_placement.dart';
 import '../style.dart';
 import 'bindings.dart';
@@ -226,6 +227,7 @@ class Settings {
     required this.leftPad,
     required this.rightPad,
     this.padPositions = const PadPositions(),
+    this.language = LanguageChoice.auto,
   });
 
   factory Settings.defaults() => Settings(
@@ -253,6 +255,7 @@ class Settings {
     final hud = section('hud');
     final pads = section('pads');
     return Settings(
+      language: LanguageChoice.fromJson(map['language']),
       padPositions: PadPositions.fromJson(map['padPositions']),
       bindings: sanitizeBindings(map['bindings']),
       handling: Handling(
@@ -276,6 +279,7 @@ class Settings {
     );
   }
 
+  final LanguageChoice language;
   final Bindings bindings;
   final Handling handling;
   final Palettes palettes;
@@ -286,6 +290,7 @@ class Settings {
   final PadPositions padPositions;
 
   Settings copyWith({
+    LanguageChoice? language,
     Bindings? bindings,
     Handling? handling,
     Palettes? palettes,
@@ -296,6 +301,7 @@ class Settings {
     PadPositions? padPositions,
   }) =>
       Settings(
+        language: language ?? this.language,
         bindings: bindings ?? this.bindings,
         handling: handling ?? this.handling,
         palettes: palettes ?? this.palettes,
@@ -307,6 +313,7 @@ class Settings {
       );
 
   Map<String, Object?> toJson() => {
+        'language': language.name,
         'bindings': {
           for (final action in keyActions)
             action.name: [for (final key in bindings[action]!) keyToJson(key)],

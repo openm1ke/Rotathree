@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../../game/config/campaign.dart';
@@ -98,8 +99,8 @@ class _CalloutView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = callout.isSpeed
-        ? Text('Скорость ${callout.speed}', style: Type.display(base * 1.3, color: Palette.warning))
-        : Text(
+        ? LText('Скорость ${callout.speed}', style: Type.display(base * 1.3, color: Palette.warning))
+        : LText(
             callout.combo > 1 ? '+${callout.points}  ${callout.combo}× комбо' : '+${callout.points}',
             style: Type.display(base * 1.5, color: Palette.accent),
           );
@@ -137,22 +138,22 @@ class GameReadout extends StatelessWidget {
               if (options.score) ...[
                 Row(
                   children: [
-                    Expanded(child: Text('${formatNumber(hud.score)} очков', style: Type.display(20))),
+                    Expanded(child: LText('${formatNumber(hud.score)} очков', style: Type.display(20))),
                     if (hud.level > 0)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
+                          LText(
                             'Уровень ${hud.level} / ${campaignLevels.length}',
                             style: Type.body(11, color: Palette.accent),
                           ),
-                          Text(
+                          LText(
                             '${formatNumber(hud.into)} / ${formatNumber(hud.target)}',
                             style: Type.body(11, color: Palette.textDim),
                           ),
                         ],
                       ),
-                    if (hud.speed > 0) Text('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
+                    if (hud.speed > 0) LText('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
                   ],
                 ),
                 if (hud.target > 0) ...[
@@ -168,7 +169,7 @@ class GameReadout extends StatelessWidget {
               if (options.stats)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text(
+                  child: LText(
                     '${formatClock(hud.seconds)} · Фигуры ${hud.pieces} · Матчи ${hud.matches} · Комбо ×${hud.bestCombo}',
                     style: Type.body(11, color: Palette.textDim),
                   ),

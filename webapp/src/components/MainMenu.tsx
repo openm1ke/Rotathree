@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import { CAMPAIGN_LAST } from '../game/campaign';
 import type { Progress } from '../services/storage';
@@ -46,6 +48,7 @@ interface Props {
 
 /** The first screen: a column of large entries, the progress on the side. */
 export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, onResume, onTutorial }: Props) {
+  const { t } = useI18n();
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, () => {});
@@ -75,22 +78,22 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
         </h1>
       </header>
 
-      <nav className="home__nav" aria-label="Главное меню">
+      <nav className="home__nav" aria-label={t("Главное меню")}>
         {savedRuns && Object.keys(savedRuns).length > 0 && (
           <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
             <span className="navitem__text">
-              <span className="navitem__title">Продолжить</span>
-              <span className="navitem__caption">Сохранённые игры</span>
+              <span className="navitem__title"><T>Продолжить</T></span>
+              <span className="navitem__caption"><T>Сохранённые игры</T></span>
             </span>
           </button>
         )}
         {onTutorial && (
           <button type="button" data-nav className="navitem" onClick={onTutorial}>
             <span className="navitem__text">
-              <span className="navitem__title">Обучение</span>
-              <span className="navitem__caption">
+              <span className="navitem__title"><T>Обучение</T></span>
+              <span className="navitem__caption"><T>
                 {tutorialDone ? 'Повторить основы' : 'Правила на практике'}
-              </span>
+              </T></span>
             </span>
           </button>
         )}
@@ -104,10 +107,10 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
             onClick={() => onOpen(item.id)}
           >
             <span className="navitem__text">
-              <span className="navitem__title">{item.title}</span>
-              <span className="navitem__caption">
+              <span className="navitem__title"><T>{item.title}</T></span>
+              <span className="navitem__caption"><T>
                 {item.caption}
-              </span>
+              </T></span>
             </span>
           </button>
         ))}
@@ -115,25 +118,25 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
 
       <aside className="home__side">
         <div className="card">
-          <span className="kicker">Кампания</span>
-          <strong>
+          <span className="kicker"><T>Кампания</T></span>
+          <strong><T>
             {progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1} из ${CAMPAIGN_LAST + 1}`}
-          </strong>
+          </T></strong>
           <div className="progressbar">
             <i style={{ width: `${(100 * opened) / (CAMPAIGN_LAST + 1)}%` }} />
           </div>
         </div>
         <div className={`card ${progress.completed ? '' : 'is-locked'}`}>
-          <span className="kicker">Кошмар</span>
-          <strong>{progress.completed ? 'открыт' : 'откроется после кампании'}</strong>
+          <span className="kicker"><T>Кошмар</T></span>
+          <strong><T>{progress.completed ? 'открыт' : 'откроется после кампании'}</T></strong>
         </div>
       </aside>
 
       {!touch && (
         <footer className="home__foot">
-          <span>↑ ↓ выбрать</span>
-          <span>Enter открыть</span>
-          <span>Esc назад в меню</span>
+          <span><T>↑ ↓ выбрать</T></span>
+          <span><T>Enter открыть</T></span>
+          <span><T>Esc назад в меню</T></span>
         </footer>
       )}
     </main>

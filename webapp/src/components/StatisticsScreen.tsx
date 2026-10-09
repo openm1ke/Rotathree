@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import { MODE_NAMES, type ModeId } from '../game/modes';
 import type { ModeStats, Progress, RunRecord, Stats } from '../services/storage';
@@ -22,6 +24,7 @@ const DESCRIPTIONS: Record<ModeId, string> = {
 
 /** Totals and records of every mode, and the last runs. */
 export function StatisticsScreen({ stats, progress, onBack, active }: Props) {
+  const { language } = useI18n();
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, onBack);
   return (
@@ -33,39 +36,39 @@ export function StatisticsScreen({ stats, progress, onBack, active }: Props) {
       </div>
 
       <section className="runs">
-        <h2>Последние партии</h2>
+        <h2><T>Последние партии</T></h2>
         {stats.recent.length === 0 ? (
-          <p className="empty">Пока ни одной партии. Первая появится здесь после конца игры.</p>
+          <p className="empty"><T>Пока ни одной партии. Первая появится здесь после конца игры.</T></p>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>Когда</th>
-                <th>Режим</th>
-                <th>Итог</th>
-                <th>Очки</th>
-                <th>Фигуры</th>
-                <th>Комбо</th>
-                <th>Время</th>
+                <th><T>Когда</T></th>
+                <th><T>Режим</T></th>
+                <th><T>Итог</T></th>
+                <th><T>Очки</T></th>
+                <th><T>Фигуры</T></th>
+                <th><T>Комбо</T></th>
+                <th><T>Время</T></th>
               </tr>
             </thead>
             <tbody>
               {stats.recent.map((run) => (
                 <tr key={run.id}>
-                  <td>
-                    {new Date(run.at).toLocaleString('ru-RU', {
+                  <td><T>
+                    {new Date(run.at).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', {
                       day: '2-digit',
                       month: '2-digit',
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
-                  </td>
-                  <td>{MODE_NAMES[run.mode]}</td>
-                  <td>{outcome(run)}</td>
-                  <td>{formatNumber(run.score)}</td>
-                  <td>{run.pieces}</td>
-                  <td>×{run.bestCombo}</td>
-                  <td>{formatDuration(run.seconds)}</td>
+                  </T></td>
+                  <td><T>{MODE_NAMES[run.mode]}</T></td>
+                  <td><T>{outcome(run)}</T></td>
+                  <td><T>{formatNumber(run.score)}</T></td>
+                  <td><T>{run.pieces}</T></td>
+                  <td><T>×{run.bestCombo}</T></td>
+                  <td><T>{formatDuration(run.seconds)}</T></td>
                 </tr>
               ))}
             </tbody>
@@ -87,11 +90,11 @@ function ModeCard({ mode, stats, progress }: { mode: ModeId; stats: ModeStats; p
   return (
     <section className="mode-card">
       <header>
-        <span className="kicker">
+        <span className="kicker"><T>
           {mode === 'campaign' ? `${progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1}`}` : 'режим'}
-        </span>
-        <h2>{MODE_NAMES[mode]}</h2>
-        <p>{DESCRIPTIONS[mode]}</p>
+        </T></span>
+        <h2><T>{MODE_NAMES[mode]}</T></h2>
+        <p><T>{DESCRIPTIONS[mode]}</T></p>
       </header>
       <dl>
         <Line label="Партий" value={String(stats.games)} />
@@ -117,8 +120,8 @@ function ModeCard({ mode, stats, progress }: { mode: ModeId; stats: ModeStats; p
 function Line({ label, value, main }: { label: string; value: string; main?: boolean }) {
   return (
     <div className={`line ${main ? 'line--main' : ''}`}>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
+      <dt><T>{label}</T></dt>
+      <dd><T>{value}</T></dd>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/context';
+import { T } from '../i18n/Text';
 import { useEffect, useRef, useState } from 'react';
 import { CAMPAIGN, CAMPAIGN_LAST, levelConfig, startsStage } from '../game/campaign';
 import { GameEngine, type GameEvent } from '../game/engine';
@@ -76,6 +78,7 @@ const newId = (): string => `${Date.now().toString(36)}${Math.random().toString(
  * the campaign's levels and turns key presses into engine input. The parent
  * re-keys it for every new game, so a session never changes under it. */
 export function GameScreen(props: Props) {
+  const { t } = useI18n();
   const { session, settings, blocked, tutorial = false } = props;
   const touch = useTouchControls();
   const runId = useRef(props.restore?.id ?? newId());
@@ -735,25 +738,25 @@ export function GameScreen(props: Props) {
       {(touch || tutorial) && (
         <header className={`touch-hud ${tutorial ? 'tutorial-hud' : ''}`}>
           {tutorial ? (
-            <button type="button" className="chip" onClick={props.onExit}>← Назад</button>
+            <button type="button" className="chip" onClick={props.onExit}><T>← Назад</T></button>
           ) : (
             <>
               <div>
-                <strong>{formatScore(hud.score)} очков</strong>
-                <small>
+                <strong><T>{formatScore(hud.score)} очков</T></strong>
+                <small><T>
                   {campaign
                     ? `Уровень ${level + 1} · ${formatScore(hud.into)} / ${formatScore(hud.target)}`
                     : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
-                </small>
+                </T></small>
               </div>
-              <button type="button" className="chip" onClick={() => actions.current.togglePause()}>
+              <button type="button" className="chip" onClick={() => actions.current.togglePause()}><T>
                 Пауза
-              </button>
+              </T></button>
             </>
           )}
-          <button type="button" className="chip" onClick={props.onSettings}>
+          <button type="button" className="chip" onClick={props.onSettings}><T>
             Настройки
-          </button>
+          </T></button>
         </header>
       )}
       {!touch && !tutorial && <div className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
@@ -774,7 +777,7 @@ export function GameScreen(props: Props) {
             ref={canvasRef}
             className="stage__canvas"
             tabIndex={0}
-            aria-label="Игровое поле"
+            aria-label={t("Игровое поле")}
             style={{ width: size, height: size }}
             onClick={onCanvasClick}
           />
@@ -811,32 +814,32 @@ export function GameScreen(props: Props) {
       {!tutorial && status === 'paused' && !blocked && (
         <Overlay label="Пауза" onDismiss={() => actions.current.togglePause()}>
           <div className="dialog dialog--narrow">
-            <span className="kicker">
+            <span className="kicker"><T>
               {mode}
               {playingLevel ? ` · уровень ${level + 1} из ${CAMPAIGN_LAST + 1}` : ''}
-            </span>
-            <h2 className="dialog__title">Пауза</h2>
+            </T></span>
+            <h2 className="dialog__title"><T>Пауза</T></h2>
             {playingLevel && (
-              <p className="dialog__note">
+              <p className="dialog__note"><T>
                 Цель {formatScore(playingLevel.target)} очков · {playingLevel.colours} цв. · {playingLevel.glasses} ст.
-              </p>
+              </T></p>
             )}
             <div className="dialog__actions">
-              <Button primary autoFocus onClick={() => actions.current.togglePause()}>
+              <Button primary autoFocus onClick={() => actions.current.togglePause()}><T>
                 Продолжить
-              </Button>
-              <Button onClick={() => actions.current.retry()}>{retryLabel}</Button>
-              <Button onClick={props.onSettings}>Настройки</Button>
+              </T></Button>
+              <Button onClick={() => actions.current.retry()}><T>{retryLabel}</T></Button>
+              <Button onClick={props.onSettings}><T>Настройки</T></Button>
               {session.mode === 'custom' && !tutorial && (
-                <Button onClick={() => actions.current.leave(props.onCustomise)}>Изменить режим</Button>
+                <Button onClick={() => actions.current.leave(props.onCustomise)}><T>Изменить режим</T></Button>
               )}
               {session.mode !== 'custom' && (
-                <Button onClick={() => actions.current.leave(props.onLevels)}>К уровням</Button>
+                <Button onClick={() => actions.current.leave(props.onLevels)}><T>К уровням</T></Button>
               )}
-              {!tutorial && <Button onClick={() => actions.current.leave(props.onExit, true)}>В меню</Button>}
-              <Button ghost onClick={() => actions.current.leave(props.onExit, false)}>
+              {!tutorial && <Button onClick={() => actions.current.leave(props.onExit, true)}><T>В меню</T></Button>}
+              <Button ghost onClick={() => actions.current.leave(props.onExit, false)}><T>
                 {tutorial ? 'В меню' : 'Завершить партию'}
-              </Button>
+              </T></Button>
             </div>
           </div>
         </Overlay>
@@ -845,24 +848,24 @@ export function GameScreen(props: Props) {
       {status === 'over' && result && !blocked && (
         <Overlay>
           <div className="dialog dialog--narrow">
-            <span className="kicker">{mode}</span>
-            <h2 className="dialog__title dialog__title--danger">Игра окончена</h2>
-            <p className="dialog__note">
+            <span className="kicker"><T>{mode}</T></span>
+            <h2 className="dialog__title dialog__title--danger"><T>Игра окончена</T></h2>
+            <p className="dialog__note"><T>
               {SLOT_NAMES[overSlot]} стакан заполнился до конца рукава.
               {campaign && ' Уровень не пройден: начнём его заново или выберем другой.'}
-            </p>
+            </T></p>
             <Stats record={result} campaign={campaign} />
             <div className="dialog__actions">
-              <Button primary autoFocus onClick={() => actions.current.retry()}>
+              <Button primary autoFocus onClick={() => actions.current.retry()}><T>
                 {retryLabel}
-              </Button>
+              </T></Button>
               {session.mode === 'custom' && !tutorial && (
-                <Button onClick={() => actions.current.leave(props.onCustomise)}>Изменить режим</Button>
+                <Button onClick={() => actions.current.leave(props.onCustomise)}><T>Изменить режим</T></Button>
               )}
-              {campaign && <Button onClick={props.onLevels}>К уровням</Button>}
-              <Button ghost onClick={props.onExit}>
+              {campaign && <Button onClick={props.onLevels}><T>К уровням</T></Button>}
+              <Button ghost onClick={props.onExit}><T>
                 В меню
-              </Button>
+              </T></Button>
             </div>
           </div>
         </Overlay>
@@ -871,18 +874,18 @@ export function GameScreen(props: Props) {
       {status === 'done' && result && !blocked && (
         <Overlay>
           <div className="dialog dialog--narrow">
-            <span className="kicker">Кампания</span>
-            <h2 className="dialog__title">Кампания пройдена</h2>
-            <p className="dialog__note">Все {CAMPAIGN_LAST + 1} уровней позади. Кошмар открыт.</p>
+            <span className="kicker"><T>Кампания</T></span>
+            <h2 className="dialog__title"><T>Кампания пройдена</T></h2>
+            <p className="dialog__note"><T>Все {CAMPAIGN_LAST + 1} уровней позади. Кошмар открыт.</T></p>
             <Stats record={result} campaign />
             <div className="dialog__actions">
-              <Button primary autoFocus onClick={props.onInsane}>
+              <Button primary autoFocus onClick={props.onInsane}><T>
                 Кошмар
-              </Button>
-              <Button onClick={props.onLevels}>К уровням</Button>
-              <Button ghost onClick={props.onExit}>
+              </T></Button>
+              <Button onClick={props.onLevels}><T>К уровням</T></Button>
+              <Button ghost onClick={props.onExit}><T>
                 В меню
-              </Button>
+              </T></Button>
             </div>
           </div>
         </Overlay>
@@ -897,29 +900,29 @@ function Stats({ record, campaign }: { record: RunRecord; campaign: boolean }) {
     <dl className="stats">
       {campaign && (
         <div className="stats__row stats__row--main">
-          <dt>Уровень</dt>
-          <dd>{record.completed ? CAMPAIGN_LAST + 1 : record.level}</dd>
+          <dt><T>Уровень</T></dt>
+          <dd><T>{record.completed ? CAMPAIGN_LAST + 1 : record.level}</T></dd>
         </div>
       )}
       <div className={`stats__row ${campaign ? '' : 'stats__row--main'}`}>
-        <dt>Очки</dt>
-        <dd>{formatNumber(record.score)}</dd>
+        <dt><T>Очки</T></dt>
+        <dd><T>{formatNumber(record.score)}</T></dd>
       </div>
       <div className="stats__row">
-        <dt>Фигуры</dt>
-        <dd>{record.pieces}</dd>
+        <dt><T>Фигуры</T></dt>
+        <dd><T>{record.pieces}</T></dd>
       </div>
       <div className="stats__row">
-        <dt>Матчи</dt>
-        <dd>{record.matches}</dd>
+        <dt><T>Матчи</T></dt>
+        <dd><T>{record.matches}</T></dd>
       </div>
       <div className="stats__row">
-        <dt>Лучшее комбо</dt>
-        <dd>×{record.bestCombo}</dd>
+        <dt><T>Лучшее комбо</T></dt>
+        <dd><T>×{record.bestCombo}</T></dd>
       </div>
       <div className="stats__row">
-        <dt>Время</dt>
-        <dd>{formatDuration(record.seconds)}</dd>
+        <dt><T>Время</T></dt>
+        <dd><T>{formatDuration(record.seconds)}</T></dd>
       </div>
     </dl>
   );

@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../../game/config/campaign.dart';
@@ -123,8 +124,8 @@ class _NavItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: Type.display(22)),
-                      Text(caption, style: Type.body(12, color: Palette.textDim)),
+                      LText(title, style: Type.display(22)),
+                      LText(caption, style: Type.body(12, color: Palette.textDim)),
                     ],
                   ),
                 ),
@@ -161,9 +162,9 @@ class _InfoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
+            LText(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
             const SizedBox(height: 4),
-            Text(value, style: Type.body(15, weight: FontWeight.w800)),
+            LText(value, style: Type.body(15, weight: FontWeight.w800)),
             if (fraction != null) ...[
               const SizedBox(height: 10),
               ClipRRect(

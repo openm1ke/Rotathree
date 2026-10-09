@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../../game/config/modes.dart';
@@ -154,12 +155,12 @@ class CustomScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              LText(
                 '$glasses ${glasses == 1 ? 'стакан' : 'стакана'} · ${setup.colours} цв. · рукав ${setup.armLength}',
                 style: Type.body(15, weight: FontWeight.w800),
               ),
               const SizedBox(height: 4),
-              Text(
+              LText(
                 setup.speedUp
                     ? 'ускорение на ${(setup.speedUpStep * 100).round()}% каждые ${setup.speedUpEvery} очков'
                     : 'скорость не меняется',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/ui/app.dart';
 import 'package:rotathree/ui/data/store.dart';
+import 'package:rotathree/ui/i18n/strings.dart';
 import 'package:rotathree/game/config/modes.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +23,8 @@ void main() {
   });
 
   testWidgets('the menu opens and leads to the campaign', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
 
@@ -41,6 +44,8 @@ void main() {
   });
 
   testWidgets('a custom game can be set up and started', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
 
@@ -57,6 +62,8 @@ void main() {
 
   testWidgets('new players see training and can skip into the chosen game', (tester) async {
     SharedPreferences.setMockInitialValues({});
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
     await tester.tap(find.text('Кастом'));
@@ -78,6 +85,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
     await tester.tap(find.text('Кампания'));
@@ -112,6 +121,8 @@ void main() {
   });
 
   testWidgets('mobile settings show pads without keyboard customization', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
     await tester.ensureVisible(find.text('Настройки'));
@@ -121,5 +132,62 @@ void main() {
     expect(find.text('ЭКРАННЫЕ КНОПКИ'), findsOneWidget);
     expect(find.textContaining('новую клавишу'), findsNothing);
     expect(find.textContaining('Клавиши'), findsNothing);
+  });
+  testWidgets('auto detects English and manual language survives restart', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('en', 'GB')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    expect(find.text('Campaign'), findsWidgets);
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.tap(find.text('Settings'));
+    await settle(tester);
+    await tester.tap(find.text('Interface'));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('language-ru')));
+    await settle(tester);
+    expect(find.text('Интерфейс'), findsOneWidget);
+    expect((await AppStore.open()).loadSettings().language, LanguageChoice.ru);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    expect(find.text('Кампания'), findsWidgets);
+    await tester.ensureVisible(find.text('Настройки'));
+    await tester.tap(find.text('Настройки'));
+    await settle(tester);
+    await tester.tap(find.text('Интерфейс'));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('language-auto')));
+    await settle(tester);
+    expect(find.text('Interface'), findsOneWidget);
+    expect((await AppStore.open()).loadSettings().language, LanguageChoice.auto);
+  });
+
+  testWidgets('switching the language in a game keeps its engine and snapshot', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    await tester.tap(find.text('Кампания'));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('campaign-level-0')));
+    await settle(tester);
+    final state = tester.state<GameScreenState>(find.byType(GameScreen));
+    await tester.tap(find.text('Настройки'));
+    await settle(tester);
+    final snapshot = state.engine.snapshot();
+    await tester.tap(find.text('Интерфейс'));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('language-en')));
+    await settle(tester);
+    expect(find.text('Interface'), findsOneWidget);
+    expect(tester.state<GameScreenState>(find.byType(GameScreen)), same(state));
+    expect(state.engine.snapshot(), snapshot);
+    expect(find.text('Pause'), findsWidgets);
+    await tester.tap(find.byTooltip('Back'));
+    await settle(tester);
+    expect(find.text('Pause'), findsOneWidget);
+    expect(tester.state<GameScreenState>(find.byType(GameScreen)), same(state));
+    expect(tester.takeException(), isNull);
   });
 }

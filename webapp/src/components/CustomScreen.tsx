@@ -1,3 +1,4 @@
+import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import { CUSTOM_LIMITS, DEFAULT_CUSTOM, type CustomSetup } from '../game/modes';
 import { Button, Choice, Screen, Toggle } from './ui';
@@ -31,11 +32,11 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
       title="Кастом"
       onBack={onBack}
       actions={
-        <Button ghost onClick={() => onChange({ ...DEFAULT_CUSTOM })}>
+        <Button ghost onClick={() => onChange({ ...DEFAULT_CUSTOM })}><T>
           Сбросить
-        </Button>
+        </T></Button>
       }
-      footer={<span>Настройки этого режима действуют только в нём</span>}
+      footer={<span><T>Настройки этого режима действуют только в нём</T></span>}
     >
       <div className="form">
         <Choice
@@ -129,15 +130,15 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
       </div>
 
       <div className="summary">
-        <strong>
+        <strong><T>
           {glasses} {glasses === 1 ? 'стакан' : 'стакана'} · {setup.colours} цв. · рукав {setup.armLength}
-        </strong>
-        <span>{setup.speedUp ? `ускорение на ${percent}% каждые ${setup.speedUpEvery} очков` : 'скорость не меняется'}</span>
+        </T></strong>
+        <span><T>{setup.speedUp ? `ускорение на ${percent}% каждые ${setup.speedUpEvery} очков` : 'скорость не меняется'}</T></span>
       </div>
       <div className="form__start">
-        <Button primary onClick={onStart}>
+        <Button primary onClick={onStart}><T>
           Начать
-        </Button>
+        </T></Button>
       </div>
     </Screen>
   );

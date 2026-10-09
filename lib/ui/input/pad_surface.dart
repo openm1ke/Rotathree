@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../data/settings.dart';
@@ -67,7 +68,7 @@ class _PadSurfaceState extends State<PadSurface> {
     if (!preview) return pad;
     void move(Offset point) => widget.onEdit!(movePad(_start, side, point, area));
     return Semantics(
-      label: 'Переместить: ${side == PadSide.left ? 'Левая' : 'Правая'} крестовина',
+      label: context.tr('Переместить: ${side == PadSide.left ? 'Левая' : 'Правая'} крестовина'),
       onIncrease: () =>
           widget.onEdit!(movePad(widget.settings.padPositions, side, rect.topLeft + const Offset(8, 0), area)),
       onDecrease: () =>

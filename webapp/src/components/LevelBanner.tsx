@@ -1,3 +1,4 @@
+import { T } from '../i18n/Text';
 /** A message over the field: a level finished, a new stage, a new glass. */
 export interface BannerData {
   id: number;
@@ -15,9 +16,9 @@ export function LevelBanner({ banner }: { banner: BannerData }) {
     <div className="banner" key={banner.id} role="status" style={{ ['--life' as string]: `${banner.seconds}s` }}>
       <div className="banner__sweep" />
       <div className="banner__card">
-        <span className="banner__kicker">{banner.kicker}</span>
-        <span className="banner__title">{banner.title}</span>
-        {banner.sub && <span className="banner__sub">{banner.sub}</span>}
+        <span className="banner__kicker"><T>{banner.kicker}</T></span>
+        <span className="banner__title"><T>{banner.title}</T></span>
+        {banner.sub && <span className="banner__sub"><T>{banner.sub}</T></span>}
         {banner.colours && (
           <span className="banner__dots">
             {banner.colours.map((colour, i) => (

@@ -1,3 +1,4 @@
+import '../i18n/strings.dart';
 import 'package:flutter/widgets.dart';
 
 import '../style.dart';
@@ -49,12 +50,12 @@ class LevelBanner extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(banner.kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
+              LText(banner.kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
               const SizedBox(height: 2),
-              Text(banner.title, style: Type.display(24), textAlign: TextAlign.center),
+              LText(banner.title, style: Type.display(24), textAlign: TextAlign.center),
               if (banner.sub != null) ...[
                 const SizedBox(height: 2),
-                Text(banner.sub!, style: Type.body(13, color: Palette.textDim), textAlign: TextAlign.center),
+                LText(banner.sub!, style: Type.body(13, color: Palette.textDim), textAlign: TextAlign.center),
               ],
               if (banner.colours.isNotEmpty) ...[
                 const SizedBox(height: 8),

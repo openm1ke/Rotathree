@@ -1,6 +1,8 @@
+import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import '../data/settings.dart';
+import '../i18n/language_picker.dart';
 import '../input/game_action.dart';
 import '../input/pad_placement.dart';
 import '../input/pad_surface.dart';
@@ -94,7 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             height: 56,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: Palette.bg, borderRadius: BorderRadius.circular(8)),
-            child: Text('Игровое поле', style: Type.body(13, color: Palette.textDim)),
+            child: LText('Игровое поле', style: Type.body(13, color: Palette.textDim)),
           ),
           PadSurface(
             settings: s,
@@ -185,14 +187,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Text('$pad · ${slot.label}', style: Type.body(13, weight: FontWeight.w700)),
+            child: LText('$pad · ${slot.label}', style: Type.body(13, weight: FontWeight.w700)),
           ),
           DropdownButton<GameAction>(
             value: layout[slot]!,
             dropdownColor: Palette.panelStrong,
             underline: const SizedBox.shrink(),
             style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
-            items: [for (final action in GameAction.values) DropdownMenuItem(value: action, child: Text(action.label))],
+            items: [
+              for (final action in GameAction.values) DropdownMenuItem(value: action, child: LText(action.label)),
+            ],
             onChanged: (action) {
               if (action != null) onChanged(action);
             },
@@ -222,6 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               for (final set in palettes.sets)
                 OptionChip(
                   label: set.name,
+                  translate: set.builtin,
                   selected: set.id == active.id,
                   onPressed: () => _setPalettes(palettes.copyWith(active: set.id)),
                 ),
@@ -252,7 +257,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       Section(
-        title: 'Цвета фигур · ${active.name}',
+        title: '${context.tr('Цвета фигур')} · ${active.builtin ? context.tr(active.name) : active.name}',
+        translateTitle: false,
         note: 'Стандартные наборы не меняются: изменяя цвет, вы получаете свою копию.',
         children: [
           Wrap(
@@ -295,7 +301,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _copyActive(Palettes palettes, PaletteSet active) {
     final set = PaletteSet(
       id: _newId(),
-      name: 'Мой набор ${palettes.sets.length - builtinPalettes.length + 1}',
+      name: context.tr('Мой набор ${palettes.sets.length - builtinPalettes.length + 1}'),
       colours: List.of(active.colours),
     );
     _setPalettes(palettes.copyWith(active: set.id, sets: [...palettes.sets, set]));
@@ -308,7 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final colours = [for (var i = 0; i < active.colours.length; i++) i == slot ? picked : active.colours[i]];
     if (active.builtin) {
       // A built-in set is copied before it is changed.
-      final name = '${active.name} · мой';
+      final name = context.tr('${context.tr(active.name)} · мой');
       final set = PaletteSet(id: _newId(), name: name.length > 24 ? name.substring(0, 24) : name, colours: colours);
       _setPalettes(palettes.copyWith(active: set.id, sets: [...palettes.sets, set]));
     } else {
@@ -340,7 +346,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             onChanged: (explosion) => _setEffects(e.copyWith(explosion: explosion)),
           ),
-          Text(
+          LText(
             'Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой. '
             'Одновременные линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.',
             style: Type.body(12, color: Palette.textDim),
@@ -381,6 +387,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _interface() {
     final h = widget.settings.hud;
     return [
+      Section(
+        title: 'Язык',
+        note: 'Авто — по языку устройства',
+        children: [
+          LanguagePicker(
+            value: widget.settings.language,
+            onChanged: (language) => widget.onChange(widget.settings.copyWith(language: language)),
+          ),
+        ],
+      ),
       Section(
         title: 'Надписи на поле',
         children: [
