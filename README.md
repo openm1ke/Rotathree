@@ -107,8 +107,9 @@ A release without these values fails explicitly instead of using the debug key.
 Pull requests and main pushes run Flutter analysis, tests and a debug APK build, plus
 web checks and browser regression tests in `.github/workflows/checks.yml`.
 
-The campaign picker is one list with colour count, glass count and active fall
-step (seconds) on every level. Custom arm lengths range from 4 through 12 cells.
-The field camera fits only visible glasses: an added glass first opens space,
-then grows its arm. Readouts stay above the canvas. Reduced motion skips the
+The campaign picker is a centered grid of compact level tiles with palette
+swatches, glass count, active fall step (seconds), and score target. Custom arm
+lengths range from 4 through 12 cells. The field camera fits visible glasses
+around a fixed board center, including during rotations and the growth of new
+arms. Readouts stay above the canvas. Reduced motion skips the
 camera/growth animation. Mode IDs and existing saves remain compatible.

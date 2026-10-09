@@ -23,12 +23,34 @@ void main() {
     reduceMotion: reduced,
   );
 
-  test('one glass fills the available field and every added glass steps back', () {
+  test('camera reserves space around the board center and every added glass steps back', () {
     final views = [for (var count = 1; count <= 4; count++) view(glassOrder.take(count).toList())];
-    expect(views.first.span, 15);
-    expect(views.first.span, lessThan(views.last.span * 0.65));
+    expect(views.first.span, 24);
     for (var i = 1; i < views.length; i++) {
       expect(views[i].span, greaterThan(views[i - 1].span));
+    }
+  });
+
+  test('board origin stays in the canvas center during every rotation and building phase', () {
+    for (var count = 1; count <= 4; count++) {
+      final sides = glassOrder.take(count).toList();
+      final config = GameConfig(glassCount: count);
+      for (var step = 0; step <= 32; step++) {
+        for (final progress in [0.0, 0.2, 0.4, 0.75, 1.0]) {
+          final angle = step * math.pi / 16;
+          expect(view(sides, angle: angle, building: sides.last, progress: progress).center, Offset.zero);
+          final geometry = FieldGeometry(
+            320,
+            config,
+            devicePixelRatio: 3,
+            angle: angle,
+            sides: sides,
+            building: sides.last,
+            progress: progress,
+          );
+          expect(geometry.origin, const Offset(160, 160));
+        }
+      }
     }
   });
 
@@ -68,7 +90,7 @@ void main() {
     }
   });
 
-  test('touch targets follow the zoom and translated center and ignore absent arms', () {
+  test('touch targets follow the zoom around the fixed center and ignore absent arms', () {
     const config = GameConfig(glassCount: 2);
     final g = FieldGeometry(320, config, devicePixelRatio: 3);
     expect(g.zoneAt(g.origin), FieldZone.center);

@@ -3,11 +3,23 @@ import { GLASS_ORDER } from '../game/config';
 import { fieldViewport } from '../render/viewport';
 
 describe('field camera', () => {
-  it('uses more of the canvas with one glass and steps back with each addition', () => {
+  it('reserves space around the board center and steps back with each addition', () => {
     const views = [1, 2, 3, 4].map((count) => fieldViewport(6, 9, GLASS_ORDER.slice(0, count)));
-    expect(views[0].span).toBe(15);
-    expect(views[0].span).toBeLessThan(views[3].span * 0.65);
+    expect(views[0].span).toBe(24);
     for (let i = 1; i < views.length; i++) expect(views[i].span).toBeGreaterThan(views[i - 1].span);
+  });
+
+  it('keeps the board centered throughout rotations and building with any glass count', () => {
+    for (let count = 1; count <= 4; count++) {
+      const sides = GLASS_ORDER.slice(0, count);
+      for (let step = 0; step <= 32; step++) for (const progress of [0, 0.2, 0.4, 0.75, 1]) {
+        const v = fieldViewport(6, 9, sides, step * Math.PI / 16, sides[count - 1], progress);
+        expect(v.cx).toBe(0);
+        expect(v.cy).toBe(0);
+        expect(v.left).toBe(-v.right);
+        expect(v.top).toBe(-v.bottom);
+      }
+    }
   });
 
   it('reframes before growing, and ends at the exact stable camera', () => {

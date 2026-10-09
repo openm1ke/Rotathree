@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import '../../game/model/side.dart';
 
-/// Fit only the arms in play; reframe before growing a new arm into the space.
+/// Fit arms around the fixed board center; make room before growing a new arm.
 class FieldViewport {
   const FieldViewport(this.bounds, this.grow);
   final Rect bounds;
@@ -40,7 +40,10 @@ class FieldViewport {
       for (final side in visible) {
         rect(-half, -half - armLength, half, -half, angle + side.index * math.pi / 2);
       }
-      return result.inflate(math.max(0, visible.length - 1) * 0.25);
+      final pad = math.max(0, visible.length - 1) * 0.25;
+      final rx = math.max(result.left.abs(), result.right.abs()) + pad;
+      final ry = math.max(result.top.abs(), result.bottom.abs()) + pad;
+      return Rect.fromLTRB(-rx, -ry, rx, ry);
     }
 
     double ease(double t) => 1 - math.pow(1 - t.clamp(0, 1), 3).toDouble();

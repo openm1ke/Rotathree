@@ -572,22 +572,40 @@ input:focus-visible {
 
 /* -------------------------------------------------------------- campaign */
 
-.levels {
+.screen--campaign .screen__body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-width: 860px;
+}
+
+.campaign-picker {
+  width: 100%;
+  max-width: 712px;
+  margin: auto;
+  flex: none;
+}
+
+.screen--campaign .screen__foot {
+  justify-content: center;
+  text-align: center;
+}
+
+.levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
 }
 
 .level-card {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
-  padding: 14px 16px;
+  min-width: 0;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--panel);
-  text-align: left;
+  text-align: center;
 }
 
 .level-card:hover:not(:disabled), .level-card:focus-visible {
@@ -610,6 +628,7 @@ input:focus-visible {
 }
 
 .level-card__head {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -617,40 +636,46 @@ input:focus-visible {
 }
 
 .level-card__head strong {
-  font-size: 20px;
+  font-size: 24px;
+  line-height: 1;
 }
 
-.level-card__target, .level-card__meta {
+.level-card__target {
   font-size: 12px;
   color: var(--text-dim);
 }
 
-.level-card.is-open .level-card__meta {
+.level-card__state {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+.level-card.is-open .level-card__state {
   color: var(--accent);
 }
 
-.level-card__badges {
+.level-card.is-done .level-card__state {
+  color: #2fd985;
+}
+
+.level-card__colours {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
-.level-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel-strong);
-  font-size: 12px;
-  font-weight: 700;
+.level-card__colours i {
+  width: 10px;
+  height: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
 }
 
-.level-badge i {
-  width: 8px;
-  height: 8px;
-  border-radius: 1px;
+.level-card__rules {
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .nightmare {
@@ -659,7 +684,7 @@ input:focus-visible {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
-  max-width: 860px;
+  width: 100%;
   padding: 18px 16px;
   margin-top: 20px;
   border: 1px solid var(--pink);
@@ -1924,6 +1949,17 @@ select:focus-visible {
 }
 
 @media (max-width: 600px) {
+  .screen--campaign .screen__head {
+    gap: 12px;
+  }
+
+  .screen--campaign .back {
+    flex: none;
+    min-height: 44px;
+    padding-inline: 10px;
+    white-space: nowrap;
+  }
+
   .home__side {
     flex-direction: column;
     gap: 8px;

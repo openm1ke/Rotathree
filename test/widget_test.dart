@@ -31,9 +31,13 @@ void main() {
     await tester.tap(find.text('Кампания'));
     await settle(tester);
     expect(find.text('Кампания'), findsWidgets);
-    expect(find.text('Цвета: 3'), findsWidgets);
-    expect(find.text('Стаканы: 1'), findsWidgets);
-    expect(find.text('Скорость: 1 с/шаг'), findsWidgets);
+    final swatches = find.descendant(
+      of: find.byKey(const ValueKey('campaign-colours-0')),
+      matching: find.byType(Container),
+    );
+    expect(swatches, findsNWidgets(3));
+    expect(find.text('1 ст. · 1 с/шаг'), findsWidgets);
+    expect(find.text('Цель 1\u00a0200'), findsOneWidget);
   });
 
   testWidgets('a custom game can be set up and started', (tester) async {
@@ -78,7 +82,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Кампания'));
     await settle(tester);
-    await tester.tap(find.text('Уровень 1'));
+    await tester.tap(find.byKey(const ValueKey('campaign-level-0')));
     await settle(tester);
     await tester.binding.handlePopRoute();
     await settle(tester);
