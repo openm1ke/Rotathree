@@ -98,6 +98,10 @@ flutter run --profile -t tool/frame_bench.dart   # build and raster time of a bu
 
 ## Android release
 
+The shared app/browser logo lives in [`assets/branding/`](assets/branding/README.md).
+Run `python3 tool/generate_icons.py` with librsvg installed to regenerate the iOS,
+Android (including adaptive/themed) and web icons from the same SVG source.
+
 Debug builds retain the existing application ID. Release builds require the owner's
 publishing ID and release key: copy `android/key.properties.example` to the ignored
 `android/key.properties`, then set `ROTATHREE_APPLICATION_ID`. Equivalent environment

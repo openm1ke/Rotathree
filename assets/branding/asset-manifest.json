@@ -1,0 +1,21 @@
+{
+  "asset": "rotathree-primary-logo",
+  "approved_by": "project owner in this conversation",
+  "approved_date": "2026-10-09",
+  "reference": {
+    "file": "approved-concept.png",
+    "sha256": "30ee7497dd89087adf21e2369b5e321b864e8021df06a0b268d03f6f359f2643",
+    "tool": "OpenAI built-in image_gen",
+    "generation_id": "exec-848068f8-8c67-48ab-b87f-dd6f50359f61",
+    "direction": "Nine large colored squares in a cross; almost-black cool background matching the fine-grid concept; coarse grid at one cell per block, barely visible."
+  },
+  "production_source": "logo.svg",
+  "normalization": "Vector reconstruction with equal square tiles, constant spacing, subtle tile gradients, a coarse faint grid and full-bleed background; platform masks supply outer corner shape.",
+  "exports": {
+    "ios": "Opaque RGB PNGs in ios/Runner/Assets.xcassets/AppIcon.appiconset",
+    "android": "Legacy density PNGs plus separate adaptive background, colored foreground and monochrome vectors; mark fits the 66 dp circular safe zone.",
+    "web": "SVG and PNG favicons, Apple touch icon, 192/512 px home-screen icons and a maskable icon referenced by site.webmanifest"
+  },
+  "regenerate": "python3 tool/generate_icons.py",
+  "third_party_artwork": false
+}

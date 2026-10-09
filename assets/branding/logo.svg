@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Rotathree</title>
+  <desc>Nine colored squares forming a cross on a dark, faint square grid.</desc>
+  <defs>
+    <pattern id="grid" x="92" y="92" width="168" height="168" patternUnits="userSpaceOnUse">
+      <path d="M168 0H0V168" fill="none" stroke="#1c1d27" stroke-width="3"/>
+    </pattern>
+    <linearGradient id="yellow" x2="0.25" y2="1">
+      <stop stop-color="#ffdc27"/>
+      <stop offset="1" stop-color="#ffca14"/>
+    </linearGradient>
+    <linearGradient id="blue" x2="0.25" y2="1">
+      <stop stop-color="#367eff"/>
+      <stop offset="1" stop-color="#2d73f5"/>
+    </linearGradient>
+    <linearGradient id="red" x2="0.25" y2="1">
+      <stop stop-color="#ff2d5f"/>
+      <stop offset="1" stop-color="#ff2858"/>
+    </linearGradient>
+    <linearGradient id="orange" x2="0.25" y2="1">
+      <stop stop-color="#ff8b1b"/>
+      <stop offset="1" stop-color="#ff7d0d"/>
+    </linearGradient>
+    <linearGradient id="white" x2="0.25" y2="1">
+      <stop stop-color="#edf4ff"/>
+      <stop offset="1" stop-color="#e4eeff"/>
+    </linearGradient>
+    <linearGradient id="green" x2="0.25" y2="1">
+      <stop stop-color="#0be296"/>
+      <stop offset="1" stop-color="#05d47f"/>
+    </linearGradient>
+    <linearGradient id="purple" x2="0.25" y2="1">
+      <stop stop-color="#aa56ff"/>
+      <stop offset="1" stop-color="#a048f7"/>
+    </linearGradient>
+    <linearGradient id="cyan" x2="0.25" y2="1">
+      <stop stop-color="#00dff0"/>
+      <stop offset="1" stop-color="#00d0e2"/>
+    </linearGradient>
+    <linearGradient id="pink" x2="0.25" y2="1">
+      <stop stop-color="#ff53bd"/>
+      <stop offset="1" stop-color="#ff40ad"/>
+    </linearGradient>
+  </defs>
+  <rect id="background" width="1024" height="1024" fill="#10111b"/>
+  <rect width="1024" height="1024" fill="url(#grid)"/>
+  <g id="tiles">
+    <rect x="432" y="96" width="160" height="160" rx="14" fill="url(#yellow)"/>
+    <rect x="432" y="264" width="160" height="160" rx="14" fill="url(#blue)"/>
+    <rect x="96" y="432" width="160" height="160" rx="14" fill="url(#red)"/>
+    <rect x="264" y="432" width="160" height="160" rx="14" fill="url(#orange)"/>
+    <rect x="432" y="432" width="160" height="160" rx="14" fill="url(#white)"/>
+    <rect x="600" y="432" width="160" height="160" rx="14" fill="url(#green)"/>
+    <rect x="768" y="432" width="160" height="160" rx="14" fill="url(#purple)"/>
+    <rect x="432" y="600" width="160" height="160" rx="14" fill="url(#cyan)"/>
+    <rect x="432" y="768" width="160" height="160" rx="14" fill="url(#pink)"/>
+  </g>
+</svg>
