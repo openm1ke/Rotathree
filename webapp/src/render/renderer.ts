@@ -118,6 +118,8 @@ export class GameRenderer {
   private visible: readonly Side[] = [];
   private viewAngle = 0;
   private grow = 1;
+  private ambientTime = 0;
+  private reduceMotion = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -152,7 +154,7 @@ export class GameRenderer {
     return null;
   }
 
-  draw(engine: GameEngine, fx: Effects, reduceMotion = false): void {
+  draw(engine: GameEngine, fx: Effects, reduceMotion = false, focusSingleGlass = false): void {
     const { ctx, pixels } = this;
     if (pixels < 2 || this.cssSize <= 0) return;
     const config = engine.config;
@@ -160,9 +162,11 @@ export class GameRenderer {
     const grid = gridSize(config);
     const viewport = fieldViewport(config.boardSize, config.armLength, engine.sides, fx.viewAngle,
       state.phase === 'building' ? state.buildingSide : null,
-      state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1, reduceMotion);
+      state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1, reduceMotion, focusSingleGlass);
     const unit = Math.max(1, Math.floor(pixels * FIT / viewport.span));
     this.grow = viewport.grow;
+    this.ambientTime = fx.clock;
+    this.reduceMotion = reduceMotion;
     this.visible = engine.sides;
     this.viewAngle = fx.viewAngle;
     const scale = pixels / this.cssSize;
@@ -465,10 +469,12 @@ export class GameRenderer {
       ctx.strokeStyle = ARM_GRID;
       if (side !== building) {
         ctx.fillRect(-half, -reach, n, arm);
+        this.drawAmbient(side, reach);
         ctx.globalAlpha = lines;
         ctx.stroke(this.armGrid);
       } else {
         ctx.fillRect(-half, -far, n, far - half);
+        this.drawAmbient(side, far);
         ctx.globalAlpha = lines;
         ctx.beginPath();
         for (let i = 1; i < n; i++) {
@@ -528,6 +534,65 @@ export class GameRenderer {
     this.frame(0);
     ctx.strokeStyle = CENTRE_OUTLINE;
     ctx.strokeRect(-half, -half, n, n);
+  }
+
+  /** World-side motifs stay with their glass and share the paused effects clock. */
+  private drawAmbient(side: Side, far: number): void {
+    if (this.reduceMotion) return;
+    const { ctx, half, n, arm, reach, ambientTime: t } = this;
+    const colours = ['#36a9ff', '#8f5bff', '#2ee6f0', '#ff9a2e'];
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-half, -far, n, far - half);
+    ctx.clip();
+    ctx.lineWidth = this.px;
+    ctx.strokeStyle = colours[side];
+    ctx.globalAlpha = .10;
+    switch (side) {
+      case 0:
+        for (let lane = 0; lane < 3; lane++) {
+          ctx.beginPath();
+          for (let j = 0; j <= 16; j++) {
+            const y = -reach + arm * j / 16;
+            const x = -half + n * (lane + 1) / 4 + .35 * Math.sin(t * .45 + j * .4 + lane);
+            if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        break;
+      case 1:
+        for (let i = 0; i < 4; i++) {
+          const pulse = (t / 12 + i / 4) % 1;
+          const radius = n * .15 + pulse * arm * .7;
+          ctx.globalAlpha = .13 * (1 - pulse);
+          ctx.strokeRect(-radius, -half - arm * .55 - radius, radius * 2, radius * 2);
+        }
+        break;
+      case 2:
+        for (let wave = 0; wave < 5; wave++) {
+          const y = -reach + ((t / 18 + wave / 5) % 1) * arm;
+          ctx.beginPath();
+          for (let j = 0; j <= 16; j++) {
+            const x = -half + n * j / 16;
+            const yy = y + .45 * Math.sin(j * .35 + t * .35);
+            if (j === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+          }
+          ctx.stroke();
+        }
+        break;
+      case 3:
+        for (let i = 0; i < 5; i++) {
+          const fall = (t / 24 + i / 5) % 1;
+          const edge = 1.1 + (i % 3) * .35;
+          ctx.save();
+          ctx.translate(Math.sin(i * 2.4 + t * .15) * n * .28, -reach + fall * arm);
+          ctx.rotate(t * .08 + i * .6);
+          ctx.strokeRect(-edge / 2, -edge / 2, edge, edge);
+          ctx.restore();
+        }
+        break;
+    }
+    ctx.restore();
   }
 
   /** Bars of light over the popped lines, and the wash of a triple clear. */

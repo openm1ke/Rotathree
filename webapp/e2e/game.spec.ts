@@ -82,7 +82,7 @@ test('pause traps focus, Space activates Continue, saved transition resumes afte
   );
   expect(save.banner?.pendingLevel).toBe(1);
   await page.reload();
-  await page.getByRole('button', { name: /Продолжить.*Выберите сохранённую игру/ }).click();
+  await page.getByRole('button', { name: /Продолжить.*Сохранённые игры/ }).click();
   await page.getByRole('button', { name: 'Продолжить Кампания', exact: true }).click();
   await expect(pause).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(
@@ -111,7 +111,7 @@ test('settings freeze campaign banners and ending a run records statistics', asy
     .toBe(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.run.web.v1')!).runs)).toEqual({});
   await page.reload();
-  await expect(page.getByRole('button', { name: /Продолжить.*Выберите сохранённую игру/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Продолжить.*Сохранённые игры/ })).toHaveCount(0);
 });
 
 test('unavailable storage warns the player while the app remains usable', async ({ page }) => {

@@ -11,6 +11,8 @@ import 'package:rotathree/ui/input/dpad.dart';
 import 'package:rotathree/ui/data/run_save.dart';
 import 'package:rotathree/ui/data/stats.dart';
 import 'package:rotathree/ui/input/game_action.dart';
+import 'package:rotathree/ui/game/tutorial.dart';
+import 'package:rotathree/ui/field/field_painter.dart';
 
 Future<GameScreenState> pumpGame(
   WidgetTester tester, {
@@ -68,6 +70,30 @@ Future<void> pumpFrames(WidgetTester tester, int frames) async {
 }
 
 void main() {
+  testWidgets('training leaves through Back without completing the tutorial or showing a pause', (tester) async {
+    var exits = 0, completions = 0;
+    final state = await pumpGame(
+      tester,
+      tutorial: true,
+      session: CustomSession(defaultCustom.copyWith(extraGlasses: 0)),
+      onExit: () => exits++,
+      onTutorialDone: () => completions++,
+    );
+    expect(find.text('Пауза'), findsNothing);
+    expect(find.text('Настройки'), findsOneWidget);
+    expect(tester.getSize(find.byType(TutorialPanel)).height, lessThan(190));
+    final field = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is FieldPainter);
+    expect(tester.getSize(field).height, greaterThan(280));
+    state.didChangeAppLifecycleState(AppLifecycleState.inactive);
+    await tester.pump();
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.text('Пауза'), findsNothing);
+    await tester.tap(find.text('Назад'));
+    expect(exits, 1);
+    expect(completions, 0);
+  });
+
   testWidgets('the right arrow of the left pad moves the piece one lane', (tester) async {
     final state = await pumpGame(tester);
     final before = state.engine.activePiece!.column;
@@ -232,7 +258,7 @@ void main() {
     await tester.tapAt(padButton(tester, 0, .5, 1 / 6));
     await tester.pump();
     expect(find.text('✓ Дальше'), findsOneWidget);
-    expect(find.textContaining('Левая крестовина · вверх'), findsOneWidget);
+    expect(find.textContaining('Левая: ↑'), findsOneWidget);
   });
 
   testWidgets('phone tutorial requires each action and resolves a real match', (tester) async {

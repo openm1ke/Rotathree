@@ -8,7 +8,7 @@ const ease = (t: number): number => 1 - (1 - Math.max(0, Math.min(1, t))) ** 3;
 
 /** Fit the arms around the fixed board center; make room before growing a new arm. */
 export function fieldViewport(n: number, arm: number, sides: readonly Side[], angle = 0,
-  building: Side | null = null, progress = 1, reduceMotion = false): FieldViewport {
+  building: Side | null = null, progress = 1, reduceMotion = false, focusSingleGlass = false): FieldViewport {
   const half = n / 2;
   const bounds = (visible: readonly Side[]) => {
     let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
@@ -22,6 +22,7 @@ export function fieldViewport(n: number, arm: number, sides: readonly Side[], an
     };
     rect(-half, -half, half, half, angle);
     for (const side of visible) rect(-half, -half - arm, half, -half, angle + side * Math.PI / 2);
+    if (focusSingleGlass && visible.length === 1) return { left, top, right, bottom };
     // A little more breathing room with each added glass makes every addition readable.
     const pad = Math.max(0, visible.length - 1) * 0.25;
     const rx = Math.max(Math.abs(left), Math.abs(right)) + pad;
@@ -34,7 +35,7 @@ export function fieldViewport(n: number, arm: number, sides: readonly Side[], an
   const lerp = (a: number, b: number) => a + (b - a) * t;
   const left = lerp(before.left, after.left), top = lerp(before.top, after.top);
   const right = lerp(before.right, after.right), bottom = lerp(before.bottom, after.bottom);
-  return { left, top, right, bottom, cx: 0, cy: 0,
+  return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2,
     span: Math.max(right - left, bottom - top),
     grow: building === null || reduceMotion ? 1 : ease((progress - 0.25) / 0.75) };
 }

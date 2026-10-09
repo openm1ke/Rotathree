@@ -100,4 +100,25 @@ void main() {
     final turned = FieldGeometry(320, config, angle: -math.pi / 2, sides: config.sides);
     expect(turned.zoneAt(turned.origin + Offset(-7 * turned.drawnCell, 0)), FieldZone.left);
   });
+
+  test('training fills the canvas with one glass then returns smoothly to a fixed center', () {
+    const config = GameConfig(boardSize: 6, glassCount: 1);
+    final focused = FieldGeometry(320, config, focusSingleGlass: true);
+    expect(focused.viewport.span, 15);
+    expect(focused.drawnCell, greaterThan(FieldGeometry(320, config).drawnCell * 1.5));
+    expect(focused.zoneAt(focused.origin), FieldZone.center);
+    expect(focused.zoneAt(focused.origin + Offset(0, -7 * focused.drawnCell)), FieldZone.top);
+    FieldViewport building(double progress) => FieldViewport.fit(
+      boardSize: 6,
+      armLength: 9,
+      sides: const [Side.top, Side.right],
+      building: Side.right,
+      progress: progress,
+      focusSingleGlass: true,
+    );
+    expect(building(0).bounds, focused.viewport.bounds);
+    expect(building(.2).center.dy, inExclusiveRange(focused.viewport.center.dy, 0));
+    expect(building(.4).center, Offset.zero);
+    expect(building(1).bounds, view(const [Side.top, Side.right]).bounds);
+  });
 }

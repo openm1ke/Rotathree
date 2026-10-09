@@ -6,58 +6,100 @@ import 'package:flutter/material.dart';
 
 import '../style.dart';
 
-/// The background of every screen: two soft glows drifting slowly over a
-/// faint grid that fades towards the edges.
+/// Soft glows over a faint grid, with the web menu's drifting squares.
 class Backdrop extends StatefulWidget {
-  const Backdrop({super.key});
+  const Backdrop({super.key, this.menu = false, this.paused = false});
+  final bool menu, paused;
 
   @override
   State<Backdrop> createState() => _BackdropState();
 }
 
-class _BackdropState extends State<Backdrop> {
-  /// The glows take forty seconds to cross: ten pictures a second show all
-  /// there is to see of that, a fraction of a pixel at a time. Asking for a
-  /// new one on every frame would keep the whole screen drawing at full rate
-  /// — on the menus too, where nothing else moves.
-  static const _step = Duration(milliseconds: 100);
-  static const _swingSeconds = 40.0;
-
-  final ValueNotifier<double> _drift = ValueNotifier(0);
-  final Stopwatch _clock = Stopwatch()..start();
+class _BackdropState extends State<Backdrop> with WidgetsBindingObserver {
+  final ValueNotifier<double> _time = ValueNotifier(0);
+  final Stopwatch _clock = Stopwatch();
   Timer? _timer;
-
-  /// Where the glows are, 0..1: there and back again, easing at both ends.
-  double _position() {
-    final phase = (_clock.elapsedMilliseconds / 1000 / _swingSeconds) % 2;
-    return Curves.easeInOut.transform(phase <= 1 ? phase : 2 - phase);
-  }
+  bool _reduceMotion = false, _visible = true, _active = true;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(_step, (_) => _drift.value = _position());
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    _visible = TickerMode.valuesOf(context).enabled;
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(Backdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.menu != oldWidget.menu || widget.paused != oldWidget.paused) {
+      _syncAnimation();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _active = state == AppLifecycleState.resumed;
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    _timer?.cancel();
+    if (_reduceMotion || !_visible || !_active || widget.paused) {
+      _clock.stop();
+      return;
+    }
+    _clock.start();
+    // Only this canvas repaints: 24 fps for squares, 10 for slow glows.
+    _timer = Timer.periodic(Duration(milliseconds: widget.menu ? 42 : 100), (_) {
+      _time.value = _clock.elapsedMilliseconds / 1000;
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _drift.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _time.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: CustomPaint(painter: _BackdropPainter(_drift), size: Size.infinite),
+      child: CustomPaint(
+        painter: _BackdropPainter(_time, menu: widget.menu),
+        size: Size.infinite,
+      ),
     );
   }
 }
 
 class _BackdropPainter extends CustomPainter {
-  _BackdropPainter(this.drift) : super(repaint: drift);
+  _BackdropPainter(this.time, {required this.menu}) : super(repaint: time);
 
-  final ValueListenable<double> drift;
+  final ValueListenable<double> time;
+  final bool menu;
+  static const _squares = <(double, double, double, int)>[
+    (.06, 26, 0, 0),
+    (.18, 16, 3.2, 1),
+    (.31, 22, 6.1, 2),
+    (.44, 14, 1.4, 3),
+    (.57, 30, 4.7, 4),
+    (.70, 18, 8.3, 5),
+    (.83, 24, 2.6, 6),
+    (.92, 14, 6.9, 7),
+    (.12, 20, 9.5, 8),
+    (.76, 34, .8, 0),
+    (.50, 18, 11.2, 2),
+    (.24, 28, 7.6, 4),
+  ];
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -65,7 +107,8 @@ class _BackdropPainter extends CustomPainter {
     canvas.drawRect(area, Paint()..color = Palette.bg);
 
     final reach = math.max(size.width, size.height);
-    final t = drift.value;
+    final phase = (time.value / 40) % 2;
+    final t = Curves.easeInOut.transform(phase <= 1 ? phase : 2 - phase);
     void glow(Offset centre, Color color, double radius) {
       canvas.drawCircle(
         centre,
@@ -111,8 +154,25 @@ class _BackdropPainter extends CustomPainter {
           stops: const [0, 0.78],
         ).createShader(Rect.fromCircle(center: area.center, radius: reach * 0.62)),
     );
+    if (menu) {
+      canvas.save();
+      canvas.clipRect(area);
+      final paint = Paint();
+      for (final (x, edge, delay, colour) in _squares) {
+        final fall = ((time.value + delay) / 26) % 1;
+        canvas.save();
+        canvas.translate(size.width * x + edge / 2, size.height * (-.3 + 1.5 * fall) + edge / 2);
+        canvas.rotate(fall * math.pi * 160 / 180);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(-edge / 2, -edge / 2, edge, edge), const Radius.circular(6)),
+          paint..color = classicColours[colour].withValues(alpha: .16),
+        );
+        canvas.restore();
+      }
+      canvas.restore();
+    }
   }
 
   @override
-  bool shouldRepaint(_BackdropPainter oldDelegate) => false;
+  bool shouldRepaint(_BackdropPainter oldDelegate) => oldDelegate.menu != menu;
 }

@@ -61,4 +61,17 @@ describe('field camera', () => {
   it('skips camera motion and arm growth when reduced motion is requested', () => {
     expect(fieldViewport(6, 9, [0, 1], 0, 1, 0.1, true)).toEqual(fieldViewport(6, 9, [0, 1]));
   });
+
+  it('fills early training with one glass and smoothly returns to the fixed center on growth', () => {
+    const focused = fieldViewport(6, 9, [0], 0, null, 1, false, true);
+    expect(focused.span).toBe(15);
+    expect(focused.cy).toBe(-4.5);
+    const build = (progress: number) => fieldViewport(6, 9, [0, 1], 0, 1, progress, false, true);
+    expect(build(0).span).toBe(focused.span);
+    expect(build(0).cy).toBe(focused.cy);
+    expect(build(.2).cy).toBeGreaterThan(focused.cy);
+    expect(build(.2).cy).toBeLessThan(0);
+    expect(build(.4).cy).toBe(0);
+    expect(build(1)).toEqual(fieldViewport(6, 9, [0, 1]));
+  });
 });

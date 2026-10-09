@@ -163,7 +163,9 @@ class GameScreenState extends State<GameScreen>
 
   bool get _isCampaign => widget.session is CampaignSession;
 
-  bool get _acceptsInput => _status == _Status.playing && !widget.blocked && !(_banner?.blocking ?? false);
+  bool _appActive = true;
+  bool get _acceptsInput =>
+      _appActive && _status == _Status.playing && !widget.blocked && !(_banner?.blocking ?? false);
 
   ModeId get _mode => switch (widget.session) {
     CampaignSession() => ModeId.campaign,
@@ -253,9 +255,12 @@ class GameScreenState extends State<GameScreen>
   /// Leaving the app pauses the game, as losing focus does in the browser.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) return;
+    _appActive = state == AppLifecycleState.resumed;
+    if (_appActive) return;
     _pads.releaseAll();
-    if (_status == _Status.playing) _setStatus(_Status.paused);
+    if (!widget.tutorial && _status == _Status.playing) {
+      _setStatus(_Status.paused);
+    }
     _checkpoint();
   }
 
@@ -415,6 +420,10 @@ class GameScreenState extends State<GameScreen>
   }
 
   void _togglePause() {
+    if (widget.tutorial) {
+      handleBack();
+      return;
+    }
     if (_status == _Status.playing) {
       _pads.releaseAll();
       _setStatus(_Status.paused);
@@ -627,7 +636,7 @@ class GameScreenState extends State<GameScreen>
     final seconds = math.min(_maxFrameSeconds, math.max(0.0, (elapsed - _last).inMicroseconds / 1e6));
     _last = elapsed;
     final settings = widget.settings;
-    final frozen = widget.blocked;
+    final frozen = widget.blocked || !_appActive;
     final holding = frozen || (_banner?.blocking ?? false);
     if (frozen) _pads.releaseAll();
     _fx.screenShake = settings.effects.screenShake && !_reduceMotion;
@@ -711,12 +720,18 @@ class GameScreenState extends State<GameScreen>
     4 => [GameAction.glassLeft, GameAction.glassRight, GameAction.glassOpposite],
     _ => [],
   };
-  List<String> get _tutorialControls => [
-    for (final side in [false, true])
-      for (final slot in PadSlot.values)
-        if (_lessonActions.contains((side ? widget.settings.rightPad : widget.settings.leftPad)[slot]))
-          '${side ? 'Правая' : 'Левая'} крестовина · ${slot.label.toLowerCase()}',
-  ];
+  List<String> get _tutorialControls {
+    const symbols = ['↑', '←', '→', '↓', '●'];
+    final hints = <String>[];
+    for (final right in [false, true]) {
+      final layout = right ? widget.settings.rightPad : widget.settings.leftPad;
+      final slots = PadSlot.values.where((slot) => _lessonActions.contains(layout[slot]));
+      if (slots.isNotEmpty) {
+        hints.add('${right ? 'Правая' : 'Левая'}: ${slots.map((slot) => symbols[slot.index]).join(' ')}');
+      }
+    }
+    return hints;
+  }
 
   // ------------------------------------------------------------------- build
 
@@ -742,13 +757,19 @@ class GameScreenState extends State<GameScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Row(
                         children: [
-                          Expanded(
-                            child: Text(
-                              widget.tutorial ? 'Обучение' : modeTitle(_mode),
-                              style: Type.body(14, weight: FontWeight.w800),
+                          if (widget.tutorial) ...[
+                            TextButton.icon(
+                              onPressed: handleBack,
+                              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                              label: const Text('Назад'),
                             ),
-                          ),
-                          TextButton(onPressed: _togglePause, child: const Text('Пауза')),
+                            const Spacer(),
+                          ] else ...[
+                            Expanded(
+                              child: Text(modeTitle(_mode), style: Type.body(14, weight: FontWeight.w800)),
+                            ),
+                            TextButton(onPressed: _togglePause, child: const Text('Пауза')),
+                          ],
                           TextButton(onPressed: widget.onSettings, child: const Text('Настройки')),
                         ],
                       ),
@@ -780,14 +801,14 @@ class GameScreenState extends State<GameScreen>
                       ),
                     ),
                     if (widget.tutorial)
-                      SizedBox(
-                        height: math.min(constraints.maxHeight * 0.4, 250),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: math.min(constraints.maxHeight * 0.3, 190)),
                         child: TutorialPanel(
                           step: _tutorialStep,
                           performed: _tutorialPerformed,
                           controls: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
-                              ? 'Действие не назначено. Попробуйте его кнопкой ниже или назначьте в настройках.'
-                              : _tutorialControls.join(' / '),
+                              ? 'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.'
+                              : _tutorialControls.join(' · '),
                           onPractice: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
                               ? () {
                                   _pads.down(_lessonActions.first);
@@ -809,7 +830,7 @@ class GameScreenState extends State<GameScreen>
               },
             ),
           ),
-          if (!widget.blocked && _status == _Status.paused) _dialog(_pauseDialog()),
+          if (!widget.tutorial && !widget.blocked && _status == _Status.paused) _dialog(_pauseDialog()),
           if (!widget.blocked && _status == _Status.over && _result != null) _dialog(_overDialog(_result!)),
           if (!widget.blocked && _status == _Status.done && _result != null) _dialog(_doneDialog(_result!)),
         ],
@@ -833,6 +854,7 @@ class GameScreenState extends State<GameScreen>
                   engine: _engine,
                   fx: _fx,
                   assets: _assets,
+                  focusSingleGlass: widget.tutorial,
                   devicePixelRatio: _pixelRatio,
                   reduceMotion: _reduceMotion,
                   repaint: _repaint,

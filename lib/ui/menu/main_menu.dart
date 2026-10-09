@@ -63,12 +63,6 @@ class MainMenu extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Четыре стакана. Один центр. Три в ряд.',
-            style: Type.body(13, color: Palette.textDim),
-            textAlign: TextAlign.center,
-          ),
           const SizedBox(height: 24),
           if (hasSavedGames && onResume != null) ...[
             GoButton(label: 'Продолжить', expand: true, onPressed: onResume),
@@ -77,15 +71,13 @@ class MainMenu extends StatelessWidget {
           if (onTutorial != null)
             _NavItem(
               title: 'Обучение',
-              caption: tutorialDone
-                  ? 'Повторить первые шаги и управление'
-                  : 'Первые шаги: попробуйте правила на практике',
+              caption: tutorialDone ? 'Повторить основы' : 'Правила на практике',
               onTap: onTutorial!,
             ),
-          _NavItem(title: 'Кампания', caption: 'Пятнадцать уровней: от одного стакана до четырёх', onTap: onCampaign),
-          _NavItem(title: 'Кастом', caption: 'Своя игра: стаканы, цвета и скорость', onTap: onCustom),
-          _NavItem(title: 'Статистика', caption: 'Очки, фигуры и рекорды по режимам', onTap: onStatistics),
-          _NavItem(title: 'Настройки', caption: 'Крестовины, цвета, эффекты, интерфейс', onTap: onSettings),
+          _NavItem(title: 'Кампания', caption: '15 уровней', onTap: onCampaign),
+          _NavItem(title: 'Кастом', caption: 'Ваши правила', onTap: onCustom),
+          _NavItem(title: 'Статистика', caption: 'Результаты и рекорды', onTap: onStatistics),
+          _NavItem(title: 'Настройки', caption: 'Управление и оформление', onTap: onSettings),
           const SizedBox(height: 16),
           _InfoCard(
             kicker: 'Кампания',

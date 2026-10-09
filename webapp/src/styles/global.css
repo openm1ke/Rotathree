@@ -339,15 +339,6 @@ input:focus-visible {
 .logo__letter--3 { color: var(--brand-green); }
 .logo__letter--4 { color: var(--brand-violet); }
 
-.home__tag {
-  margin: 14px 0 0;
-  font-size: clamp(12px, 1.2vw, 15px);
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
 .home__nav {
   grid-column: 1;
   align-self: center;
@@ -427,7 +418,13 @@ input:focus-visible {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
+
+.navitem:hover .navitem__caption,
+.navitem:focus-visible .navitem__caption,
+.home--touch .navitem__caption { opacity: 1; }
 
 .home__side {
   grid-column: 2;
@@ -1625,10 +1622,6 @@ input:focus-visible {
     flex: 1;
   }
 
-  .navitem__caption {
-    display: none;
-  }
-
   .row {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1720,6 +1713,11 @@ input:focus-visible {
   padding: 6px 9px;
   font-size: 12px;
 }
+.tutorial-hud {
+  width: min(1100px, 100%);
+  align-self: center;
+  justify-content: space-between;
+}
 .touch-controls {
   display: flex;
   justify-content: space-between;
@@ -1800,29 +1798,32 @@ select:focus-visible {
   align-self: center;
   flex-shrink: 0;
   margin: 4px 8px;
-  padding: 10px 12px;
+  padding: 8px 10px 6px;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   background: var(--panel-strong);
 }
 .tutorial h2 {
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.15;
-  margin: 4px 0;
+  margin: 0;
 }
+.tutorial__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tutorial__heading .kicker { flex-shrink: 0; font-size: 10px; }
 .tutorial p {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
   margin: 4px 0;
 }
-.tutorial__controls {
+.tutorial p.tutorial__controls {
   color: var(--accent);
+  font-size: 11px;
 }
 .tutorial__actions {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .tutorial__actions .button {
   min-height: 44px;
@@ -1844,7 +1845,7 @@ select:focus-visible {
 .tutorial {
   display: flex;
   flex-direction: column;
-  max-height: 40vh;
+  max-height: min(190px, 30dvh);
 }
 .tutorial > div:first-child {
   min-height: 0;

@@ -12,7 +12,7 @@ import { useTouchControls } from '../input/touch';
 import { makePiece } from '../game/piece';
 import type { RunSave, RunTotals } from '../services/runSave';
 import { TouchControls } from './TouchControls';
-import { PAD_SLOTS, SLOT_LABELS } from '../input/pads';
+import { PAD_SLOTS } from '../input/pads';
 import { TutorialPanel, TUTORIAL_LESSONS } from './TutorialPanel';
 import { Effects } from '../render/effects';
 import { AdaptiveQuality } from '../render/quality';
@@ -382,6 +382,10 @@ export function GameScreen(props: Props) {
     };
 
     const togglePause = () => {
+      if (tutorial) {
+        live.current.onExit();
+        return;
+      }
       if (current === 'playing') {
         keyboard.releaseAll();
         pads.releaseAll();
@@ -531,7 +535,7 @@ export function GameScreen(props: Props) {
     const onBlur = () => {
       keyboard.releaseAll();
       pads.releaseAll();
-      if (current === 'playing') setRunStatus('paused');
+      if (!tutorial && current === 'playing') setRunStatus('paused');
       checkpoint();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -554,7 +558,7 @@ export function GameScreen(props: Props) {
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
       last = now;
       const s = live.current.settings;
-      const frozen = live.current.blocked;
+      const frozen = live.current.blocked || document.hidden;
       const holding = frozen || (banner?.blocking ?? false);
       if (frozen) {
         keyboard.releaseAll();
@@ -618,7 +622,7 @@ export function GameScreen(props: Props) {
       const effectsRunning = current !== 'paused' && !frozen;
       still = !engineRunning && (!effectsRunning || fx.settled) ? still + 1 : 0;
       if (still <= 2 || dirty || drawnPalette !== paletteRevision()) {
-        renderer.draw(engine, fx, reduceMotion.matches);
+        renderer.draw(engine, fx, reduceMotion.matches, tutorial);
         dirty = false;
         drawnPalette = paletteRevision();
       }
@@ -715,11 +719,11 @@ export function GameScreen(props: Props) {
             ? ['glassLeft', 'glassRight', 'glassOpposite']
             : [];
   const tutorialControls = touch
-    ? (['left', 'right'] as const).flatMap((side) =>
-        PAD_SLOTS.filter((slot) => lessonActions.includes(settings.pads[side][slot] as Action)).map(
-          (slot) => `${side === 'left' ? 'Левая' : 'Правая'} крестовина · ${SLOT_LABELS[slot].toLowerCase()}`,
-        ),
-      )
+    ? (['left', 'right'] as const).flatMap((side) => {
+        const slots = PAD_SLOTS.filter((slot) => lessonActions.includes(settings.pads[side][slot] as Action));
+        const symbols = { up: '↑', left: '←', right: '→', down: '↓', center: '●' };
+        return slots.length ? [`${side === 'left' ? 'Левая' : 'Правая'}: ${slots.map((slot) => symbols[slot]).join(' ')}`] : [];
+      })
     : lessonActions.flatMap((action) => settings.bindings[action].map(keyLabel));
   const missingControl = lessonActions.length > 0 && tutorialControls.length === 0;
 
@@ -728,25 +732,31 @@ export function GameScreen(props: Props) {
       className={`game ${touch ? 'game--touch' : ''} ${tutorial ? 'game--tutorial' : ''}`}
       data-frozen={status === 'paused' || blocked}
     >
-      {touch && (
-        <header className="touch-hud">
-          <div>
-            <strong>{formatScore(hud.score)} очков</strong>
-            <small>
-              {campaign
-                ? `Уровень ${level + 1} · ${formatScore(hud.into)} / ${formatScore(hud.target)}`
-                : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
-            </small>
-          </div>
-          <button type="button" className="chip" onClick={() => actions.current.togglePause()}>
-            Пауза
-          </button>
+      {(touch || tutorial) && (
+        <header className={`touch-hud ${tutorial ? 'tutorial-hud' : ''}`}>
+          {tutorial ? (
+            <button type="button" className="chip" onClick={props.onExit}>← Назад</button>
+          ) : (
+            <>
+              <div>
+                <strong>{formatScore(hud.score)} очков</strong>
+                <small>
+                  {campaign
+                    ? `Уровень ${level + 1} · ${formatScore(hud.into)} / ${formatScore(hud.target)}`
+                    : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
+                </small>
+              </div>
+              <button type="button" className="chip" onClick={() => actions.current.togglePause()}>
+                Пауза
+              </button>
+            </>
+          )}
           <button type="button" className="chip" onClick={props.onSettings}>
             Настройки
           </button>
         </header>
       )}
-      {!touch && <div className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
+      {!touch && !tutorial && <div className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
         <Hud hud={hud} callout={callout} bindings={settings.bindings} options={settings.hud}
           onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
       </div>}
@@ -779,8 +789,8 @@ export function GameScreen(props: Props) {
           performed={performed}
           controls={
             missingControl
-              ? 'Действие не назначено. Попробуйте его кнопкой ниже или назначьте в настройках.'
-              : tutorialControls.join(' / ')
+              ? 'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.'
+              : tutorialControls.join(' · ')
           }
           onPractice={missingControl ? () => actions.current.practice(lessonActions[0]) : undefined}
           onNext={() => actions.current.nextLesson()}
@@ -798,7 +808,7 @@ export function GameScreen(props: Props) {
         </div>
       )}
 
-      {status === 'paused' && !blocked && (
+      {!tutorial && status === 'paused' && !blocked && (
         <Overlay label="Пауза" onDismiss={() => actions.current.togglePause()}>
           <div className="dialog dialog--narrow">
             <span className="kicker">

@@ -5,27 +5,15 @@ import '../widgets/controls.dart';
 const tutorialLessons = [
   (
     'Одна фигура — три клетки',
-    'Фигура падает в активный стакан сверху. В центре стаканы делят общее поле. Сейчас попробуем всё без спешки: падение в обучении остановлено.',
+    'Фигуры падают сверху. Собирайте три клетки одного цвета в ряд. Здесь падение остановлено.',
   ),
-  (
-    'Сдвиньте фигуру',
-    'Нажмите «Влево» или «Вправо». Удержание кнопки повторяет движение. Светлый контур показывает место приземления.',
-  ),
-  (
-    'Поверните фигуру',
-    'Нажмите кнопку поворота. Каждый поворот — четверть оборота; порядок цветов в фигуре сохраняется.',
-  ),
-  (
-    'Соберите три в ряд',
-    'Здесь всё подготовлено: клетка фигуры встанет рядом с двумя того же цвета. Нажмите «Сброс». Три одинаковых цвета по горизонтали или вертикали исчезнут, а блоки над ними упадут.',
-  ),
-  (
-    'Переключите стакан',
-    'Появился второй стакан. Нажмите кнопку переключения стакана или коснитесь нового рукава. Активный стакан окажется сверху; блоки в общем центре останутся на месте.',
-  ),
+  ('Сдвиньте фигуру', 'Сдвигайте фигуру. Удерживайте кнопку для повтора. Контур — место приземления.'),
+  ('Поверните фигуру', 'Поверните фигуру на четверть оборота. Цвета сохраняют свой порядок.'),
+  ('Соберите три в ряд', 'Сбросьте фигуру. Три одинаковых цвета в ряд исчезнут, а блоки сверху опустятся.'),
+  ('Переключите стакан', 'Выведите второй стакан наверх. У стаканов общий центр: блоки в нём остаются на месте.'),
   (
     'Следите за всеми стаканами',
-    'В настоящей игре фигуры падают одновременно: в активном стакане быстрее, в остальных медленнее. Переключайтесь до переполнения рукава. Новые совпадения после оседания дают комбо. При выходе партия сохраняется автоматически.',
+    'Фигуры падают во всех стаканах. Активный быстрее: переключайтесь до переполнения. Игра сохраняется при выходе.',
   ),
 ];
 
@@ -51,7 +39,7 @@ class TutorialPanel extends StatelessWidget {
       liveRegion: true,
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
         decoration: BoxDecoration(
           color: Palette.panelStrong,
           borderRadius: BorderRadius.circular(12),
@@ -61,31 +49,33 @@ class TutorialPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            Flexible(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Обучение · ${step + 1} / ${tutorialLessons.length}',
-                      style: Type.label(11, color: Palette.accent),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(title, style: Type.body(14, weight: FontWeight.w800)),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('${step + 1} / ${tutorialLessons.length}', style: Type.label(10, color: Palette.accent)),
+                      ],
                     ),
                     const SizedBox(height: 4),
-                    Text(title, style: Type.body(16, weight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Text(body, style: Type.body(13)),
+                    Text(body, style: Type.body(12)),
                     if (controls.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(controls, style: Type.body(12, color: Palette.accent)),
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(controls, style: Type.body(11, color: Palette.accent)),
                       ),
-                    if (onPractice != null)
-                      TextButton(onPressed: onPractice, child: const Text('Попробовать действие')),
+                    if (onPractice != null) TextButton(onPressed: onPractice, child: const Text('Попробовать')),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Row(
               children: [
                 Expanded(

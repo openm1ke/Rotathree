@@ -48,6 +48,7 @@ class FieldGeometry {
     Side? building,
     double progress = 1,
     bool reduceMotion = false,
+    bool focusSingleGlass = false,
   }) : n = config.boardSize,
        arm = config.armLength,
        grid = config.gridSize,
@@ -60,6 +61,7 @@ class FieldGeometry {
          building: building,
          progress: progress,
          reduceMotion: reduceMotion,
+         focusSingleGlass: focusSingleGlass,
        );
 
   /// The cross is drawn a touch smaller than its canvas so that glows and
@@ -524,6 +526,7 @@ class FieldPainter extends CustomPainter {
     required this.assets,
     required this.devicePixelRatio,
     this.reduceMotion = false,
+    this.focusSingleGlass = false,
     required Listenable repaint,
   }) : super(repaint: repaint);
 
@@ -532,6 +535,7 @@ class FieldPainter extends CustomPainter {
   final FieldAssets assets;
   final double devicePixelRatio;
   final bool reduceMotion;
+  final bool focusSingleGlass;
 
   // ------------------------------------------------ the frame being drawn
   /// One logical pixel, in cells.
@@ -554,7 +558,11 @@ class FieldPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(FieldPainter oldDelegate) =>
-      oldDelegate.engine != engine || oldDelegate.fx != fx || oldDelegate.devicePixelRatio != devicePixelRatio;
+      oldDelegate.engine != engine ||
+      oldDelegate.fx != fx ||
+      oldDelegate.devicePixelRatio != devicePixelRatio ||
+      oldDelegate.reduceMotion != reduceMotion ||
+      oldDelegate.focusSingleGlass != focusSingleGlass;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -569,6 +577,7 @@ class FieldPainter extends CustomPainter {
       building: building,
       progress: state.phaseProgress,
       reduceMotion: reduceMotion,
+      focusSingleGlass: focusSingleGlass,
     );
     if (g.cell <= 0) return;
     assets._prepare(g);
@@ -739,12 +748,14 @@ class FieldPainter extends CustomPainter {
       _enter(canvas, side.index);
       if (side != growing) {
         canvas.drawRect(Rect.fromLTWH(-half, -g.reach, n, arm), armFill);
+        _drawAmbient(canvas, g, side, g.reach);
         canvas.drawPath(a._armGrid, grid);
       } else {
         final grown = Rect.fromLTRB(-half, -far, half, -half);
         canvas.drawRect(grown, armFill);
         canvas.save();
         canvas.clipRect(grown);
+        _drawAmbient(canvas, g, side, far);
         canvas.drawPath(a._armGrid, grid);
         canvas.restore();
       }
@@ -790,6 +801,72 @@ class FieldPainter extends CustomPainter {
       canvas.restore();
     }
     canvas.drawRect(centre, outline..color = const Color(0x38FFFFFF));
+  }
+
+  /// Each world-side has its own quiet motif behind the grid and pieces.
+  /// It follows the glass through turns and shares the effects' pause clock.
+  void _drawAmbient(Canvas canvas, FieldGeometry g, Side side, double far) {
+    if (reduceMotion) return;
+    final half = g.half, n = g.n.toDouble(), arm = g.arm.toDouble();
+    final t = fx.clock;
+    const colours = [Palette.accentStrong, Palette.violet, Color(0xFF2EE6F0), Palette.orange];
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _px
+      ..color = colours[side.index].withValues(alpha: .10);
+    canvas.save();
+    canvas.clipRect(Rect.fromLTRB(-half, -far, half, -half));
+    switch (side.index) {
+      case 0:
+        for (var lane = 0; lane < 3; lane++) {
+          final path = Path();
+          for (var j = 0; j <= 16; j++) {
+            final y = -g.reach + arm * j / 16;
+            final x = -half + n * (lane + 1) / 4 + .35 * math.sin(t * .45 + j * .4 + lane);
+            if (j == 0) {
+              path.moveTo(x, y);
+            } else {
+              path.lineTo(x, y);
+            }
+          }
+          canvas.drawPath(path, paint);
+        }
+      case 1:
+        for (var i = 0; i < 4; i++) {
+          final pulse = (t / 12 + i / 4) % 1;
+          final radius = n * .15 + pulse * arm * .7;
+          canvas.drawRect(
+            Rect.fromCenter(center: Offset(0, -half - arm * .55), width: radius * 2, height: radius * 2),
+            paint..color = colours[1].withValues(alpha: .13 * (1 - pulse)),
+          );
+        }
+      case 2:
+        for (var wave = 0; wave < 5; wave++) {
+          final y = -g.reach + ((t / 18 + wave / 5) % 1) * arm;
+          final path = Path();
+          for (var j = 0; j <= 16; j++) {
+            final x = -half + n * j / 16;
+            final yy = y + .45 * math.sin(j * .35 + t * .35);
+            if (j == 0) {
+              path.moveTo(x, yy);
+            } else {
+              path.lineTo(x, yy);
+            }
+          }
+          canvas.drawPath(path, paint);
+        }
+      case 3:
+        for (var i = 0; i < 5; i++) {
+          final fall = (t / 24 + i / 5) % 1;
+          final edge = 1.1 + (i % 3) * .35;
+          canvas.save();
+          canvas.translate(math.sin(i * 2.4 + t * .15) * n * .28, -g.reach + fall * arm);
+          canvas.rotate(t * .08 + i * .6);
+          canvas.drawRect(Rect.fromLTWH(-edge / 2, -edge / 2, edge, edge), paint);
+          canvas.restore();
+        }
+    }
+    canvas.restore();
   }
 
   /// The glass being steered glows; the glow moves over as the cross turns.
@@ -933,7 +1010,9 @@ class FieldPainter extends CustomPainter {
         for (var col = 0; col < size; col++) {
           final color = board.at(row, col);
           if (color == null) continue;
-          if (matched != null && matched.contains(CellPosition(row, col))) continue;
+          if (matched != null && matched.contains(CellPosition(row, col))) {
+            continue;
+          }
           _add(color, origin + col, origin + row, 0);
         }
       }

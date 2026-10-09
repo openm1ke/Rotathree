@@ -19,6 +19,7 @@ class FieldViewport {
     Side? building,
     double progress = 1,
     bool reduceMotion = false,
+    bool focusSingleGlass = false,
   }) {
     final half = boardSize / 2;
     Rect bounds(List<Side> visible) {
@@ -40,6 +41,9 @@ class FieldViewport {
       for (final side in visible) {
         rect(-half, -half - armLength, half, -half, angle + side.index * math.pi / 2);
       }
+      // Early lessons can fill the canvas with their only glass. As the
+      // second arm grows, interpolate back to the fixed board center.
+      if (focusSingleGlass && visible.length == 1) return result;
       final pad = math.max(0, visible.length - 1) * 0.25;
       final rx = math.max(result.left.abs(), result.right.abs()) + pad;
       final ry = math.max(result.top.abs(), result.bottom.abs()) + pad;

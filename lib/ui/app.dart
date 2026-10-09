@@ -294,7 +294,9 @@ class _AppRootState extends State<_AppRoot> {
         type: MaterialType.transparency,
         child: Stack(
           children: [
-            const Positioned.fill(child: Backdrop()),
+            Positioned.fill(
+              child: Backdrop(menu: _screen != _Screen.play, paused: _settingsOpen),
+            ),
             Positioned.fill(
               child: Column(
                 children: [

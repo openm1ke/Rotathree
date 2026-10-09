@@ -8,10 +8,10 @@ import { useTouchControls } from '../input/touch';
 export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
 
 const ITEMS: readonly { id: MenuTarget; title: string; caption: string }[] = [
-  { id: 'campaign', title: 'Кампания', caption: 'Пятнадцать уровней: от одного стакана до четырёх' },
-  { id: 'custom', title: 'Кастом', caption: 'Своя игра: стаканы, цвета и скорость' },
-  { id: 'statistics', title: 'Статистика', caption: 'Очки, фигуры и рекорды по режимам' },
-  { id: 'settings', title: 'Настройки', caption: 'Клавиши, цвета, эффекты, интерфейс' },
+  { id: 'campaign', title: 'Кампания', caption: '15 уровней' },
+  { id: 'custom', title: 'Кастом', caption: 'Ваши правила' },
+  { id: 'statistics', title: 'Статистика', caption: 'Результаты и рекорды' },
+  { id: 'settings', title: 'Настройки', caption: 'Управление и оформление' },
 ];
 
 /** Blocks drifting down behind the menu: left %, size in px, delay in s, and
@@ -51,7 +51,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
   useScreenKeys(rootRef, active, () => {});
   const opened = progress.unlocked + (progress.completed ? 1 : 0);
   return (
-    <main className="home" ref={rootRef}>
+    <main className={`home ${touch ? 'home--touch' : ''}`} ref={rootRef}>
       <div className="home__drift" aria-hidden="true">
         {DRIFT.map(([x, size, delay, colour], i) => (
           <i
@@ -73,7 +73,6 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
             <span className={`logo__letter logo__letter--${index}`} key={index}>{letter}</span>
           ))}
         </h1>
-        <p className="home__tag">Четыре стакана. Один центр. Три в ряд.</p>
       </header>
 
       <nav className="home__nav" aria-label="Главное меню">
@@ -81,7 +80,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
           <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
             <span className="navitem__text">
               <span className="navitem__title">Продолжить</span>
-              <span className="navitem__caption">Выберите сохранённую игру</span>
+              <span className="navitem__caption">Сохранённые игры</span>
             </span>
           </button>
         )}
@@ -90,7 +89,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
             <span className="navitem__text">
               <span className="navitem__title">Обучение</span>
               <span className="navitem__caption">
-                {tutorialDone ? 'Повторить основы и управление' : 'Первые шаги без спешки'}
+                {tutorialDone ? 'Повторить основы' : 'Правила на практике'}
               </span>
             </span>
           </button>
@@ -107,7 +106,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
             <span className="navitem__text">
               <span className="navitem__title">{item.title}</span>
               <span className="navitem__caption">
-                {touch && item.id === 'settings' ? 'Крестовины, цвета, эффекты, интерфейс' : item.caption}
+                {item.caption}
               </span>
             </span>
           </button>
