@@ -25,6 +25,41 @@ void checkContinuation(GameEngine engine) {
 }
 
 void main() {
+  test('resume preserves double-tap protection after a short drop', () {
+    const config = GameConfig(glassCount: 1, seed: 317);
+    final engine = GameEngine(config: config);
+    engine.update(1.1);
+    engine.incoming.put(Side.top, Piece([BlockColor.red, BlockColor.blue, BlockColor.yellow]),
+        row: config.armLength + config.boardSize - 1);
+    engine.dropActive();
+    final restored = GameEngine(config: config)..restoreSnapshot(jsonDecode(jsonEncode(engine.snapshot())));
+    restored.update(0.1);
+    expect(restored.phase, GamePhase.playing);
+    restored.dropActive();
+    expect(restored.phase, GamePhase.playing);
+    expect(restored.state.piecesPlaced, 1);
+    restored.update(0.21);
+    restored.dropActive();
+    expect(restored.phase, GamePhase.pieceDropping);
+  });
+
+  test('old saves load but their buffered drops are discarded', () {
+    const config = GameConfig(glassCount: 1, seed: 317);
+    final engine = GameEngine(config: config);
+    engine.incoming.put(Side.top, Piece([BlockColor.red, BlockColor.blue, BlockColor.yellow]));
+    engine.dropActive();
+    final raw = engine.snapshot()..remove('dropCooldown');
+    raw['inputs'] = [
+      {'kind': 'drop'},
+      {'kind': 'move', 'value': 1},
+    ];
+    final restored = GameEngine(config: config)..restoreSnapshot(raw);
+    restored.update(0.5);
+    expect(restored.phase, GamePhase.playing);
+    expect(restored.state.piecesPlaced, 1);
+    expect(restored.activePiece!.column, restored.incoming.spawnColumn + 1);
+  });
+
   test('resume keeps an in-flight drop, queued input and future pieces', () {
     final engine = GameEngine(config: const GameConfig(glassCount: 1, seed: 317));
     engine.dropActive();

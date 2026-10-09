@@ -580,7 +580,9 @@ export function GameScreen(props: Props) {
       }
       wasFrozen = frozen;
       fx.screenShake = s.effects.screenShake && !reduceMotion.matches;
-      fx.turnSeconds = reduceMotion.matches ? 0 : s.effects.turnMs / 1000;
+      // The explicit game setting controls glass navigation; the system
+      // preference still reduces decorative motion and screen shake.
+      fx.turnSeconds = s.effects.turnMs / 1000;
       fx.explosion = s.effects.explosion;
 
       if (current === 'playing' && !holding) {

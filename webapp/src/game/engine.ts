@@ -10,9 +10,8 @@ import { stepsTo, turned, type Side } from './side';
 import { makePiece, type BlockColor, type Orientation, type Piece } from './piece';
 import { integer, list, number, record } from './snapshotReader';
 
-/** Explicit phases of the engine. Player input is only applied in
- * `playing`; in every other phase it is queued and replayed afterwards, so
- * rotation, drops, pops and gravity can never interleave. */
+/** Explicit phases of the engine. Input is applied in `playing`; movement
+ * and turns can be queued during resolution, but hard drops are never buffered. */
 export type GamePhase =
   /** Pieces fall; the player can switch, move, rotate and drop. */
   | 'playing'
@@ -157,6 +156,7 @@ export class GameEngine {
       piecesPlaced: s.piecesPlaced,
       selfLocked: s.selfLocked,
       elapsedSeconds: s.elapsedSeconds,
+      dropCooldown: Math.min(GameEngine.DROP_DEBOUNCE_SECONDS, Math.max(0, this.dropReadyAt - s.elapsedSeconds)),
       speedLevel: s.speedLevel,
       buildingSide: s.buildingSide,
       drop:
@@ -320,6 +320,7 @@ export class GameEngine {
       moves,
       gameOverSide: null,
     };
+    const dropCooldown = number(r.dropCooldown ?? 0, 0, GameEngine.DROP_DEBOUNCE_SECONDS);
     this.setSteps(steps.active, steps.inactive);
     this.rampBase = base;
     this.incoming.generator.restore(seed, generated);
@@ -330,13 +331,17 @@ export class GameEngine {
     this.awaitingPiece.length = 0;
     this.awaitingPiece.push(...waiting);
     this.inputs.length = 0;
-    this.inputs.push(...inputs);
+    // Older saves may contain a second drop buffered for the next piece.
+    this.inputs.push(...inputs.filter((input) => input.kind !== 'drop'));
     this.events = [];
     this.state = restored;
+    this.dropReadyAt = restored.elapsedSeconds + dropCooldown;
   }
 
   private readonly startConfig: GameConfig;
   private readonly inputs: Input[] = [];
+  private static readonly DROP_DEBOUNCE_SECONDS = 0.3;
+  private dropReadyAt = 0;
   private events: GameEvent[] = [];
   /** Glasses whose piece has locked and that get a new one as soon as the
    * board has come to rest. */
@@ -391,6 +396,7 @@ export class GameEngine {
     this.sides = sidesInPlay(this.startConfig);
     this.incoming.setConfig(this.config);
     this.inputs.length = 0;
+    this.dropReadyAt = 0;
     this.events = [];
     this.awaitingPiece = [];
     this.incoming.reset(this.sides);
@@ -529,6 +535,12 @@ export class GameEngine {
 
   private submit(input: Input): void {
     if (this.isGameOver) return;
+    // A hard drop belongs to the visible piece, never to the next spawn.
+    // Debounce also covers double taps when a short flight has already ended.
+    if (
+      input.kind === 'drop' &&
+      (this.state.phase !== 'playing' || this.inputs.length > 0 || this.state.elapsedSeconds < this.dropReadyAt)
+    ) return;
     if (this.state.phase === 'playing' && this.inputs.length === 0) {
       this.apply(input);
       return;
@@ -655,6 +667,7 @@ export class GameEngine {
   private beginDrop(): void {
     const piece = this.activePiece;
     if (!piece) return;
+    this.dropReadyAt = this.state.elapsedSeconds + GameEngine.DROP_DEBOUNCE_SECONDS;
     const placement = this.previewDrop(piece.side)!;
     this.incoming.take(piece.side);
     const cells = placement.row - piece.row;
