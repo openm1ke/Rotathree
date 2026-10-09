@@ -86,6 +86,8 @@ class GameEngine {
   final IncomingController incoming;
 
   final List<_Input> _inputs = [];
+  static const _dropDebounceSeconds = 0.3;
+  double _dropReadyAt = 0;
   final List<GameEvent> _events = [];
 
   /// Glasses whose piece has locked and that get a new one as soon as the
@@ -132,6 +134,7 @@ class GameEngine {
     _sides = _startConfig.sides;
     incoming.setConfig(_config);
     _inputs.clear();
+    _dropReadyAt = 0;
     _events.clear();
     _awaitingPiece.clear();
     incoming.reset(_sides);
@@ -182,6 +185,7 @@ class GameEngine {
     'piecesPlaced': state.piecesPlaced,
     'selfLocked': state.selfLocked,
     'elapsedSeconds': state.elapsedSeconds,
+    'dropCooldown': min(_dropDebounceSeconds, max(0.0, _dropReadyAt - state.elapsedSeconds)),
     'speedLevel': state.speedLevel,
     'buildingSide': state.buildingSide?.index,
     'drop': state.drop == null
@@ -314,6 +318,9 @@ class GameEngine {
     final baseInactive = r.number('rampBaseInactive', min: 0.01, max: 60);
     final seed = r.integer('randomSeed', max: 1 << 32);
     final generated = r.integer('generated', max: 100000);
+    final dropCooldown = r.data.containsKey('dropCooldown')
+        ? r.number('dropCooldown', max: _dropDebounceSeconds)
+        : 0.0;
     setSteps(activeStep, inactiveStep);
     _rampBaseActive = baseActive;
     _rampBaseInactive = baseInactive;
@@ -329,9 +336,11 @@ class GameEngine {
       ..addAll(waiting);
     _inputs
       ..clear()
-      ..addAll(inputs);
+      // Older saves may contain a second drop buffered for the next piece.
+      ..addAll(inputs.where((input) => input is! _Drop));
     _events.clear();
     state = restored;
+    _dropReadyAt = restored.elapsedSeconds + dropCooldown;
     _changedBoard();
   }
 
@@ -471,6 +480,12 @@ class GameEngine {
 
   void _submit(_Input input) {
     if (isGameOver) return;
+    // A hard drop belongs to the visible piece, never to the next spawn.
+    // Debounce also covers double taps when a short flight has already ended.
+    if (input is _Drop &&
+        (phase != GamePhase.playing || _inputs.isNotEmpty || state.elapsedSeconds < _dropReadyAt)) {
+      return;
+    }
     if (state.phase == GamePhase.playing && _inputs.isEmpty) {
       _apply(input);
       return;
@@ -585,6 +600,7 @@ class GameEngine {
   void _beginDrop() {
     final piece = activePiece;
     if (piece == null) return;
+    _dropReadyAt = state.elapsedSeconds + _dropDebounceSeconds;
     final placement = previewDrop(piece.side)!;
     incoming.take(piece.side);
     final cells = placement.row - piece.row;

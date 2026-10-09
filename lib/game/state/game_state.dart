@@ -5,9 +5,8 @@ import '../model/board.dart';
 import '../model/incoming_piece.dart';
 import '../model/side.dart';
 
-/// Explicit phases of the engine. Player input is only applied in [playing];
-/// in every other phase it is queued and replayed afterwards, so rotation,
-/// drops, pops and gravity can never interleave.
+/// Explicit phases of the engine. Input is applied in [playing]; movement
+/// and turns can be queued during resolution, but hard drops are never buffered.
 enum GamePhase {
   /// Pieces fall; the player can switch, move, rotate and drop.
   playing,

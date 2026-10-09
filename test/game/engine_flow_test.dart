@@ -12,6 +12,57 @@ import 'package:rotathree/game/state/game_state.dart';
 import 'helpers.dart';
 
 void main() {
+  test('double hard drop lands only one piece and keeps queued movement', () {
+    final engine = newEngine();
+    engine.incoming.put(Side.top, horizontal([r, b, y]), column: 0);
+    engine.dropActive();
+    engine.dropActive();
+    engine.moveActive(1);
+    engine.dropActive();
+    runUntilPlaying(engine);
+    expect(engine.state.piecesPlaced, 1);
+    expect(engine.activePiece!.column, engine.incoming.spawnColumn + 1);
+    engine.update(0.4);
+    expect(engine.state.piecesPlaced, 1);
+    engine.dropActive();
+    expect(engine.phase, GamePhase.pieceDropping);
+  });
+
+  test('second tap after a short flight cannot drop the next piece', () {
+    final engine = newEngine();
+    engine.incoming.put(Side.top, horizontal([r, b, y]), row: 15);
+    engine.dropActive();
+    engine.update(0.1);
+    expect(engine.phase, GamePhase.playing);
+    final next = engine.activePiece;
+    engine.dropActive();
+    engine.update(0.1);
+    expect(engine.activePiece, same(next));
+    expect(engine.state.piecesPlaced, 1);
+    engine.update(0.11);
+    engine.dropActive();
+    expect(engine.phase, GamePhase.pieceDropping);
+    engine.restart();
+    engine.dropActive();
+    expect(engine.phase, GamePhase.pieceDropping);
+  });
+
+  test('drops during a cascade are ignored even after the debounce ends', () {
+    final engine = newEngine(center: ['B B R B']);
+    engine.incoming.put(Side.top, vertical([b, r, r]), column: 2);
+    engine.dropActive();
+    final visited = <GamePhase>{};
+    while (engine.phase != GamePhase.playing) {
+      visited.add(engine.phase);
+      engine.dropActive();
+      engine.update(0.01);
+    }
+    expect(visited, contains(GamePhase.cascading));
+    expect(engine.state.piecesPlaced, 1);
+    engine.update(0.1);
+    expect(engine.state.piecesPlaced, 1);
+  });
+
   test('input during a drop is queued and replayed in order', () {
     final engine = newEngine();
     engine.incoming.put(Side.top, horizontal([r, b, y]), column: 0);

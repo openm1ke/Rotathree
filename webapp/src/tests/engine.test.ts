@@ -263,6 +263,57 @@ describe('controlling the active piece', () => {
     expect(engine.board.centerRows().at(-1)).toBe('R B Y . . . . . . .');
   });
 
+  it('double hard drop lands only one piece and keeps queued movement', () => {
+    const engine = newEngine();
+    engine.incoming.put(TOP, lying([R, B, Y]), { column: 0 });
+    engine.dropActive();
+    engine.dropActive();
+    engine.moveActive(1);
+    engine.dropActive();
+    runUntilPlaying(engine);
+    expect(engine.state.piecesPlaced).toBe(1);
+    expect(engine.activePiece!.column).toBe(engine.incoming.spawnColumn + 1);
+    engine.update(0.4);
+    expect(engine.state.piecesPlaced).toBe(1);
+    engine.dropActive();
+    expect(engine.phase).toBe('pieceDropping');
+  });
+
+  it('ignores a second tap after a short flight has already spawned the next piece', () => {
+    const engine = newEngine();
+    engine.incoming.put(TOP, lying([R, B, Y]), { row: 15 });
+    engine.dropActive();
+    engine.update(0.1);
+    expect(engine.phase).toBe('playing');
+    const next = engine.activePiece;
+    engine.dropActive();
+    engine.update(0.1);
+    expect(engine.activePiece).toBe(next);
+    expect(engine.state.piecesPlaced).toBe(1);
+    engine.update(0.11);
+    engine.dropActive();
+    expect(engine.phase).toBe('pieceDropping');
+    engine.restart();
+    engine.dropActive();
+    expect(engine.phase).toBe('pieceDropping');
+  });
+
+  it('does not buffer drops during a cascade even after the debounce ends', () => {
+    const engine = newEngine({}, ['B B R B']);
+    engine.incoming.put(TOP, standing([B, R, R]), { column: 2 });
+    engine.dropActive();
+    const visited = new Set<string>();
+    while (engine.phase !== 'playing') {
+      visited.add(engine.phase);
+      engine.dropActive();
+      engine.update(0.01);
+    }
+    expect(visited.has('cascading')).toBe(true);
+    expect(engine.state.piecesPlaced).toBe(1);
+    engine.update(0.1);
+    expect(engine.state.piecesPlaced).toBe(1);
+  });
+
   it('input during a drop is queued and replayed in order', () => {
     const engine = newEngine({ maxQueuedInputs: 3 });
     engine.incoming.put(TOP, lying([R, B, Y]), { column: 0 });

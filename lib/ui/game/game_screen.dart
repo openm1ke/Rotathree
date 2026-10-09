@@ -641,7 +641,8 @@ class GameScreenState extends State<GameScreen>
     final holding = frozen || (_banner?.blocking ?? false);
     if (frozen) _pads.releaseAll();
     _fx.screenShake = settings.effects.screenShake && !_reduceMotion;
-    _fx.turnSeconds = _reduceMotion ? 0 : settings.effects.turnMs / 1000;
+    // Glass navigation follows the explicit game setting on every platform.
+    _fx.turnSeconds = settings.effects.turnMs / 1000;
     _fx.explosion = settings.effects.explosion;
 
     if (_status == _Status.playing && !holding) {
