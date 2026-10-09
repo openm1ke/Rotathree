@@ -88,7 +88,7 @@ export const defaultSettings = (): Settings => ({
   hud: { keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
   padPositions: structuredClone(DEFAULT_POSITIONS),
-  audio: { music: true, musicVolume: 0.6 },
+  audio: { music: true, musicVolume: 0.1 },
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -163,7 +163,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     },
     audio: {
       music: audio.music !== false,
-      musicVolume: numberIn(audio.volume, 0, 1, base.audio.musicVolume),
+      musicVolume: numberIn(audio.musicVolume ?? audio.volume, 0, 1, base.audio.musicVolume),
     },
   };
 }

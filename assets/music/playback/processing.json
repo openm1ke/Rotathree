@@ -1,0 +1,43 @@
+{
+  "targetLufs": -23,
+  "truePeakDbtp": -2,
+  "fadeInSeconds": 2,
+  "fadeOutSeconds": 2,
+  "tracks": [
+    {
+      "file": "deep-focus.m4a",
+      "durationSeconds": 54.8,
+      "sourceLufs": -15.04
+    },
+    {
+      "file": "deep-focus-1.m4a",
+      "durationSeconds": 52.4,
+      "sourceLufs": -15.72
+    },
+    {
+      "file": "ambient-relaxing-loop.m4a",
+      "durationSeconds": 24.51093,
+      "sourceLufs": -18.78
+    },
+    {
+      "file": "project-utopia-loop.m4a",
+      "durationSeconds": 18.320431,
+      "sourceLufs": -15.35
+    },
+    {
+      "file": "chill-loopable.m4a",
+      "durationSeconds": 67.186917,
+      "sourceLufs": -15.26
+    },
+    {
+      "file": "insistent-background-loop.m4a",
+      "durationSeconds": 128.693265,
+      "sourceLufs": -19.6
+    },
+    {
+      "file": "claimed-by-the-void-loop.m4a",
+      "durationSeconds": 195.0302,
+      "sourceLufs": -9.95
+    }
+  ]
+}

@@ -1,141 +1,134 @@
-import type { AudioOptions } from './storage';
+import { defaultSettings, type AudioOptions } from './storage';
 
-/** Tracks bundled with the web build. The first two are the player's tracks;
- * the remaining files are CC0 loopable ambience in assets/music/downloaded. */
+/** These playback copies have matched loudness and baked-in 2s fades at both
+ * ends. Keep the originals and licensing records in assets/music. */
 export const MUSIC_TRACKS = [
   'music/deep-focus.m4a',
   'music/deep-focus-1.m4a',
-  'music/ambient-relaxing-loop.mp3',
-  'music/project-utopia-loop.mp3',
-  'music/chill-loopable.mp3',
-  'music/insistent-background-loop.mp3',
-  'music/claimed-by-the-void-loop.mp3',
+  'music/ambient-relaxing-loop.m4a',
+  'music/project-utopia-loop.m4a',
+  'music/chill-loopable.m4a',
+  'music/insistent-background-loop.m4a',
+  'music/claimed-by-the-void-loop.m4a',
 ] as const;
 
-const CROSSFADE_MS = 3000;
-
-/**
- * Two HTML audio elements are used because changing an element's volume while
- * it is playing cannot overlap the next source. A small timer ramps one down
- * and the other up during the last three seconds of every track.
- */
+/** One player advances only after a track finishes, so the faded ends never
+ * overlap or add their loudness. Web Audio also controls volume on iOS Safari,
+ * where setting HTMLMediaElement.volume alone has no effect. */
 export class MusicPlayer {
-  private readonly players = [new Audio(), new Audio()];
-  private options: AudioOptions = { music: true, musicVolume: 0.6 };
-  private active = 0;
+  private readonly player = new Audio();
+  private options: AudioOptions = defaultSettings().audio;
+  private context: AudioContext | undefined;
+  private gain: GainNode | undefined;
   private track = 0;
-  private timer: number | undefined;
-  private started = false;
-  private transitioning = false;
-  private fadeStarted = 0;
-  private sourceBase = import.meta.env.BASE_URL;
+  private loaded = false;
+  private wanted = false;
+  private disposed = false;
+  private pending: Promise<void> | undefined;
+  private failures = 0;
 
   constructor() {
-    for (const player of this.players) {
-      player.preload = 'auto';
-      player.addEventListener('ended', () => this.advanceWithoutFade(player));
-    }
+    this.player.preload = 'auto';
+    this.player.addEventListener('ended', this.onEnded);
+    this.player.addEventListener('error', this.onError);
+    this.applyVolume();
   }
 
   setSettings(options: AudioOptions): void {
     const wasEnabled = this.options.music;
-    this.options = options;
-    for (const player of this.players) player.volume = options.music ? options.musicVolume : 0;
-    if (!options.music) {
-      this.stop();
-    } else if (!wasEnabled) {
-      this.ensurePlaying();
-    }
+    this.options = { ...options, musicVolume: Math.max(0, Math.min(1, options.musicVolume)) };
+    this.applyVolume();
+    if (!options.music) this.stop();
+    else if (!wasEnabled) this.ensurePlaying();
   }
 
-  /** Call from a pointer/key gesture so browsers that block autoplay can start. */
+  /** Called from a pointer/key gesture to unlock browser audio. */
   ensurePlaying(): void {
-    if (!this.options.music || this.started) return;
+    if (!this.options.music || this.disposed) return;
+    if (!this.player.paused && this.wanted) return;
     void this.start();
   }
 
   async start(): Promise<void> {
-    if (!this.options.music || this.started) return;
-    this.started = true;
-    const player = this.players[this.active];
-    player.src = this.url(MUSIC_TRACKS[this.track]);
-    player.currentTime = 0;
-    player.volume = this.options.musicVolume;
+    if (!this.options.music || this.disposed) return;
+    this.wanted = true;
+    if (this.pending) return this.pending;
+    this.pending = this.playCurrent();
     try {
-      await player.play();
-      this.timer ??= window.setInterval(() => void this.tick(), 80);
-    } catch {
-      // Autoplay policies reject the promise until the next user gesture.
-      this.started = false;
+      await this.pending;
+    } finally {
+      this.pending = undefined;
     }
   }
 
   stop(): void {
-    this.started = false;
-    this.transitioning = false;
-    if (this.timer !== undefined) window.clearInterval(this.timer);
-    this.timer = undefined;
-    for (const player of this.players) {
-      player.pause();
-      player.currentTime = 0;
-    }
+    this.wanted = false;
+    this.player.pause();
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.stop();
-    for (const player of this.players) {
-      player.removeAttribute('src');
-      player.load();
+    this.player.removeEventListener('ended', this.onEnded);
+    this.player.removeEventListener('error', this.onError);
+    this.player.removeAttribute('src');
+    this.player.load();
+    void this.context?.close().catch(() => {});
+  }
+
+  private applyVolume(): void {
+    const volume = this.options.music ? this.options.musicVolume : 0;
+    if (this.gain) this.gain.gain.value = volume;
+    else this.player.volume = volume;
+  }
+
+  private createAudioGraph(): void {
+    if (this.context || typeof AudioContext === 'undefined') return;
+    const context = new AudioContext();
+    const gain = context.createGain();
+    context.createMediaElementSource(this.player).connect(gain);
+    gain.connect(context.destination);
+    this.context = context;
+    this.gain = gain;
+    this.applyVolume();
+    this.player.volume = 1;
+  }
+
+  private async playCurrent(): Promise<void> {
+    if (!this.loaded) {
+      this.player.src = `${import.meta.env.BASE_URL}${MUSIC_TRACKS[this.track]}`;
+      this.loaded = true;
     }
-  }
-
-  private url(track: string): string {
-    return `${this.sourceBase}${track}`;
-  }
-
-  private async tick(): Promise<void> {
-    if (!this.started || this.transitioning) return;
-    const player = this.players[this.active];
-    if (!Number.isFinite(player.duration) || player.duration <= 0) return;
-    if (player.duration - player.currentTime <= CROSSFADE_MS / 1000) await this.beginFade();
-  }
-
-  private async beginFade(): Promise<void> {
-    if (this.transitioning || !this.started) return;
-    this.transitioning = true;
-    this.fadeStarted = performance.now();
-    const next = 1 - this.active;
-    this.track = (this.track + 1) % MUSIC_TRACKS.length;
-    const player = this.players[next];
-    player.pause();
-    player.src = this.url(MUSIC_TRACKS[this.track]);
-    player.currentTime = 0;
-    player.volume = 0;
     try {
-      await player.play();
-      this.fade();
+      this.createAudioGraph();
+      if (this.context?.state === 'suspended') await this.context.resume();
+      if (!this.wanted || this.disposed) return;
+      await this.player.play();
+      if (!this.wanted || this.disposed) this.player.pause();
     } catch {
-      this.transitioning = false;
+      // A rejected autoplay attempt is retried on the next user gesture.
+      // Media errors instead advance once this pending play has settled.
+      if (!this.player.error) this.wanted = false;
     }
   }
 
-  private fade(): void {
-    if (!this.transitioning) return;
-    const progress = Math.min(1, (performance.now() - this.fadeStarted) / CROSSFADE_MS);
-    this.players[this.active].volume = this.options.musicVolume * (1 - progress);
-    this.players[1 - this.active].volume = this.options.musicVolume * progress;
-    if (progress < 1) {
-      window.requestAnimationFrame(() => this.fade());
-      return;
-    }
-    this.players[this.active].pause();
-    this.players[this.active].currentTime = 0;
-    this.active = 1 - this.active;
-    this.transitioning = false;
+  private advance(): void {
+    if (!this.wanted || !this.options.music || this.disposed) return;
+    this.track = (this.track + 1) % MUSIC_TRACKS.length;
+    this.loaded = false;
+    void this.start();
   }
 
-  private advanceWithoutFade(player: HTMLAudioElement): void {
-    if (!this.started || this.transitioning || player !== this.players[this.active]) return;
-    void this.beginFade();
-  }
+  private onEnded = (): void => {
+    this.failures = 0;
+    this.advance();
+  };
+
+  private onError = (): void => {
+    // Skip an unavailable file, but stop if the entire playlist is unavailable.
+    if (++this.failures >= MUSIC_TRACKS.length) this.stop();
+    else if (this.pending) void this.pending.then(() => this.advance());
+    else this.advance();
+  };
 }

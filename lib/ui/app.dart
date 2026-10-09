@@ -107,7 +107,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && _store != null) {
       unawaited(_music.start());
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       unawaited(_music.stop());
@@ -140,6 +140,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     widget.onLanguageChanged(_settings.language);
     BlockTones.setColours(_settings.palettes.activeSet.colours);
     unawaited(_music.update(_settings.audio));
+    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      unawaited(_music.start());
+    }
   }
 
   void _saved(String key, Future<bool> write) {

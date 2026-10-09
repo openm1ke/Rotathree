@@ -4,10 +4,41 @@ import {
   addRun,
   defaultProgress,
   defaultStats,
+  defaultSettings,
+  loadSettings,
+  saveSettings,
+  sanitizeSettings,
   sanitizeProgress,
   sanitizeStats,
   type RunRecord,
 } from '../services/storage';
+
+describe('music settings', () => {
+  it('uses 10% for a new player or an older save without audio preferences', () => {
+    expect(defaultSettings().audio.musicVolume).toBe(0.1);
+    expect(sanitizeSettings({ handling: { dasMs: 210 } }).audio.musicVolume).toBe(0.1);
+  });
+
+  it('reads back the actual stored volume, including mute and 100%', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    };
+    for (const musicVolume of [0, 0.05, 0.35, 0.6, 1]) {
+      const settings = { ...defaultSettings(), audio: { music: false, musicVolume } };
+      expect(saveSettings(settings, storage)).toBe(true);
+      expect(loadSettings(storage)).toEqual(settings);
+    }
+  });
+
+  it('preserves the previous volume key while preferring the current key', () => {
+    expect(sanitizeSettings({ audio: { volume: 0.25 } }).audio.musicVolume).toBe(0.25);
+    expect(sanitizeSettings({ audio: { musicVolume: 0, volume: 0.6 } }).audio.musicVolume).toBe(0);
+    expect(sanitizeSettings({ audio: { musicVolume: 8 } }).audio.musicVolume).toBe(1);
+    expect(sanitizeSettings({ audio: { musicVolume: Number.NaN } }).audio.musicVolume).toBe(0.1);
+  });
+});
 
 const run = (overrides: Partial<RunRecord> = {}): RunRecord => ({
   id: 'x',
