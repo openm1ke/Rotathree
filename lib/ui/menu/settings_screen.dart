@@ -10,13 +10,14 @@ import '../style.dart';
 import '../widgets/controls.dart';
 import 'colour_picker.dart';
 
-enum _Tab { controls, colours, effects, interface }
+enum _Tab { controls, colours, effects, interface, sound }
 
 const _tabNames = {
   _Tab.controls: 'Управление',
   _Tab.colours: 'Цвета',
   _Tab.effects: 'Эффекты',
   _Tab.interface: 'Интерфейс',
+  _Tab.sound: 'Звуки',
 };
 
 /// The settings: keys and buttons, colours, effects and the look of the
@@ -107,6 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           _Tab.colours => _colours(),
           _Tab.effects => _effects(),
           _Tab.interface => _interface(),
+          _Tab.sound => _sound(),
         },
         Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -479,6 +481,44 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             final defaults = Settings.defaults();
             widget.onChange(widget.settings.copyWith(hud: defaults.hud, effects: defaults.effects));
           },
+        ),
+      ),
+      const SizedBox(height: 20),
+    ];
+  }
+
+  // --------------------------------------------------------------------- sound
+
+  List<Widget> _sound() {
+    final audio = widget.settings.audio;
+    void setAudio(AudioOptions next) => widget.onChange(widget.settings.copyWith(audio: next));
+    return [
+      Section(
+        title: 'Музыка',
+        note: 'Треки плавно переходят друг в друга',
+        children: [
+          SwitchRow(
+            label: 'Фоновая музыка',
+            value: audio.music,
+            on: 'вкл',
+            off: 'выкл',
+            onChanged: (music) => setAudio(audio.copyWith(music: music)),
+          ),
+          SliderRow(
+            label: 'Громкость музыки',
+            value: (audio.musicVolume * 100).round(),
+            min: 0,
+            max: 100,
+            step: 5,
+            unit: '%',
+            onChanged: (value) => setAudio(audio.copyWith(musicVolume: value / 100)),
+          ),
+        ],
+      ),
+      Center(
+        child: OutlineButton(
+          label: 'Сбросить звук',
+          onPressed: () => setAudio(const AudioOptions()),
         ),
       ),
       const SizedBox(height: 20),

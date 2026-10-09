@@ -61,6 +61,19 @@ class HudOptions {
       );
 }
 
+/// Background music preferences. The volume is stored from 0.0 to 1.0.
+class AudioOptions {
+  const AudioOptions({this.music = true, this.musicVolume = 0.6});
+
+  final bool music;
+  final double musicVolume;
+
+  AudioOptions copyWith({bool? music, double? musicVolume}) => AudioOptions(
+        music: music ?? this.music,
+        musicVolume: musicVolume ?? this.musicVolume,
+      );
+}
+
 class Handling {
   const Handling({this.dasMs = 150, this.arrMs = 35});
 
@@ -228,6 +241,7 @@ class Settings {
     required this.rightPad,
     this.padPositions = const PadPositions(),
     this.language = LanguageChoice.auto,
+    this.audio = const AudioOptions(),
   });
 
   factory Settings.defaults() => Settings(
@@ -253,6 +267,7 @@ class Settings {
     final handling = section('handling');
     final effects = section('effects');
     final hud = section('hud');
+    final audio = section('audio');
     final pads = section('pads');
     return Settings(
       language: LanguageChoice.fromJson(map['language']),
@@ -274,6 +289,10 @@ class Settings {
         stats: hud['stats'] != false,
         opacity: _doubleIn(hud['opacity'], 0.1, 1, base.hud.opacity),
       ),
+      audio: AudioOptions(
+        music: audio['music'] != false,
+        musicVolume: _doubleIn(audio['volume'], 0, 1, base.audio.musicVolume),
+      ),
       leftPad: _padFromJson(pads['left'], base.leftPad),
       rightPad: _padFromJson(pads['right'], base.rightPad),
     );
@@ -288,6 +307,7 @@ class Settings {
   final PadLayout leftPad;
   final PadLayout rightPad;
   final PadPositions padPositions;
+  final AudioOptions audio;
 
   Settings copyWith({
     LanguageChoice? language,
@@ -299,6 +319,7 @@ class Settings {
     PadLayout? leftPad,
     PadLayout? rightPad,
     PadPositions? padPositions,
+    AudioOptions? audio,
   }) =>
       Settings(
         language: language ?? this.language,
@@ -310,6 +331,7 @@ class Settings {
         leftPad: leftPad ?? this.leftPad,
         rightPad: rightPad ?? this.rightPad,
         padPositions: padPositions ?? this.padPositions,
+        audio: audio ?? this.audio,
       );
 
   Map<String, Object?> toJson() => {
@@ -330,6 +352,10 @@ class Settings {
           'score': hud.score,
           'stats': hud.stats,
           'opacity': hud.opacity,
+        },
+        'audio': {
+          'music': audio.music,
+          'volume': audio.musicVolume,
         },
         'padPositions': padPositions.toJson(),
         'pads': {

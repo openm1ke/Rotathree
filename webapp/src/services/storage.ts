@@ -45,6 +45,12 @@ export interface Effects {
   turnMs: number;
 }
 
+export interface AudioOptions {
+  music: boolean;
+  /** Master volume from 0 to 1. */
+  musicVolume: number;
+}
+
 export interface Settings {
   language: LanguageChoice;
   bindings: Bindings;
@@ -54,6 +60,7 @@ export interface Settings {
   hud: HudOptions;
   pads: { left: PadLayout; right: PadLayout };
   padPositions: PadPositions;
+  audio: AudioOptions;
 }
 
 export const BUILTIN_PALETTES: PaletteSet[] = [
@@ -81,6 +88,7 @@ export const defaultSettings = (): Settings => ({
   hud: { keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
   padPositions: structuredClone(DEFAULT_POSITIONS),
+  audio: { music: true, musicVolume: 0.6 },
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -122,6 +130,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   const effects = (stored.effects ?? {}) as Record<string, unknown>;
   const hud = (stored.hud ?? {}) as Record<string, unknown>;
   const pads = (stored.pads ?? {}) as Record<string, unknown>;
+  const audio = (stored.audio ?? {}) as Record<string, unknown>;
   const pad = (raw: unknown, fallback: PadLayout): PadLayout => {
     const p = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
     return Object.fromEntries(
@@ -151,6 +160,10 @@ export function sanitizeSettings(raw: unknown): Settings {
       score: hud.score !== false,
       stats: hud.stats !== false,
       opacity: numberIn(hud.opacity, 0.1, 1, base.hud.opacity),
+    },
+    audio: {
+      music: audio.music !== false,
+      musicVolume: numberIn(audio.volume, 0, 1, base.audio.musicVolume),
     },
   };
 }
