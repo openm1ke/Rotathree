@@ -61,7 +61,7 @@ describe('the other modes', () => {
     const cleaned = sanitizeCustom({ extraGlasses: 9, colours: 1, armLength: 40, speedUp: true, speedUpStep: 0.9, gravityScope: 'sideways' });
     expect(cleaned.extraGlasses).toBe(3);
     expect(cleaned.colours).toBe(3);
-    expect(cleaned.armLength).toBe(10);
+    expect(cleaned.armLength).toBe(12);
     expect(cleaned.speedUpStep).toBe(0.3);
     expect(cleaned.speedUp).toBe(true);
     expect(cleaned.gravityScope).toBe('wholeGlass');
@@ -71,4 +71,14 @@ describe('the other modes', () => {
   it('the glasses come into play in the order start, neighbours, opposite', () => {
     expect(GLASS_ORDER).toEqual([TOP, RIGHT, LEFT, BOTTOM]);
   });
+});
+
+// All offered lengths must survive the persisted setup without being clamped back.
+it('supports each custom arm length from 4 to 12', () => {
+  for (let armLength = 4; armLength <= 12; armLength++) {
+    const setup = sanitizeCustom({ ...DEFAULT_CUSTOM, armLength });
+    expect(setup.armLength).toBe(armLength);
+    expect(customPlan(setup).config.armLength).toBe(armLength);
+  }
+  expect(sanitizeCustom({ armLength: 0 }).armLength).toBe(4);
 });

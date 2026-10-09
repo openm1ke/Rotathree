@@ -31,15 +31,14 @@ class CustomScreen extends StatelessWidget {
       kicker: 'Режим',
       title: 'Кастом',
       onBack: onBack,
-      actions: [
-        OutlineButton(label: 'Сбросить', onPressed: () => onChange(defaultCustom)),
-      ],
+      actions: [OutlineButton(square: true, label: 'Сбросить', onPressed: () => onChange(defaultCustom))],
       footer: 'Настройки этого режима действуют только в нём',
       children: [
         Section(
           title: 'Стаканы и цвета',
           children: [
             OptionGroup<int>(
+              square: true,
               label: 'Дополнительных стаканов',
               note: 'кроме стакана, с которого начинается игра',
               value: setup.extraGlasses,
@@ -47,6 +46,7 @@ class CustomScreen extends StatelessWidget {
               onChanged: (value) => set(setup.copyWith(extraGlasses: value)),
             ),
             OptionGroup<int>(
+              square: true,
               label: 'Цветов',
               value: setup.colours,
               options: [for (var n = 3; n <= 9; n++) (value: n, label: '$n')],
@@ -61,15 +61,16 @@ class CustomScreen extends StatelessWidget {
                       width: 12,
                       height: 12,
                       margin: const EdgeInsets.only(right: 4),
-                      decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: colour, borderRadius: BorderRadius.circular(2)),
                     ),
                 ],
               ),
             ),
             OptionGroup<int>(
+              square: true,
               label: 'Длина рукава, клеток',
               value: setup.armLength,
-              options: [for (final n in [6, 8, 9, 10]) (value: n, label: '$n')],
+              options: [for (var n = 4; n <= 12; n++) (value: n, label: '$n')],
               onChanged: (value) => set(setup.copyWith(armLength: value)),
             ),
           ],
@@ -78,6 +79,7 @@ class CustomScreen extends StatelessWidget {
           title: 'Скорость',
           children: [
             OptionGroup<double>(
+              square: true,
               label: 'Старт: активный стакан',
               note: 'секунд на шаг фигуры',
               value: setup.activeStep,
@@ -87,6 +89,7 @@ class CustomScreen extends StatelessWidget {
               onChanged: (value) => set(setup.copyWith(activeStep: value)),
             ),
             OptionGroup<double>(
+              square: true,
               label: 'Старт: остальные стаканы',
               note: 'секунд на шаг фигуры',
               value: setup.inactiveStep,
@@ -96,12 +99,14 @@ class CustomScreen extends StatelessWidget {
               onChanged: (value) => set(setup.copyWith(inactiveStep: value)),
             ),
             SwitchRow(
+              square: true,
               label: 'Ускорять падение',
               value: setup.speedUp,
               onChanged: (value) => set(setup.copyWith(speedUp: value)),
             ),
             if (setup.speedUp) ...[
               OptionGroup<double>(
+                square: true,
                 label: 'Шаг ускорения',
                 note: 'на сколько быстрее каждый раз',
                 value: setup.speedUpStep,
@@ -111,6 +116,7 @@ class CustomScreen extends StatelessWidget {
                 onChanged: (value) => set(setup.copyWith(speedUpStep: value)),
               ),
               OptionGroup<int>(
+                square: true,
                 label: 'Ускорять каждые',
                 note: 'очков',
                 value: setup.speedUpEvery,
@@ -126,6 +132,7 @@ class CustomScreen extends StatelessWidget {
           title: 'Правила',
           children: [
             OptionGroup<GravityScope>(
+              square: true,
               label: 'После хлопка падает',
               value: setup.gravityScope,
               options: const [
@@ -161,7 +168,7 @@ class CustomScreen extends StatelessWidget {
             ],
           ),
         ),
-        GoButton(label: 'Начать', expand: true, onPressed: onStart),
+        GoButton(square: true, label: 'Начать', expand: true, onPressed: onStart),
       ],
     );
   }

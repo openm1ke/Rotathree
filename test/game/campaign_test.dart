@@ -25,7 +25,10 @@ void main() {
     });
 
     test('each stage starts again with one glass', () {
-      final starts = [for (var i = 0; i < campaignLevels.length; i++) if (startsStage(i)) i];
+      final starts = [
+        for (var i = 0; i < campaignLevels.length; i++)
+          if (startsStage(i)) i,
+      ];
       expect(starts, [0, 3, 7, 11]);
       expect(campaignLevels[3].glasses, 1);
       expect(campaignLevels[7].glasses, 1);
@@ -62,13 +65,11 @@ void main() {
       expect(plain.config.numberOfColors, 3);
       expect(plain.ramp, isNull);
 
-      final faster = planFor(CustomSession(defaultCustom.copyWith(
-        extraGlasses: 0,
-        colours: 9,
-        speedUp: true,
-        speedUpStep: 0.2,
-        speedUpEvery: 2000,
-      )));
+      final faster = planFor(
+        CustomSession(
+          defaultCustom.copyWith(extraGlasses: 0, colours: 9, speedUp: true, speedUpStep: 0.2, speedUpEvery: 2000),
+        ),
+      );
       expect(faster.config.glassCount, 1);
       expect(faster.config.numberOfColors, 9);
       expect(faster.ramp!.factor, closeTo(0.8, 1e-9));
@@ -90,6 +91,16 @@ void main() {
       expect(setup.speedUp, isFalse);
       expect(setup.gravityScope, GravityScope.aboveCleared);
       expect(setup.speedUpStep, 0.3);
+    });
+
+    test('custom arm lengths 4 through 12 survive saving and configure the board', () {
+      for (var length = 4; length <= 12; length++) {
+        final setup = CustomSetup.fromJson(defaultCustom.copyWith(armLength: length).toJson());
+        expect(setup.armLength, length);
+        expect(customPlan(setup).config.armLength, length);
+      }
+      expect(CustomSetup.fromJson({'armLength': 0}).armLength, 4);
+      expect(CustomSetup.fromJson({'armLength': 100}).armLength, 12);
     });
 
     test('a custom setup survives a JSON round trip', () {
@@ -136,12 +147,7 @@ void main() {
 
     test('the speed steps up with the score and never past its minimum', () {
       final engine = newEngine(config: testConfig.copyWith(glassCount: 1));
-      engine.setRamp(const SpeedRamp(
-        everyPoints: 100,
-        factor: 0.5,
-        minActive: 0.2,
-        minInactive: 0.6,
-      ));
+      engine.setRamp(const SpeedRamp(everyPoints: 100, factor: 0.5, minActive: 0.2, minInactive: 0.6));
       // A line of three is worth 100 points: one step of the ramp.
       engine.incoming.put(Side.top, horizontal([r, r, r]));
       engine.dropActive();

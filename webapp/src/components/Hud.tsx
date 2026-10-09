@@ -14,7 +14,7 @@ interface Props {
   onOpenSettings: () => void;
 }
 
-/** Four panels in the corners the cross leaves free. */
+/** Readouts above the canvas keep the fitted field clear at every glass count. */
 export function Hud({ hud, callout, bindings, options, onPause, onOpenSettings }: Props) {
   return (
     <>

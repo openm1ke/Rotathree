@@ -85,7 +85,7 @@ class CustomSetup {
     return CustomSetup(
       extraGlasses: number('extraGlasses', defaultCustom.extraGlasses.toDouble(), 0, 3).round(),
       colours: number('colours', defaultCustom.colours.toDouble(), 3, 9).round(),
-      armLength: number('armLength', defaultCustom.armLength.toDouble(), 6, 10).round(),
+      armLength: number('armLength', defaultCustom.armLength.toDouble(), 4, 12).round(),
       activeStep: number('activeStep', defaultCustom.activeStep, 0.3, 2),
       inactiveStep: number('inactiveStep', defaultCustom.inactiveStep, 0.6, 6),
       speedUp: map['speedUp'] == true,

@@ -602,7 +602,13 @@ class GameScreenState extends State<GameScreen>
   void _onTapStage(TapUpDetails details, double side) {
     if (!_acceptsInput || (widget.tutorial && _tutorialStep != 4)) return;
     final before = _engine.activeSide;
-    final zone = FieldGeometry(side, _engine.config, devicePixelRatio: _pixelRatio).zoneAt(details.localPosition);
+    final zone = FieldGeometry(
+      side,
+      _engine.config,
+      devicePixelRatio: _pixelRatio,
+      angle: _fx.viewAngle,
+      sides: _engine.sides,
+    ).zoneAt(details.localPosition);
     final slot = switch (zone) {
       FieldZone.right => Side.right,
       FieldZone.bottom => Side.bottom,
@@ -747,6 +753,11 @@ class GameScreenState extends State<GameScreen>
                         ],
                       ),
                     ),
+                    if (!widget.tutorial)
+                      ValueListenableBuilder<HudState>(
+                        valueListenable: _hud,
+                        builder: (context, hud, _) => GameReadout(hud: hud, options: settings.hud, callout: _callout),
+                      ),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, box) {
@@ -807,9 +818,6 @@ class GameScreenState extends State<GameScreen>
   }
 
   Widget _stage(double side) {
-    final config = _engine.config;
-    final corner = side * config.armLength / config.gridSize;
-    final base = math.max(10.0, side / 40);
     final banner = _banner;
     return Stack(
       children: [
@@ -826,6 +834,7 @@ class GameScreenState extends State<GameScreen>
                   fx: _fx,
                   assets: _assets,
                   devicePixelRatio: _pixelRatio,
+                  reduceMotion: _reduceMotion,
                   repaint: _repaint,
                 ),
                 size: Size.square(side),
@@ -833,16 +842,6 @@ class GameScreenState extends State<GameScreen>
             ),
           ),
         ),
-        if (!widget.tutorial)
-          Positioned.fill(
-            child: RepaintBoundary(
-              child: ValueListenableBuilder<HudState>(
-                valueListenable: _hud,
-                builder: (context, hud, _) =>
-                    Hud(hud: hud, callout: _callout, options: widget.settings.hud, corner: corner, base: base),
-              ),
-            ),
-          ),
         if (banner != null)
           Positioned(
             top: side * 0.3,
@@ -932,12 +931,12 @@ class GameScreenState extends State<GameScreen>
   Widget _doneDialog(RunRecord record) => DialogCard(
     kicker: 'Кампания',
     title: 'Кампания пройдена',
-    note: 'Все ${campaignLevels.length} уровней позади. Безумие открыто.',
+    note: 'Все ${campaignLevels.length} уровней позади. Кошмар открыт.',
     children: [
       _RunStats(record: record, campaign: true),
       const SizedBox(height: 14),
       _buttons([
-        GoButton(label: 'Безумие', expand: true, onPressed: widget.onInsane),
+        GoButton(label: 'Кошмар', expand: true, onPressed: widget.onInsane),
         OutlineButton(label: 'К уровням', onPressed: widget.onLevels),
         OutlineButton(label: 'В меню', onPressed: () => _leave(widget.onExit)),
       ]),

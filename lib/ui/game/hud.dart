@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../game/config/campaign.dart';
 import '../data/settings.dart';
@@ -89,135 +89,6 @@ class Callout {
   final int speed;
 }
 
-/// Four panels in the corners the cross leaves free.
-class Hud extends StatelessWidget {
-  const Hud({
-    super.key,
-    required this.hud,
-    required this.callout,
-    required this.options,
-    required this.corner,
-    required this.base,
-  });
-
-  final HudState hud;
-  final Callout? callout;
-  final HudOptions options;
-
-  /// Side of a corner square, in logical pixels.
-  final double corner;
-
-  /// The base text size; everything on the field is a multiple of it.
-  final double base;
-
-  @override
-  Widget build(BuildContext context) {
-    final pad = base * 0.5;
-    final label = Type.label(base * 0.9);
-    final value = Type.display(base * 1.8, height: 1.05);
-    final small = Type.display(base * 1.25, height: 1.05);
-    return Opacity(
-      opacity: options.opacity,
-      child: Stack(
-        children: [
-          if (options.score)
-            Positioned(
-              left: pad,
-              top: pad,
-              width: corner * 1.1,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Счёт', style: label),
-                  Text(formatNumber(hud.score), style: value.copyWith(fontSize: base * 2.4)),
-                  if (hud.level > 0) ...[SizedBox(height: base * 0.6), _LevelBlock(hud: hud, base: base)],
-                  if (hud.speed > 0)
-                    Text('Скорость ${hud.speed}', style: Type.body(base * 0.95, color: Palette.accent)),
-                  if (callout != null) _CalloutView(callout: callout!, base: base),
-                ],
-              ),
-            ),
-          if (options.stats) ...[
-            Positioned(
-              right: pad,
-              top: pad,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Время', style: label),
-                  Text(formatClock(hud.seconds), style: small),
-                  Text('Фигуры', style: label),
-                  Text('${hud.pieces}', style: small),
-                ],
-              ),
-            ),
-            Positioned(
-              left: pad,
-              bottom: pad,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Матчи', style: label),
-                  Text('${hud.matches}', style: small),
-                  Text('Лучшее комбо', style: label),
-                  Text('×${hud.bestCombo}', style: small),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LevelBlock extends StatelessWidget {
-  const _LevelBlock({required this.hud, required this.base});
-
-  final HudState hud;
-  final double base;
-
-  @override
-  Widget build(BuildContext context) {
-    final fraction = hud.target <= 0 ? 0.0 : (hud.into / hud.target).clamp(0.0, 1.0).toDouble();
-    return SizedBox(
-      width: base * 11,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Уровень ${hud.level} / ${campaignLevels.length}',
-            style: Type.body(base * 1.0, weight: FontWeight.w800),
-          ),
-          Text('${hud.colours} цв · ${hud.glasses} ст', style: Type.body(base * 0.85, color: Palette.textDim)),
-          SizedBox(height: base * 0.35),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: Stack(
-              children: [
-                Container(height: base * 0.4, color: Palette.line),
-                FractionallySizedBox(
-                  widthFactor: fraction,
-                  child: Container(height: base * 0.4, color: Palette.accent),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: base * 0.3),
-          Text(
-            '${formatNumber(hud.into)} / ${formatNumber(hud.target)}',
-            style: Type.body(base * 0.9, color: Palette.textDim, weight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CalloutView extends StatelessWidget {
   const _CalloutView({required this.callout, required this.base});
 
@@ -245,4 +116,73 @@ class _CalloutView extends StatelessWidget {
       child: text,
     );
   }
+}
+
+/// Readouts outside the field leave every pixel available to the fitted camera.
+class GameReadout extends StatelessWidget {
+  const GameReadout({super.key, required this.hud, required this.options, this.callout});
+  final HudState hud;
+  final HudOptions options;
+  final Callout? callout;
+  @override
+  Widget build(BuildContext context) => Opacity(
+    opacity: options.opacity,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (options.score) ...[
+                Row(
+                  children: [
+                    Expanded(child: Text('${formatNumber(hud.score)} очков', style: Type.display(20))),
+                    if (hud.level > 0)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Уровень ${hud.level} / ${campaignLevels.length}',
+                            style: Type.body(11, color: Palette.accent),
+                          ),
+                          Text(
+                            '${formatNumber(hud.into)} / ${formatNumber(hud.target)}',
+                            style: Type.body(11, color: Palette.textDim),
+                          ),
+                        ],
+                      ),
+                    if (hud.speed > 0) Text('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
+                  ],
+                ),
+                if (hud.target > 0) ...[
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(
+                    value: (hud.into / hud.target).clamp(0, 1),
+                    minHeight: 3,
+                    color: Palette.accent,
+                    backgroundColor: Palette.line,
+                  ),
+                ],
+              ],
+              if (options.stats)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${formatClock(hud.seconds)} · Фигуры ${hud.pieces} · Матчи ${hud.matches} · Комбо ×${hud.bestCombo}',
+                    style: Type.body(11, color: Palette.textDim),
+                  ),
+                ),
+            ],
+          ),
+          if (callout != null)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: IgnorePointer(child: _CalloutView(callout: callout!, base: 10)),
+            ),
+        ],
+      ),
+    ),
+  );
 }

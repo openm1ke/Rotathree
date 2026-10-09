@@ -75,32 +75,16 @@ class MainMenu extends StatelessWidget {
           ],
           if (onTutorial != null)
             _NavItem(
-              number: '▶',
               title: 'Обучение',
               caption: tutorialDone
                   ? 'Повторить первые шаги и управление'
                   : 'Первые шаги: попробуйте правила на практике',
               onTap: onTutorial!,
             ),
-          _NavItem(
-            number: '01',
-            title: 'Campaign',
-            caption: 'Пятнадцать уровней: от одного стакана до четырёх',
-            onTap: onCampaign,
-          ),
-          _NavItem(number: '02', title: 'Custom', caption: 'Своя игра: стаканы, цвета и скорость', onTap: onCustom),
-          _NavItem(
-            number: '03',
-            title: 'Statistics',
-            caption: 'Очки, фигуры и рекорды по режимам',
-            onTap: onStatistics,
-          ),
-          _NavItem(
-            number: '04',
-            title: 'Settings',
-            caption: 'Крестовины, цвета, эффекты, интерфейс',
-            onTap: onSettings,
-          ),
+          _NavItem(title: 'Кампания', caption: 'Пятнадцать уровней: от одного стакана до четырёх', onTap: onCampaign),
+          _NavItem(title: 'Кастом', caption: 'Своя игра: стаканы, цвета и скорость', onTap: onCustom),
+          _NavItem(title: 'Статистика', caption: 'Очки, фигуры и рекорды по режимам', onTap: onStatistics),
+          _NavItem(title: 'Настройки', caption: 'Крестовины, цвета, эффекты, интерфейс', onTap: onSettings),
           const SizedBox(height: 16),
           _InfoCard(
             kicker: 'Кампания',
@@ -108,8 +92,8 @@ class MainMenu extends StatelessWidget {
             fraction: opened / campaignLevels.length,
           ),
           _InfoCard(
-            kicker: 'Безумие',
-            value: progress.completed ? 'открыто' : 'откроется после кампании',
+            kicker: 'Кошмар',
+            value: progress.completed ? 'открыт' : 'откроется после кампании',
             locked: !progress.completed,
           ),
         ],
@@ -119,9 +103,8 @@ class MainMenu extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.number, required this.title, required this.caption, required this.onTap});
+  const _NavItem({required this.title, required this.caption, required this.onTap});
 
-  final String number;
   final String title;
   final String caption;
   final VoidCallback onTap;
@@ -143,8 +126,6 @@ class _NavItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Text(number, style: Type.label(12, color: Palette.accent)),
-                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

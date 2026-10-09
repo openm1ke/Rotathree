@@ -8,10 +8,10 @@ import { useTouchControls } from '../input/touch';
 export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
 
 const ITEMS: readonly { id: MenuTarget; title: string; caption: string }[] = [
-  { id: 'campaign', title: 'Campaign', caption: 'Пятнадцать уровней: от одного стакана до четырёх' },
-  { id: 'custom', title: 'Custom', caption: 'Своя игра: стаканы, цвета и скорость' },
-  { id: 'statistics', title: 'Statistics', caption: 'Очки, фигуры и рекорды по режимам' },
-  { id: 'settings', title: 'Settings', caption: 'Клавиши, цвета, эффекты, интерфейс' },
+  { id: 'campaign', title: 'Кампания', caption: 'Пятнадцать уровней: от одного стакана до четырёх' },
+  { id: 'custom', title: 'Кастом', caption: 'Своя игра: стаканы, цвета и скорость' },
+  { id: 'statistics', title: 'Статистика', caption: 'Очки, фигуры и рекорды по режимам' },
+  { id: 'settings', title: 'Настройки', caption: 'Клавиши, цвета, эффекты, интерфейс' },
 ];
 
 /** Blocks drifting down behind the menu: left %, size in px, delay in s, and
@@ -77,7 +77,6 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
       <nav className="home__nav" aria-label="Главное меню">
         {savedRuns && Object.keys(savedRuns).length > 0 && (
           <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
-            <span className="navitem__no">▶</span>
             <span className="navitem__text">
               <span className="navitem__title">Продолжить</span>
               <span className="navitem__caption">Выберите сохранённую игру</span>
@@ -86,7 +85,6 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
         )}
         {onTutorial && (
           <button type="button" data-nav className="navitem" onClick={onTutorial}>
-            <span className="navitem__no">?</span>
             <span className="navitem__text">
               <span className="navitem__title">Обучение</span>
               <span className="navitem__caption">
@@ -104,7 +102,6 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
             autoFocus={i === 0}
             onClick={() => onOpen(item.id)}
           >
-            <span className="navitem__no">{String(i + 1).padStart(2, '0')}</span>
             <span className="navitem__text">
               <span className="navitem__title">{item.title}</span>
               <span className="navitem__caption">
@@ -126,8 +123,8 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
           </div>
         </div>
         <div className={`card ${progress.completed ? '' : 'is-locked'}`}>
-          <span className="kicker">Безумие</span>
-          <strong>{progress.completed ? 'открыто' : 'откроется после кампании'}</strong>
+          <span className="kicker">Кошмар</span>
+          <strong>{progress.completed ? 'открыт' : 'откроется после кампании'}</strong>
         </div>
       </aside>
 

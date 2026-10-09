@@ -62,7 +62,11 @@ class ScreenFrame extends StatelessWidget {
                 if (footer != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(footer!, style: Type.body(12, color: Palette.textDim), textAlign: TextAlign.center),
+                    child: Text(
+                      footer!,
+                      style: Type.body(12, color: Palette.textDim),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
               ],
             ),
@@ -75,11 +79,12 @@ class ScreenFrame extends StatelessWidget {
 
 /// The main button of the app: the gradient of "go".
 class GoButton extends StatelessWidget {
-  const GoButton({super.key, required this.label, required this.onPressed, this.expand = false});
+  const GoButton({super.key, required this.label, required this.onPressed, this.expand = false, this.square = false});
 
   final String label;
   final VoidCallback? onPressed;
   final bool expand;
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -88,16 +93,14 @@ class GoButton extends StatelessWidget {
       opacity: enabled ? 1 : 0.4,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(square ? 4 : 12),
           gradient: const LinearGradient(colors: Palette.go),
-          boxShadow: enabled
-              ? [BoxShadow(color: Palette.pink.withValues(alpha: 0.3), blurRadius: 18)]
-              : null,
+          boxShadow: enabled ? [BoxShadow(color: Palette.pink.withValues(alpha: 0.3), blurRadius: 18)] : null,
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(square ? 4 : 12),
             onTap: onPressed,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
@@ -113,11 +116,18 @@ class GoButton extends StatelessWidget {
 
 /// A quiet outlined button.
 class OutlineButton extends StatelessWidget {
-  const OutlineButton({super.key, required this.label, required this.onPressed, this.danger = false});
+  const OutlineButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.danger = false,
+    this.square = false,
+  });
 
   final String label;
   final VoidCallback? onPressed;
   final bool danger;
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +137,7 @@ class OutlineButton extends StatelessWidget {
         foregroundColor: danger ? Palette.danger : Palette.text,
         side: BorderSide(color: danger ? Palette.danger.withValues(alpha: 0.6) : Palette.lineStrong),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(square ? 4 : 12)),
       ),
       child: Text(label, style: Type.body(14, weight: FontWeight.w800)),
     );
@@ -136,34 +146,51 @@ class OutlineButton extends StatelessWidget {
 
 /// A small pill that is either on or off.
 class OptionChip extends StatelessWidget {
-  const OptionChip({super.key, required this.label, required this.selected, required this.onPressed, this.leading});
+  const OptionChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+    this.leading,
+    this.square = false,
+  });
 
   final String label;
   final bool selected;
   final VoidCallback? onPressed;
   final Widget? leading;
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? Palette.accent.withValues(alpha: 0.16) : Palette.panel,
-      shape: StadiumBorder(
-        side: BorderSide(color: selected ? Palette.accent : Palette.line, width: selected ? 1.4 : 1),
-      ),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (leading != null) ...[leading!, const SizedBox(width: 8)],
-              Text(
-                label,
-                style: Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
-              ),
-            ],
+    final shape = square
+        ? RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+            side: BorderSide(color: selected ? Palette.accent : Palette.line),
+          )
+        : StadiumBorder(side: BorderSide(color: selected ? Palette.accent : Palette.line));
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? Palette.accent.withValues(alpha: 0.16) : Palette.panel,
+        shape: shape,
+        child: InkWell(
+          customBorder: shape,
+          onTap: onPressed,
+          child: Container(
+            constraints: square ? const BoxConstraints(minWidth: 44, minHeight: 44) : null,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (leading != null) ...[leading!, const SizedBox(width: 8)],
+                Text(
+                  label,
+                  style: Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -196,7 +223,10 @@ class Section extends StatelessWidget {
             Text(title.toUpperCase(), style: Type.label(11, color: Palette.textDim)),
             if (note != null) ...[
               const SizedBox(height: 4),
-              Text(note!, style: Type.body(12, color: Palette.textDim, weight: FontWeight.w500)),
+              Text(
+                note!,
+                style: Type.body(12, color: Palette.textDim, weight: FontWeight.w500),
+              ),
             ],
             const SizedBox(height: 10),
             ...children,
@@ -216,10 +246,12 @@ class OptionGroup<T> extends StatelessWidget {
     required this.options,
     required this.onChanged,
     this.note,
+    this.square = false,
   });
 
   final String label;
   final String? note;
+  final bool square;
   final T value;
   final List<Option<T>> options;
   final ValueChanged<T> onChanged;
@@ -232,7 +264,11 @@ class OptionGroup<T> extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: Type.body(14, weight: FontWeight.w800)),
-          if (note != null) Text(note!, style: Type.body(12, color: Palette.textDim, weight: FontWeight.w500)),
+          if (note != null)
+            Text(
+              note!,
+              style: Type.body(12, color: Palette.textDim, weight: FontWeight.w500),
+            ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -240,6 +276,7 @@ class OptionGroup<T> extends StatelessWidget {
             children: [
               for (final option in options)
                 OptionChip(
+                  square: square,
                   label: option.label,
                   selected: option.value == value,
                   onPressed: () => onChanged(option.value),
@@ -291,7 +328,9 @@ class SliderRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(label, style: Type.body(14, weight: FontWeight.w800))),
+              Expanded(
+                child: Text(label, style: Type.body(14, weight: FontWeight.w800)),
+              ),
               Text(
                 '$text${unit.isEmpty ? '' : ' $unit'}${note == null ? '' : ' · $note'}',
                 style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
@@ -330,11 +369,13 @@ class SwitchRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.square = false,
     this.on = 'вкл',
     this.off = 'выкл',
   });
 
   final String label;
+  final bool square;
   final bool value;
   final String on;
   final String off;
@@ -342,12 +383,26 @@ class SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (square) {
+      return OptionGroup<bool>(
+        label: label,
+        value: value,
+        square: true,
+        options: [(value: true, label: on), (value: false, label: off)],
+        onChanged: onChanged,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: Type.body(14, weight: FontWeight.w800))),
-          Text(value ? on : off, style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700)),
+          Expanded(
+            child: Text(label, style: Type.body(14, weight: FontWeight.w800)),
+          ),
+          Text(
+            value ? on : off,
+            style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700),
+          ),
           const SizedBox(width: 6),
           Switch(
             value: value,
@@ -385,7 +440,11 @@ class Keycap extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: waiting ? Palette.warning : Palette.lineStrong),
         ),
-        child: Text(label, style: Type.body(13, weight: FontWeight.w800, color: color), textAlign: TextAlign.center),
+        child: Text(
+          label,
+          style: Type.body(13, weight: FontWeight.w800, color: color),
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }
@@ -427,10 +486,7 @@ class DialogCard extends StatelessWidget {
             Text(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
             const SizedBox(height: 4),
             Text(title, style: Type.display(30, color: danger ? Palette.danger : Palette.text)),
-            if (note != null) ...[
-              const SizedBox(height: 8),
-              Text(note!, style: Type.body(14, color: Palette.textDim)),
-            ],
+            if (note != null) ...[const SizedBox(height: 8), Text(note!, style: Type.body(14, color: Palette.textDim))],
             const SizedBox(height: 14),
             ...children,
           ],

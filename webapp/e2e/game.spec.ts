@@ -5,7 +5,7 @@ import type { RunSave } from '../src/services/runSave';
 async function startCampaign(page: Page, onboarded = true) {
   if (onboarded) await page.addInitScript(() => localStorage.setItem('rotathree.tutorial.v1', 'true'));
   await page.goto('/');
-  await page.getByRole('button', { name: /Campaign/ }).click();
+  await page.getByRole('button', { name: /Кампания/ }).click();
   await page.getByRole('button', { name: 'Уровень 1, цель 1200', exact: true }).click();
 }
 async function finishLevel(page: Page) {
@@ -57,7 +57,7 @@ test('phone-sized browser gets touch controls and a complete tutorial', async ({
   await right.getByRole('button', { name: 'Поднять наверх стакан, который справа', exact: true }).click();
   await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
   await page.getByRole('button', { name: 'Играть', exact: true }).click();
-  await page.getByRole('button', { name: /Settings/ }).click();
+  await page.getByRole('button', { name: /Настройки/ }).click();
   await expect(page.getByRole('heading', { name: 'Левая крестовина' })).toBeVisible();
   await expect(page.locator('.bind__key')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

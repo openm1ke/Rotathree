@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { CAMPAIGN, CAMPAIGN_LAST, levelConfig, startsStage } from '../game/campaign';
-import { gridSize } from '../game/config';
 import { GameEngine, type GameEvent } from '../game/engine';
 import { sideAtSlot, slotOfSide } from '../game/glass';
 import { planFor, type Session } from '../game/session';
@@ -619,7 +618,7 @@ export function GameScreen(props: Props) {
       const effectsRunning = current !== 'paused' && !frozen;
       still = !engineRunning && (!effectsRunning || fx.settled) ? still + 1 : 0;
       if (still <= 2 || dirty || drawnPalette !== paletteRevision()) {
-        renderer.draw(engine, fx);
+        renderer.draw(engine, fx, reduceMotion.matches);
         dirty = false;
         drawnPalette = paletteRevision();
       }
@@ -701,8 +700,6 @@ export function GameScreen(props: Props) {
     if (zone === 1 || zone === 2 || zone === 3) actions.current.activeGlass(zone);
   };
 
-  const config = planFor(session).config;
-  const corner = `${(100 * config.armLength) / gridSize(config)}%`;
   const campaign = session.mode === 'campaign';
   const retryLabel = campaign ? 'Повторить уровень' : 'Заново';
   const mode = tutorial ? 'Обучение' : MODE_NAMES[session.mode];
@@ -749,6 +746,10 @@ export function GameScreen(props: Props) {
           </button>
         </header>
       )}
+      {!touch && <div className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
+        <Hud hud={hud} callout={callout} bindings={settings.bindings} options={settings.hud}
+          onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
+      </div>}
       <div className="game__frame" ref={frameRef}>
         <div
           className="stage"
@@ -756,7 +757,6 @@ export function GameScreen(props: Props) {
             width: size,
             height: size,
             fontSize: Math.max(9, size / 58),
-            ['--corner' as string]: corner,
             ['--hud-opacity' as string]: settings.hud.opacity,
           }}
         >
@@ -768,16 +768,7 @@ export function GameScreen(props: Props) {
             style={{ width: size, height: size }}
             onClick={onCanvasClick}
           />
-          {!touch && (
-            <Hud
-              hud={hud}
-              callout={callout}
-              bindings={settings.bindings}
-              options={settings.hud}
-              onPause={() => actions.current.togglePause()}
-              onOpenSettings={props.onSettings}
-            />
-          )}
+
           {banner && <LevelBanner banner={banner} />}
         </div>
       </div>
@@ -872,11 +863,11 @@ export function GameScreen(props: Props) {
           <div className="dialog dialog--narrow">
             <span className="kicker">Кампания</span>
             <h2 className="dialog__title">Кампания пройдена</h2>
-            <p className="dialog__note">Все {CAMPAIGN_LAST + 1} уровней позади. Безумие открыто.</p>
+            <p className="dialog__note">Все {CAMPAIGN_LAST + 1} уровней позади. Кошмар открыт.</p>
             <Stats record={result} campaign />
             <div className="dialog__actions">
               <Button primary autoFocus onClick={props.onInsane}>
-                Безумие
+                Кошмар
               </Button>
               <Button onClick={props.onLevels}>К уровням</Button>
               <Button ghost onClick={props.onExit}>

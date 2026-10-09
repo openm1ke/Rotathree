@@ -26,10 +26,10 @@ historical prototype audit, with its original test and playtest results.
 flutter run
 ```
 
-The app opens on a menu: **Campaign** (fifteen levels, each a score target with
-more glasses and colours), **Custom** (your own game, set up before it starts),
-**Statistics** (per mode: points, pieces, matches, the best combo, and the last
-runs) and **Settings**. **Insane** opens once the campaign is finished.
+The app opens on a menu: **Кампания** (fifteen levels, each a score target with
+more glasses and colours), **Кастом** (your own game, set up before it starts),
+**Статистика** (per mode: points, pieces, matches, the best combo, and the last
+runs) and **Настройки**. **Кошмар** opens once the campaign is finished.
 
 Controls are two on-screen D-pads in the bottom corners, the buttons of which
 are chosen in Settings. Tapping a glass on the field also brings it to the top.
@@ -49,7 +49,7 @@ and can be skipped or replayed from the menu. Training uses your selected contro
 
 Games save automatically on menu navigation, system Back, backgrounding and tab
 closure, as well as periodically and at significant engine events. Campaign,
-Custom and Insane have independent slots. **Continue** opens a selection screen
+Custom and Nightmare have independent slots. **Continue** opens a selection screen
 and restores the chosen run paused. **Finish run** explicitly ends only that run;
 a new game replaces only the save for its own mode. Legacy single saves migrate.
 A storage failure shows a persistent notice with a retry button while the app
@@ -106,3 +106,9 @@ A release without these values fails explicitly instead of using the debug key.
 
 Pull requests and main pushes run Flutter analysis, tests and a debug APK build, plus
 web checks and browser regression tests in `.github/workflows/checks.yml`.
+
+The campaign picker is one list with colour count, glass count and active fall
+step (seconds) on every level. Custom arm lengths range from 4 through 12 cells.
+The field camera fits only visible glasses: an added glass first opens space,
+then grows its arm. Readouts stay above the canvas. Reduced motion skips the
+camera/growth animation. Mode IDs and existing saves remain compatible.

@@ -26,6 +26,7 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
   return (
     <Screen
       rootRef={rootRef}
+      className="screen--custom"
       kicker="Режим"
       title="Кастом"
       onBack={onBack}
@@ -60,7 +61,7 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
         <Choice
           label="Длина рукава, клеток"
           value={setup.armLength}
-          options={[6, 8, 9, 10].map((n) => [n, String(n)] as const)}
+          options={range(...CUSTOM_LIMITS.armLength).map((n) => [n, String(n)] as const)}
           onChange={(armLength) => set({ armLength })}
         />
         <Choice
@@ -134,7 +135,7 @@ export function CustomScreen({ setup, colours, onChange, onStart, onBack, active
         <span>{setup.speedUp ? `ускорение на ${percent}% каждые ${setup.speedUpEvery} очков` : 'скорость не меняется'}</span>
       </div>
       <div className="form__start">
-        <Button primary autoFocus onClick={onStart}>
+        <Button primary onClick={onStart}>
           Начать
         </Button>
       </div>

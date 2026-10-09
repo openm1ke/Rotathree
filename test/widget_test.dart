@@ -25,20 +25,22 @@ void main() {
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
 
-    expect(find.text('Campaign'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Кампания'), findsWidgets);
+    expect(find.text('Настройки'), findsOneWidget);
 
-    await tester.tap(find.text('Campaign'));
+    await tester.tap(find.text('Кампания'));
     await settle(tester);
     expect(find.text('Кампания'), findsWidgets);
-    expect(find.text('3 ЦВЕТА'), findsOneWidget);
+    expect(find.text('Цвета: 3'), findsWidgets);
+    expect(find.text('Стаканы: 1'), findsWidgets);
+    expect(find.text('Скорость: 1 с/шаг'), findsWidgets);
   });
 
   testWidgets('a custom game can be set up and started', (tester) async {
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
 
-    await tester.tap(find.text('Custom'));
+    await tester.tap(find.text('Кастом'));
     await settle(tester);
     expect(find.text('Кастом'), findsWidgets);
 
@@ -53,7 +55,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
-    await tester.tap(find.text('Custom'));
+    await tester.tap(find.text('Кастом'));
     await settle(tester);
     await tester.scrollUntilVisible(find.text('Начать'), 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Начать'));
@@ -74,15 +76,15 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
-    await tester.tap(find.text('Campaign'));
+    await tester.tap(find.text('Кампания'));
     await settle(tester);
-    await tester.tap(find.text('1'));
+    await tester.tap(find.text('Уровень 1'));
     await settle(tester);
     await tester.binding.handlePopRoute();
     await settle(tester);
     final first = (await AppStore.open()).loadRuns()[ModeId.campaign]!;
-    expect(find.text('Campaign'), findsOneWidget);
-    await tester.tap(find.text('Custom'));
+    expect(find.text('Кампания'), findsWidgets);
+    await tester.tap(find.text('Кастом'));
     await settle(tester);
     await tester.scrollUntilVisible(find.text('Начать'), 300, scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(find.text('Начать'));
@@ -108,8 +110,8 @@ void main() {
   testWidgets('mobile settings show pads without keyboard customization', (tester) async {
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
-    await tester.ensureVisible(find.text('Settings'));
-    await tester.tap(find.text('Settings'));
+    await tester.ensureVisible(find.text('Настройки'));
+    await tester.tap(find.text('Настройки'));
     await settle(tester);
     await tester.scrollUntilVisible(find.text('ЭКРАННЫЕ КНОПКИ'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('ЭКРАННЫЕ КНОПКИ'), findsOneWidget);

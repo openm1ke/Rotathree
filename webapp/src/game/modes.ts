@@ -6,7 +6,7 @@ export type ModeId = 'campaign' | 'insane' | 'custom';
 
 export const MODE_NAMES: Record<ModeId, string> = {
   campaign: 'Кампания',
-  insane: 'Безумие',
+  insane: 'Кошмар',
   custom: 'Кастом',
 };
 
@@ -43,7 +43,7 @@ export const DEFAULT_CUSTOM: CustomSetup = {
 export const CUSTOM_LIMITS = {
   extraGlasses: [0, 3],
   colours: [3, 9],
-  armLength: [6, 10],
+  armLength: [4, 12],
   activeStep: [0.3, 2],
   inactiveStep: [0.6, 6],
   speedUpStep: [0.02, 0.3],

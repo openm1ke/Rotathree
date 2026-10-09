@@ -297,7 +297,8 @@ input:focus-visible {
   grid-template-rows: auto 1fr auto;
   gap: 0 40px;
   padding: 5vh 6vw 3vh 7vw;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .home__drift {
@@ -361,7 +362,7 @@ input:focus-visible {
 .navitem {
   position: relative;
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 10px 18px 10px 10px;
@@ -398,13 +399,6 @@ input:focus-visible {
   transform: scaleY(1);
 }
 
-.navitem__no {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
 .navitem__text {
   display: flex;
   flex-direction: column;
@@ -412,7 +406,7 @@ input:focus-visible {
 }
 
 .navitem__title {
-  font-size: clamp(38px, 6vw, 82px);
+  font-size: clamp(30px, min(5vw, 7vh), 64px);
   font-weight: 900;
   font-style: italic;
   line-height: 0.98;
@@ -578,143 +572,124 @@ input:focus-visible {
 
 /* -------------------------------------------------------------- campaign */
 
-.stage-group {
-  margin-bottom: 26px;
-}
-
-.stage-group__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.stage-group__head h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 900;
-  font-style: italic;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .levels {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 860px;
 }
 
 .level-card {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 14px 14px 12px;
+  gap: 8px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.035);
+  border-radius: 8px;
+  background: var(--panel);
   text-align: left;
-  transition:
-    transform 140ms var(--ease-snap),
-    border-color 140ms,
-    box-shadow 140ms;
 }
 
-.level-card:hover:not(:disabled),
-.level-card:focus-visible {
-  transform: translateY(-2px);
-  border-color: var(--line-strong);
+.level-card:hover:not(:disabled), .level-card:focus-visible {
+  border-color: var(--accent);
+  background: rgba(120,205,255,.06);
 }
 
 .level-card:disabled {
+  opacity: .45;
   cursor: not-allowed;
-  opacity: 0.4;
 }
 
 .level-card.is-open {
   border-color: var(--accent);
-  background: rgba(120, 205, 255, 0.08);
-  box-shadow:
-    0 0 0 1px rgba(120, 205, 255, 0.25),
-    0 10px 30px rgba(120, 205, 255, 0.18);
+  background: rgba(120,205,255,.08);
 }
 
 .level-card.is-done {
-  border-color: rgba(47, 217, 133, 0.5);
+  border-color: rgba(47,217,133,.35);
 }
 
-.level-card__no {
-  font-size: 30px;
-  font-weight: 900;
-  font-style: italic;
-  line-height: 1;
-}
-
-.level-card__glasses {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.level-card__glasses i {
-  width: 14px;
-  height: 22px;
-  border: 1px solid var(--line-strong);
-  border-radius: 3px;
-}
-
-.level-card__glasses i.on {
-  border-color: transparent;
-  background: var(--accent);
-  box-shadow: 0 0 10px rgba(120, 205, 255, 0.5);
-}
-
-.level-card__target {
-  font-size: 22px;
-  font-weight: 900;
-  font-style: italic;
-  font-variant-numeric: tabular-nums;
-}
-
-.level-card__meta,
-.level-card__best,
-.level-card__lock {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-dim);
-}
-
-.level-card__best {
-  color: #7df0c5;
-}
-
-.insane {
+.level-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 18px 20px;
-  border: 1px solid rgba(255, 46, 126, 0.45);
-  border-radius: 16px;
-  background: linear-gradient(95deg, rgba(255, 46, 126, 0.14), rgba(165, 59, 255, 0.12));
+  gap: 12px;
 }
 
-.insane strong {
-  font-size: 32px;
-  font-weight: 900;
-  font-style: italic;
+.level-card__head strong {
+  font-size: 20px;
 }
 
-.insane p {
-  max-width: 46em;
-  margin: 6px 0 0;
-  font-size: 14px;
+.level-card__target, .level-card__meta {
+  font-size: 12px;
   color: var(--text-dim);
 }
 
-.insane.is-locked {
+.level-card.is-open .level-card__meta {
+  color: var(--accent);
+}
+
+.level-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.level-badge i {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+}
+
+.nightmare {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 860px;
+  padding: 18px 16px;
+  margin-top: 20px;
+  border: 1px solid var(--pink);
+  border-radius: 8px;
+  background: rgba(255,46,126,.06);
+}
+
+.nightmare h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.nightmare p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.nightmare.is-locked {
+  opacity: .55;
   border-color: var(--line);
-  background: rgba(255, 255, 255, 0.03);
-  opacity: 0.6;
+}
+
+.screen--custom button, .screen--custom .dots i {
+  border-radius: 4px;
+}
+
+.screen--custom .chip {
+  min-width: 44px;
+  min-height: 44px;
 }
 
 /* --------------------------------------------------------- forms, custom */
@@ -1870,3 +1845,101 @@ select:focus-visible {
 .pad-surface--editor .pad-surface__pad:active { cursor: grabbing; }
 .pad-surface--editor .pad-surface__pad:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pad-preview-field { display: grid; place-items: center; height: 56px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim); background: var(--bg); font-size: 13px; }
+
+/* The camera can use the whole canvas; readouts stay outside the playfield. */
+.game {
+  display: flex;
+  flex-direction: column;
+}
+
+.game .game__frame {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+}
+
+.game__readout {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(1100px, 100%);
+  align-self: center;
+  padding: 12px 20px 8px;
+  font-size: 11px;
+}
+
+.game__readout .hud {
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  gap: 2px;
+}
+
+.game__readout .hud--tl {
+  width: 220px;
+}
+
+.game__readout .hud__value {
+  font-size: 20px;
+}
+
+.game__readout .hud__value--xl {
+  font-size: 28px;
+}
+
+.game__readout .hud__value--sm {
+  font-size: 17px;
+}
+
+.game__readout .hud__label {
+  font-size: 10px;
+}
+
+.game__readout .level {
+  margin-top: 4px;
+}
+
+.game__readout .hud__gain, .game__readout .hud__combo, .game__readout .hud__speedup {
+  position: absolute;
+  top: 18px;
+  left: 70px;
+}
+
+.game__readout .hud__hints {
+  font-size: 10px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 12px;
+}
+
+.game__readout .hud__buttons {
+  margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+  .home__side {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .home__side .card {
+    min-width: 0;
+  }
+
+  .screen--custom .screen__head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .screen--custom .screen__title {
+    order: 3;
+    flex-basis: 100%;
+  }
+}

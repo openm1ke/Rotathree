@@ -6,6 +6,7 @@ import type { IncomingPiece } from '../game/incoming';
 import { isHorizontal, pieceDepth, pieceWidth, type BlockColor, type Piece } from '../game/piece';
 import { SIDES, type Side } from '../game/side';
 import type { Effects } from './effects';
+import { fieldViewport } from './viewport';
 import { THEME, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
 
 const QUARTER = Math.PI / 2;
@@ -114,6 +115,9 @@ export class GameRenderer {
   private dsin = 0;
   /** Whether the canvas is in the transform of `base()` right now. */
   private based = false;
+  private visible: readonly Side[] = [];
+  private viewAngle = 0;
+  private grow = 1;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -130,32 +134,37 @@ export class GameRenderer {
     this.pixels = pixels;
   }
 
-  private unitFor(grid: number): number {
-    return Math.max(1, Math.floor((this.pixels * FIT) / grid));
-  }
-
-  /** Which part of the cross is under a point of the canvas (CSS pixels). */
+  /** Hit testing uses the exact camera transform of the last drawn frame. */
   zoneAt(x: number, y: number, config: GameConfig): ClickZone {
     if (this.cssSize <= 0) return null;
-    const unit = this.unitFor(gridSize(config));
-    const scale = this.pixels / this.cssSize;
-    const cx = (x * scale - this.pixels / 2) / unit;
-    const cy = (y * scale - this.pixels / 2) / unit;
-    const half = config.boardSize / 2;
-    const reach = half + config.armLength;
-    if (Math.abs(cx) <= half && Math.abs(cy) <= half) return 'center';
-    if (Math.abs(cx) <= half && Math.abs(cy) <= reach) return cy < 0 ? 0 : 2;
-    if (Math.abs(cy) <= half && Math.abs(cx) <= reach) return cx > 0 ? 1 : 3;
+    const ratio = this.pixels / this.cssSize;
+    const cx = (x * ratio - this.tx) / this.s, cy = (y * ratio - this.ty) / this.s;
+    const c = Math.cos(this.viewAngle), s = Math.sin(this.viewAngle);
+    const wx = c * cx + s * cy, wy = -s * cx + c * cy;
+    const half = config.boardSize / 2, reach = half + config.armLength;
+    if (Math.abs(wx) <= half && Math.abs(wy) <= half) return 'center';
+    for (const side of this.visible) {
+      const turn = side * QUARTER, cos = Math.cos(turn), sin = Math.sin(turn);
+      const rx = cos * wx + sin * wy, ry = -sin * wx + cos * wy;
+      if (Math.abs(rx) <= half && ry <= -half && ry >= -reach)
+        return (((side + Math.round(this.viewAngle / QUARTER)) % 4 + 4) % 4) as Side;
+    }
     return null;
   }
 
-  draw(engine: GameEngine, fx: Effects): void {
+  draw(engine: GameEngine, fx: Effects, reduceMotion = false): void {
     const { ctx, pixels } = this;
     if (pixels < 2 || this.cssSize <= 0) return;
     const config = engine.config;
     const state = engine.state;
     const grid = gridSize(config);
-    const unit = this.unitFor(grid);
+    const viewport = fieldViewport(config.boardSize, config.armLength, engine.sides, fx.viewAngle,
+      state.phase === 'building' ? state.buildingSide : null,
+      state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1, reduceMotion);
+    const unit = Math.max(1, Math.floor(pixels * FIT / viewport.span));
+    this.grow = viewport.grow;
+    this.visible = engine.sides;
+    this.viewAngle = fx.viewAngle;
     const scale = pixels / this.cssSize;
 
     this.n = config.boardSize;
@@ -189,21 +198,11 @@ export class GameRenderer {
     this.dcos = atRest ? 1 : Math.cos(delta);
     this.dsin = atRest ? 0 : Math.sin(delta);
 
-    // Turned off its axes, the corners of the arms reach further out than
-    // the canvas is wide, so mid-turn the cross shrinks by exactly as much as
-    // it takes to keep them in — and not a bit more, because a field that
-    // pumps in and out is tiring to watch.
-    let zoom = 1;
-    if (!atRest) {
-      const cos = Math.abs(this.cos[0]);
-      const sin = Math.abs(this.sin[0]);
-      const extent = Math.max(this.reach * cos + this.half * sin, this.reach * sin + this.half * cos);
-      zoom = Math.min(1, (pixels / 2 / unit - 0.25) / extent);
-    }
-    this.s = unit * (zoom + fx.punch);
+    // Combo pulses stay inside the fitted camera and zoom about its center.
+    this.s = Math.min(unit * (1 + fx.punch), pixels * 0.985 / viewport.span);
     const nudge = pixels / grid;
-    this.tx = pixels / 2 + (fx.kickX + fx.shakeX) * nudge;
-    this.ty = pixels / 2 + (fx.kickY + fx.shakeY) * nudge;
+    this.tx = Math.round(pixels / 2 - viewport.cx * this.s) + (fx.kickX + fx.shakeX) * nudge;
+    this.ty = Math.round(pixels / 2 - viewport.cy * this.s) + (fx.kickY + fx.shakeY) * nudge;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.based = false;
@@ -456,8 +455,7 @@ export class GameRenderer {
   private drawField(sides: readonly Side[], lines: number, state: GameState): void {
     const { ctx, n, arm, half, reach, px } = this;
     const building = state.phase === 'building' ? state.buildingSide : null;
-    const grow =
-      building === null ? 1 : easeOut(state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1);
+    const grow = this.grow;
     const far = half + arm * grow;
 
     ctx.lineWidth = px;
@@ -905,8 +903,6 @@ function unitGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
   gradient.addColorStop(1, `rgba(255, 255, 255, ${bottom})`);
   return gradient;
 }
-
-const easeOut = (t: number): number => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
 
 const urgencyColor = (secondsLeft: number): string =>
   secondsLeft < 1.5 ? THEME.danger : THEME.warning;

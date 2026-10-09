@@ -26,6 +26,6 @@ String formatClock(int seconds) => '${seconds ~/ 60}:${(seconds % 60).toString()
 
 String modeTitle(ModeId mode) => switch (mode) {
       ModeId.campaign => 'Кампания',
-      ModeId.insane => 'Безумие',
+      ModeId.insane => 'Кошмар',
       ModeId.custom => 'Кастом',
     };

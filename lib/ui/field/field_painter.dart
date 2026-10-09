@@ -15,6 +15,7 @@ import '../../game/model/side.dart';
 import '../../game/state/game_state.dart';
 import '../style.dart';
 import 'effects.dart';
+import 'field_viewport.dart';
 
 const _quarter = math.pi / 2;
 
@@ -38,10 +39,28 @@ enum FieldZone { center, top, right, bottom, left, outside }
 /// Measurements of the cross on a square canvas. Everything inside is drawn
 /// in cell units.
 class FieldGeometry {
-  FieldGeometry(this.size, GameConfig config, {this.devicePixelRatio = 1})
-    : n = config.boardSize,
-      arm = config.armLength,
-      grid = config.gridSize;
+  FieldGeometry(
+    this.size,
+    GameConfig config, {
+    this.devicePixelRatio = 1,
+    this.angle = 0,
+    List<Side>? sides,
+    Side? building,
+    double progress = 1,
+    bool reduceMotion = false,
+  }) : n = config.boardSize,
+       arm = config.armLength,
+       grid = config.gridSize,
+       sides = sides ?? config.sides,
+       viewport = FieldViewport.fit(
+         boardSize: config.boardSize,
+         armLength: config.armLength,
+         sides: sides ?? config.sides,
+         angle: angle,
+         building: building,
+         progress: progress,
+         reduceMotion: reduceMotion,
+       );
 
   /// The cross is drawn a touch smaller than its canvas so that glows and
   /// the recoil of a hard drop are not clipped at the edges.
@@ -53,6 +72,9 @@ class FieldGeometry {
   final int n;
   final int arm;
   final int grid;
+  final double angle;
+  final List<Side> sides;
+  final FieldViewport viewport;
 
   double get half => n / 2;
   double get reach => n / 2 + arm;
@@ -62,24 +84,38 @@ class FieldGeometry {
 
   /// Physical pixels to a cell while the cross is at rest. A whole number, so
   /// that a block is copied to the screen pixel for pixel.
-  int get unit => math.max(1, (size * devicePixelRatio * fit / grid).floor());
+  int get unit => math.max(1, (size * devicePixelRatio * fit / viewport.span).floor());
 
   /// A cell as drawn at rest, in logical pixels.
   double get drawnCell => unit / devicePixelRatio;
+
+  Offset get origin => Offset(
+    ((size / 2 - viewport.center.dx * drawnCell) * devicePixelRatio).round() / devicePixelRatio,
+    ((size / 2 - viewport.center.dy * drawnCell) * devicePixelRatio).round() / devicePixelRatio,
+  );
 
   /// The corner squares the cross leaves free, as a fraction of the canvas.
   double get cornerFraction => arm / grid;
 
   /// Which part of the cross is under a point of the canvas.
   FieldZone zoneAt(Offset point) {
-    final cx = (point.dx - size / 2) / drawnCell;
-    final cy = (point.dy - size / 2) / drawnCell;
-    if (cx.abs() <= half && cy.abs() <= half) return FieldZone.center;
-    if (cx.abs() <= half && cy.abs() <= reach) {
-      return cy < 0 ? FieldZone.top : FieldZone.bottom;
-    }
-    if (cy.abs() <= half && cx.abs() <= reach) {
-      return cx > 0 ? FieldZone.right : FieldZone.left;
+    final cx = (point.dx - origin.dx) / drawnCell;
+    final cy = (point.dy - origin.dy) / drawnCell;
+    final c = math.cos(angle), s = math.sin(angle);
+    final x = c * cx + s * cy, y = -s * cx + c * cy;
+    if (x.abs() <= half && y.abs() <= half) return FieldZone.center;
+    for (final side in sides) {
+      final turn = side.index * _quarter;
+      final rx = math.cos(turn) * x + math.sin(turn) * y;
+      final ry = -math.sin(turn) * x + math.cos(turn) * y;
+      if (rx.abs() <= half && ry <= -half && ry >= -reach) {
+        return [
+          FieldZone.top,
+          FieldZone.right,
+          FieldZone.bottom,
+          FieldZone.left,
+        ][(side.index + (angle / _quarter).round()) % 4];
+      }
     }
     return FieldZone.outside;
   }
@@ -99,8 +135,7 @@ class _Glow {
   final Rect source;
 
   /// Where the image goes when its shape's origin is at ([x], [y]), in cells.
-  Rect at(double x, double y) =>
-      Rect.fromLTWH(x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
+  Rect at(double x, double y) => Rect.fromLTWH(x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
 }
 
 /// The seconds written beside a piece, laid out once for each text.
@@ -279,10 +314,7 @@ class FieldAssets {
       canvas.restore();
     }
     final patchLeft = (count * pitch).toDouble();
-    canvas.drawRect(
-      Rect.fromLTWH(patchLeft, 0, _patch.toDouble(), _patch.toDouble()),
-      Paint()..color = _white,
-    );
+    canvas.drawRect(Rect.fromLTWH(patchLeft, 0, _patch.toDouble(), _patch.toDouble()), Paint()..color = _white);
     _whitePatch = Rect.fromLTWH(patchLeft + 1, 1, 2, 2);
     final picture = recorder.endRecording();
     _atlas = picture.toImageSync(count * pitch + _patch, math.max(pitch, _patch));
@@ -307,11 +339,10 @@ class FieldAssets {
     canvas.drawRRect(
       _faceShape,
       Paint()
-        ..shader = ui.Gradient.linear(
-          _faceShape.outerRect.topCenter,
-          _faceShape.outerRect.center,
-          const [Color(0x61FFFFFF), Color(0x00FFFFFF)],
-        ),
+        ..shader = ui.Gradient.linear(_faceShape.outerRect.topCenter, _faceShape.outerRect.center, const [
+          Color(0x61FFFFFF),
+          Color(0x00FFFFFF),
+        ]),
     );
   }
 
@@ -376,23 +407,17 @@ class FieldAssets {
   /// The soft halo round a piece [width] by [depth] cells; [tone] indexes
   /// [_haloColors].
   _Glow _halo(int width, int depth, int tone, FieldGeometry g) {
-    return _halos[width * 100 + depth * 10 + tone] ??= _makeGlow(
-      width.toDouble(),
-      depth.toDouble(),
-      g,
-      16,
-      (canvas) {
-        final px = g.devicePixelRatio / g.unit;
-        canvas.drawRRect(
-          _haloShape(0, 0, width, depth),
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 4 * px
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * px)
-            ..color = _haloColors[tone].withValues(alpha: 0.7),
-        );
-      },
-    );
+    return _halos[width * 100 + depth * 10 + tone] ??= _makeGlow(width.toDouble(), depth.toDouble(), g, 16, (canvas) {
+      final px = g.devicePixelRatio / g.unit;
+      canvas.drawRRect(
+        _haloShape(0, 0, width, depth),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4 * px
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * px)
+          ..color = _haloColors[tone].withValues(alpha: 0.7),
+      );
+    });
   }
 
   static RRect _haloShape(double left, double top, int width, int depth) => RRect.fromRectAndRadius(
@@ -418,10 +443,7 @@ class FieldAssets {
     canvas.scale(unit.toDouble());
     draw(canvas);
     final picture = recorder.endRecording();
-    final image = picture.toImageSync(
-      (width * unit).ceil() + pad * 2,
-      (height * unit).ceil() + pad * 2,
-    );
+    final image = picture.toImageSync((width * unit).ceil() + pad * 2, (height * unit).ceil() + pad * 2);
     picture.dispose();
     return _Glow(image, pad, unit);
   }
@@ -501,6 +523,7 @@ class FieldPainter extends CustomPainter {
     required this.fx,
     required this.assets,
     required this.devicePixelRatio,
+    this.reduceMotion = false,
     required Listenable repaint,
   }) : super(repaint: repaint);
 
@@ -508,6 +531,7 @@ class FieldPainter extends CustomPainter {
   final Effects fx;
   final FieldAssets assets;
   final double devicePixelRatio;
+  final bool reduceMotion;
 
   // ------------------------------------------------ the frame being drawn
   /// One logical pixel, in cells.
@@ -530,14 +554,22 @@ class FieldPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(FieldPainter oldDelegate) =>
-      oldDelegate.engine != engine ||
-      oldDelegate.fx != fx ||
-      oldDelegate.devicePixelRatio != devicePixelRatio;
+      oldDelegate.engine != engine || oldDelegate.fx != fx || oldDelegate.devicePixelRatio != devicePixelRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
     final state = engine.state;
-    final g = FieldGeometry(size.width, engine.config, devicePixelRatio: devicePixelRatio);
+    final building = state.phase == GamePhase.building ? state.buildingSide : null;
+    final g = FieldGeometry(
+      size.width,
+      engine.config,
+      devicePixelRatio: devicePixelRatio,
+      angle: fx.viewAngle,
+      sides: engine.sides,
+      building: building,
+      progress: state.phaseProgress,
+      reduceMotion: reduceMotion,
+    );
     if (g.cell <= 0) return;
     assets._prepare(g);
     _px = devicePixelRatio / g.unit;
@@ -561,30 +593,17 @@ class FieldPainter extends CustomPainter {
     _leftCos = _atRest ? 1 : math.cos(_left);
     _leftSin = _atRest ? 0 : math.sin(_left);
 
-    // Turned off its axes, the corners of the arms reach further out than
-    // the canvas is wide, so mid-turn the cross shrinks by exactly as much as
-    // it takes to keep them in — and not a bit more, because a field that
-    // pumps in and out is tiring to watch.
-    var zoom = 1.0;
-    if (!_atRest) {
-      final cos = _cos[0].abs();
-      final sin = _sin[0].abs();
-      final extent = math.max(g.reach * cos + g.half * sin, g.reach * sin + g.half * cos);
-      zoom = math.min(1.0, (size.width / 2 / g.drawnCell - 0.25) / extent);
-    }
-    final scale = g.drawnCell * (zoom + fx.punch);
-    // The centre of the cross sits on a physical pixel boundary.
-    final centre = (size.width * devicePixelRatio / 2).roundToDouble() / devicePixelRatio;
-    final ox = centre + (fx.kickX + fx.shakeX) * g.cell;
-    final oy = centre + (fx.kickY + fx.shakeY) * g.cell;
+    // Combo pulses stay inside the fitted camera and zoom about its center.
+    final scale = math.min(g.drawnCell * (1 + fx.punch), size.width * 0.985 / g.viewport.span);
+    double snap(double value) => (value * devicePixelRatio).round() / devicePixelRatio;
+    final ox = snap(size.width / 2 - g.viewport.center.dx * scale) + (fx.kickX + fx.shakeX) * g.cell;
+    final oy = snap(size.width / 2 - g.viewport.center.dy * scale) + (fx.kickY + fx.shakeY) * g.cell;
 
     canvas.save();
     canvas.translate(ox, oy);
     canvas.scale(scale);
 
-    final building = state.phase == GamePhase.building ? state.buildingSide : null;
-    final grow = building == null ? 1.0 : 1 - math.pow(1 - state.phaseProgress, 3).toDouble();
-    _drawField(canvas, g, engine.sides, 1 - 0.7 * fx.turnMotion, building, grow);
+    _drawField(canvas, g, engine.sides, 1 - 0.7 * fx.turnMotion, building, g.viewport.grow);
     _drawActiveGlass(canvas, g);
     for (final side in engine.sides) {
       _drawCrowdedWarning(canvas, g, side);
@@ -669,12 +688,7 @@ class FieldPainter extends CustomPainter {
     canvas.translate(c * x - s * y, s * x + c * y);
     if (!_atRest) canvas.rotate(_left);
     canvas.scale(swapped ? scaleY : scaleX, swapped ? scaleX : scaleY);
-    canvas.drawImageRect(
-      assets._atlas!,
-      assets._blocks[color.index],
-      FieldAssets._unitRect,
-      assets._imagePaint,
-    );
+    canvas.drawImageRect(assets._atlas!, assets._blocks[color.index], FieldAssets._unitRect, assets._imagePaint);
     if (flash > 0) {
       canvas.drawRRect(
         FieldAssets._flashShape,
@@ -686,15 +700,7 @@ class FieldPainter extends CustomPainter {
 
   /// The squares of a stick whose top left cell is at ([left], [top]) of the
   /// frame of glass [frame].
-  void _stick(
-    Canvas canvas,
-    Piece piece,
-    double left,
-    double top,
-    int frame, {
-    double scaleY = 1,
-    double flash = 0,
-  }) {
+  void _stick(Canvas canvas, Piece piece, double left, double top, int frame, {double scaleY = 1, double flash = 0}) {
     final count = piece.length;
     final lying = piece.isHorizontal;
     final flipped = piece.orientation.isFlipped;
@@ -717,14 +723,7 @@ class FieldPainter extends CustomPainter {
   /// The cross: the central square and the arm of every glass in play. A
   /// glass being built grows out of the centre. [lines] fades the grid while
   /// the cross is turning.
-  void _drawField(
-    Canvas canvas,
-    FieldGeometry g,
-    List<Side> sides,
-    double lines,
-    Side? growing,
-    double grow,
-  ) {
+  void _drawField(Canvas canvas, FieldGeometry g, List<Side> sides, double lines, Side? growing, double grow) {
     final a = assets;
     final half = g.half;
     final n = g.n.toDouble();
@@ -911,12 +910,7 @@ class FieldPainter extends CustomPainter {
       final along = flipped ? count - 1 - i : i;
       final tone = BlockTones.of(stick.colors[i]).base;
       final shape = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          left + (lying ? along : 0) + 0.07,
-          -g.reach + rest + (lying ? 0 : along) + 0.07,
-          0.86,
-          0.86,
-        ),
+        Rect.fromLTWH(left + (lying ? along : 0) + 0.07, -g.reach + rest + (lying ? 0 : along) + 0.07, 0.86, 0.86),
         const Radius.circular(0.14),
       );
       canvas.drawRRect(shape, fill..color = tone.withValues(alpha: 0.14 * strength));
@@ -954,9 +948,7 @@ class FieldPainter extends CustomPainter {
       for (final effect in fx.landings) {
         for (final cell in effect.placement.cells) {
           final at = cell.position;
-          if (board.colorAt(at) == cell.color &&
-              !(matched?.contains(at) ?? false) &&
-              !moving.contains(at)) {
+          if (board.colorAt(at) == cell.color && !(matched?.contains(at) ?? false) && !moving.contains(at)) {
             landing[at] = effect;
           }
         }
@@ -1033,9 +1025,7 @@ class FieldPainter extends CustomPainter {
     if (matched != null && matched.isNotEmpty) {
       final t = state.phaseProgress;
       final popping = state.phase == GamePhase.clearing;
-      final scale = popping
-          ? 1.22 * math.max(0.0, 1 - t * 1.7)
-          : 1 + 0.22 * (1 - (1 - t) * (1 - t));
+      final scale = popping ? 1.22 * math.max(0.0, 1 - t * 1.7) : 1 + 0.22 * (1 - (1 - t) * (1 - t));
       final flash = popping ? 1.0 : 0.3 + 0.7 * t;
       if (scale > 0.01) {
         for (final cell in matched) {
@@ -1155,14 +1145,7 @@ class FieldPainter extends CustomPainter {
   }
 
   /// Seconds until a piece locks by itself, written upright beside it.
-  void _drawCountdown(
-    Canvas canvas,
-    FieldGeometry g,
-    double ox,
-    double oy,
-    double scale,
-    IncomingPiece piece,
-  ) {
+  void _drawCountdown(Canvas canvas, FieldGeometry g, double ox, double oy, double scale, IncomingPiece piece) {
     if (engine.isGameOver) return;
     final secondsLeft = engine.secondsToLock(piece.side) ?? 0;
     final lit = fx.activeness[piece.side.index];
