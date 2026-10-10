@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "dev:vk": "vite --mode vk",
+    "build:vk": "tsc -b && vite build --mode vk",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
@@ -19,12 +21,14 @@
   },
   "dependencies": {
     "@fontsource/exo-2": "^5.1.1",
+    "@vkontakte/vk-bridge": "^3.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@playwright/test": "^1.64.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.7.0",

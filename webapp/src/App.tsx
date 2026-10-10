@@ -33,6 +33,9 @@ import {
 } from './services/storage';
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
 import { MusicPlayer } from './services/music';
+import { isPlatformHidden, subscribeVisibility } from './platform/lifecycle';
+import { VK_BUILD, vkStorage } from './platform/runtime';
+import { VKStatus } from './platform/VKStatus';
 
 const routeOf = (target: MenuTarget): Route => ({ name: target }) as Route;
 
@@ -106,18 +109,30 @@ export default function App() {
   useEffect(() => {
     const player = new MusicPlayer();
     music.current = player;
-    const unlock = () => player.ensurePlaying();
+    const unlock = () => { if (!document.hidden && !isPlatformHidden()) player.ensurePlaying(); };
+    const onVisibility = () => {
+      if (document.hidden || isPlatformHidden()) player.stop();
+      else player.ensurePlaying();
+    };
+    const onPageHide = () => player.stop();
+    const unsubscribeVisibility = subscribeVisibility(onVisibility);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     return () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      unsubscribeVisibility();
       player.dispose();
       music.current = null;
     };
   }, []);
   useEffect(() => {
     music.current?.setSettings(settings.audio);
+    if (document.hidden || isPlatformHidden()) music.current?.stop();
   }, [settings.audio]);
 
   // Everything the player sets up is written at once, so it survives closing
@@ -311,6 +326,7 @@ export default function App() {
       </div>
 
       <div className="app__content">{screen}</div>
+      {VK_BUILD && vkStorage && <VKStatus />}
       {!stored && (
         <div className="storage-notice" role="status">
           <span><T>Не удалось сохранить данные. Они пока доступны только в этой вкладке.</T></span>

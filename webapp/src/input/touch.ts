@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { platformNeedsTouch } from '../platform/runtime';
 
 export function needsTouchControls(
   width: number,
@@ -14,7 +15,7 @@ export function needsTouchControls(
 
 export function useTouchControls(): boolean {
   const detect = () =>
-    needsTouchControls(
+    platformNeedsTouch() || needsTouchControls(
       window.innerWidth,
       window.innerHeight,
       navigator.userAgent,

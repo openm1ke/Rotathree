@@ -26,6 +26,7 @@ import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { Button, Overlay } from './ui';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
+import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
 
@@ -554,6 +555,7 @@ export function GameScreen(props: Props) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
+    const unsubscribeVisibility = subscribeVisibility((hidden) => { if (hidden) onBlur(); });
     const onVisibility = () => {
       if (document.hidden) onBlur();
     };
@@ -571,7 +573,7 @@ export function GameScreen(props: Props) {
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
       last = now;
       const s = live.current.settings;
-      const frozen = live.current.blocked || document.hidden;
+      const frozen = live.current.blocked || document.hidden || isPlatformHidden();
       const holding = frozen || (banner?.blocking ?? false);
       if (frozen) {
         keyboard.releaseAll();
@@ -699,6 +701,7 @@ export function GameScreen(props: Props) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      unsubscribeVisibility();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onBlur);
       keyboard.releaseAll();

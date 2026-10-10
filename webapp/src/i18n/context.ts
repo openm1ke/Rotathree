@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { resolveLanguage, translate, type Language, type LanguageChoice } from './catalog';
+import { platformLocale } from '../platform/runtime';
 
 export interface I18n {
   language: Language;
@@ -16,7 +17,8 @@ export function useLanguage(choice: LanguageChoice): I18n {
     window.addEventListener('languagechange', update);
     return () => window.removeEventListener('languagechange', update);
   }, []);
-  const language = resolveLanguage(choice, preferred);
+  const locale = platformLocale();
+  const language = resolveLanguage(choice, locale ? [locale, ...preferred] : preferred);
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
