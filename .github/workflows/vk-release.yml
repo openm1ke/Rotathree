@@ -1,0 +1,30 @@
+name: VK draft release
+on:
+  push:
+    branches: [codex/vk-games]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+      - run: npm ci
+        working-directory: webapp
+      - run: npm audit --audit-level=moderate
+        working-directory: webapp
+      - run: npm run check
+        working-directory: webapp
+      - run: npm run build:vk
+        working-directory: webapp
+      - run: python3 tool/package_vk.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rotathree-vk-draft
+          path: build/releases/vk/Rotathree-vk-draft.zip*

@@ -1,4 +1,6 @@
 {
+  "Синхронизация VK отключена. Прогресс остаётся на этом устройстве.": "VK sync is off. Progress stays on this device.",
+  "Не удалось сохранить прогресс в VK. Повторите попытку перед выходом.": "Could not save progress to VK. Retry before leaving.",
   "Обучение": "Tutorial",
   "Повторить основы": "Review the basics",
   "Правила на практике": "Learn by playing",

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Rotathree — локальный стенд VK</title>
+<style>html,body{margin:0;background:#0a1b30;color:#eee;font:14px sans-serif}header{padding:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}button{padding:8px}iframe{display:block;border:0;margin:auto;width:100%;height:calc(100vh - 54px)}body.mobile iframe{width:390px;height:844px}body.capture header{display:none}body.capture iframe{height:100vh}</style></head>
+<body><header>Локальный стенд, без подключения к VK
+<button id="desktop">Десктоп</button><button id="mobile">Телефон</button>
+<button id="hide">Свернуть</button><button id="restore">Вернуться</button>
+<button id="offline">Хранилище: онлайн</button><button id="reload">Перезапустить игру</button>
+<button id="capture">Убрать панель стенда</button></header>
+<iframe title="Rotathree" allow="autoplay"></iframe>
+<script>
+// Test-only host. Never included in the VK upload archive; no real credentials.
+const frame = document.querySelector('iframe');
+const saved = JSON.parse(localStorage.getItem('rotathree.mock-vk') || '{}');
+const gameURL = new URL(new URLSearchParams(location.search).get('game') || '/', location.href);
+let offline = false;
+const mobile = new URLSearchParams(location.search).has('mobile');
+if (mobile) document.body.classList.add('mobile');
+const emit = (type, data = {}) => frame.contentWindow.postMessage({ type, data }, gameURL.origin);
+window.addEventListener('message', ({ source, origin, data }) => {
+  if (source !== frame.contentWindow || origin !== gameURL.origin || data?.type !== 'vk-connect') return;
+  const { handler, params } = data;
+  let result;
+  if (offline && handler.startsWith('VKWebAppStorage')) {
+    emit(handler + 'Failed', { error_type: 'client_error', request_id: params.request_id, error_data: { error_code: 1, error_reason: 'Offline test' } });
+    return;
+  }
+  switch (handler) {
+    case 'VKWebAppInit': result = { result: true }; break;
+    case 'VKWebAppGetLaunchParams': result = { vk_app_id: 54815388, vk_user_id: 1, vk_platform: mobile ? 'mobile_web' : 'desktop_web', vk_language: 'ru' }; break;
+    case 'VKWebAppGetConfig': result = { appearance: 'dark', insets: { top: 0, bottom: 0, left: 0, right: 0 }, adaptivity: mobile ? 'force_mobile' : 'regular' }; break;
+    case 'VKWebAppStorageGet': result = { keys: params.keys.map(key => ({ key, value: saved[key] || '' })) }; break;
+    case 'VKWebAppStorageSet': saved[params.key] = params.value; localStorage.setItem('rotathree.mock-vk', JSON.stringify(saved)); result = { result: true }; break;
+    default: result = { error_type: 'client_error', error_data: { error_code: 4, error_reason: 'Not implemented by local test host' } };
+  }
+  emit(handler + 'Result', { ...result, request_id: params.request_id });
+});
+document.querySelector('#desktop').onclick = () => location.search = '';
+document.querySelector('#mobile').onclick = () => location.search = '?mobile';
+document.querySelector('#hide').onclick = () => emit('VKWebAppViewHide');
+document.querySelector('#restore').onclick = () => emit('VKWebAppViewRestore');
+document.querySelector('#offline').onclick = (event) => { offline = !offline; event.target.textContent = 'Хранилище: ' + (offline ? 'офлайн' : 'онлайн'); };
+document.querySelector('#reload').onclick = () => frame.src = frame.src;
+document.querySelector('#capture').onclick = () => document.body.classList.add('capture');
+gameURL.search = 'vk_app_id=54815388&vk_user_id=1&vk_platform=' + (mobile ? 'mobile_web' : 'desktop_web');
+frame.src = gameURL.href;
+</script></body></html>

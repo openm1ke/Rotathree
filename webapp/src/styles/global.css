@@ -1740,6 +1740,20 @@ input:focus-visible {
   flex: 1;
   min-height: 0;
 }
+html[data-platform="vk"] .app {
+  padding-top: max(env(safe-area-inset-top), var(--vk-inset-top, 0px));
+  padding-right: max(env(safe-area-inset-right), var(--vk-inset-right, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom), var(--vk-inset-bottom, 0px));
+  padding-left: max(env(safe-area-inset-left), var(--vk-inset-left, 0px));
+}
+.vk-start {
+  width: min(520px, calc(100% - 32px));
+  margin: 12vh auto;
+  display: grid;
+  gap: 16px;
+  text-align: center;
+}
+.vk-start h1 { font-style: italic; font-weight: 900; }
 .storage-notice {
   position: relative;
   display: flex;

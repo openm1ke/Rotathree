@@ -8,6 +8,7 @@ import { sanitizeRunSave, sanitizeSavedRuns, type RunSave, type SavedRuns } from
 import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
 import { DEFAULT_POSITIONS, sanitizePositions, type PadPositions } from '../input/padPlacement';
 import { ACTIONS } from '../input/bindings';
+import { getPlatformStorage } from '../platform/storageBackend';
 
 /** How the explosion of a match looks: one animation for everything, or one
  * per kind of match. */
@@ -331,7 +332,7 @@ export function sanitizeStats(raw: unknown): Stats {
 
 // ------------------------------------------------------------------ storage
 
-const KEYS = {
+export const STORAGE_KEYS = {
   settings: 'rotathree.settings.v2',
   progress: 'rotathree.progress.v1',
   stats: 'rotathree.stats.v1',
@@ -339,11 +340,14 @@ const KEYS = {
   run: 'rotathree.run.web.v1',
   tutorial: 'rotathree.tutorial.v1',
 } as const;
+const KEYS = STORAGE_KEYS;
 
 type KeyValue = Partial<Pick<Storage, 'getItem' | 'setItem'>>;
 
 /** `localStorage`, or null where it is unavailable or forbidden. */
 export function browserStorage(): KeyValue | null {
+  const platform = getPlatformStorage();
+  if (platform) return platform;
   try {
     return globalThis.localStorage ?? null;
   } catch {

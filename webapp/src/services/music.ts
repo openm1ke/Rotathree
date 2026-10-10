@@ -1,10 +1,10 @@
 import { defaultSettings, type AudioOptions } from './storage';
+import { VK_BUILD } from '../platform/runtime';
 
 /** These playback copies have matched loudness and baked-in 2s fades at both
  * ends. Keep the originals and licensing records in assets/music. */
 export const MUSIC_TRACKS = [
-  'music/deep-focus.m4a',
-  'music/deep-focus-1.m4a',
+  ...(VK_BUILD ? [] : ['music/deep-focus.m4a', 'music/deep-focus-1.m4a']),
   'music/ambient-relaxing-loop.m4a',
   'music/project-utopia-loop.m4a',
   'music/chill-loopable.m4a',
