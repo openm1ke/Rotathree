@@ -2,7 +2,7 @@ name: Deploy web version to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/vk-games]
     paths:
       - 'webapp/**'
       - 'assets/i18n/**'
@@ -26,15 +26,33 @@ jobs:
       run:
         working-directory: webapp
     steps:
+      # Each site keeps its own source branch. Publish a single Pages artifact
+      # so deploying either version cannot remove the other version's files.
       - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/vk-games
+          path: vk-source
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: webapp/package-lock.json
+          cache-dependency-path: |
+            webapp/package-lock.json
+            vk-source/webapp/package-lock.json
       - run: npm ci
       # typecheck + lint + tests + build: nothing broken gets published
       - run: npm run check
+      - run: npm ci
+        working-directory: vk-source/webapp
+      - run: npm run check
+        working-directory: vk-source/webapp
+      - run: npm run build:vk
+        working-directory: vk-source/webapp
+      - run: cp -R vk-source/webapp/dist-vk webapp/dist/vk
+        working-directory: .
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
