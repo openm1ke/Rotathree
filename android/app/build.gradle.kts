@@ -18,6 +18,10 @@ val releaseAlias = releaseValue("keyAlias", "ROTATHREE_KEY_ALIAS")
 val releasePassword = releaseValue("keyPassword", "ROTATHREE_KEY_PASSWORD")
 val releaseId = providers.gradleProperty("rotathreeApplicationId")
     .orElse(providers.environmentVariable("ROTATHREE_APPLICATION_ID")).orNull
+// Local APK updates retain the ID of earlier installs. Store builds still
+// require an explicit publishing ID unless this flag is deliberately set.
+val localRelease = providers.gradleProperty("rotathreeLocalRelease")
+    .map { it == "true" }.getOrElse(false)
 val releaseReady = listOf(releaseStore, releaseStorePassword, releaseAlias, releasePassword)
     .all { !it.isNullOrBlank() }
 
@@ -26,7 +30,7 @@ val releaseReady = listOf(releaseStore, releaseStorePassword, releaseAlias, rele
 gradle.taskGraph.whenReady {
     if (allTasks.any { it.project == project && it.name.endsWith("Release") }) {
         check(releaseReady) { "Configure android/key.properties or ROTATHREE_* signing variables before building a release." }
-        check(!releaseId.isNullOrBlank() && !releaseId.startsWith("com.example.")) {
+        check(!releaseId.isNullOrBlank() && (localRelease || !releaseId.startsWith("com.example."))) {
             "Set ROTATHREE_APPLICATION_ID (or -ProtathreeApplicationId) to your publishing application ID."
         }
     }
