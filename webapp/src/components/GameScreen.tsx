@@ -38,6 +38,7 @@ interface Props {
   /** True while the settings are open over the game: nothing moves. */
   blocked: boolean;
   onSettings: () => void;
+  onPauseChanged?: (paused: boolean) => void;
   /** Back to the main menu. */
   onExit: () => void;
   /** Back to the campaign's levels. */
@@ -157,9 +158,11 @@ export function GameScreen(props: Props) {
 
     let current: Status = props.restore ? 'paused' : 'playing';
     setStatus(current);
+    live.current.onPauseChanged?.(current === 'paused');
     const setRunStatus = (next: Status) => {
       current = next;
       setStatus(next);
+      live.current.onPauseChanged?.(next === 'paused');
     };
 
     let campaignLevel = campaign ? session.level : -1;

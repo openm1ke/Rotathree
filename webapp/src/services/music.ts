@@ -23,6 +23,7 @@ export class MusicPlayer {
   private track = 0;
   private loaded = false;
   private wanted = false;
+  private suspended = false;
   private disposed = false;
   private pending: Promise<void> | undefined;
   private failures = 0;
@@ -44,13 +45,13 @@ export class MusicPlayer {
 
   /** Called from a pointer/key gesture to unlock browser audio. */
   ensurePlaying(): void {
-    if (!this.options.music || this.disposed) return;
+    if (!this.options.music || this.suspended || this.disposed) return;
     if (!this.player.paused && this.wanted) return;
     void this.start();
   }
 
   async start(): Promise<void> {
-    if (!this.options.music || this.disposed) return;
+    if (!this.options.music || this.suspended || this.disposed) return;
     this.wanted = true;
     if (this.pending) return this.pending;
     this.pending = this.playCurrent();
@@ -64,6 +65,14 @@ export class MusicPlayer {
   stop(): void {
     this.wanted = false;
     this.player.pause();
+  }
+
+  /** Game pause survives gestures, settings changes and visibility events. */
+  setSuspended(suspended: boolean): void {
+    if (this.suspended === suspended) return;
+    this.suspended = suspended;
+    if (suspended) this.stop();
+    else this.ensurePlaying();
   }
 
   dispose(): void {

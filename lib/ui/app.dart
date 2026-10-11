@@ -109,7 +109,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _store != null) {
       unawaited(_music.start());
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    } else if (state != AppLifecycleState.resumed) {
       unawaited(_music.stop());
     }
   }
@@ -206,10 +206,20 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('custom', _store!.saveCustom(next));
   }
 
-  void _show(_Screen screen) => setState(() {
-    _screen = screen;
-    _settingsOpen = false;
-  });
+  void _setMusicPaused(bool paused) {
+    unawaited(_music.setSuspended(paused));
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      unawaited(_music.stop());
+    }
+  }
+
+  void _show(_Screen screen) {
+    _setMusicPaused(false);
+    setState(() {
+      _screen = screen;
+      _settingsOpen = false;
+    });
+  }
 
   void _start(Session session, {RunSave? restore}) {
     if (restore == null && !_tutorialDone) {
@@ -221,6 +231,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _recordRun(_savedRuns[mode]!.abandoned());
       _checkpoint(mode, null);
     }
+    _setMusicPaused(restore != null);
     setState(() {
       _gameKey = GlobalKey<GameScreenState>();
       _restore = restore;
@@ -231,15 +242,18 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     });
   }
 
-  void _openTutorial({Session? after}) => setState(() {
-    _gameKey = GlobalKey<GameScreenState>();
-    _restore = null;
-    _afterTutorial = after;
-    _tutorial = true;
-    _settingsOpen = false;
-    _session = CustomSession(defaultCustom.copyWith(extraGlasses: 0));
-    _screen = _Screen.play;
-  });
+  void _openTutorial({Session? after}) {
+    _setMusicPaused(false);
+    setState(() {
+      _gameKey = GlobalKey<GameScreenState>();
+      _restore = null;
+      _afterTutorial = after;
+      _tutorial = true;
+      _settingsOpen = false;
+      _session = CustomSession(defaultCustom.copyWith(extraGlasses: 0));
+      _screen = _Screen.play;
+    });
+  }
 
   void _finishTutorial() {
     _tutorialDone = true;
@@ -253,11 +267,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
-  void _retry(Session session) => setState(() {
-    _gameKey = GlobalKey<GameScreenState>();
-    _restore = null;
-    _session = session;
-  });
+  void _retry(Session session) {
+    _setMusicPaused(false);
+    setState(() {
+      _gameKey = GlobalKey<GameScreenState>();
+      _restore = null;
+      _session = session;
+    });
+  }
 
   void _back() {
     if (_settingsOpen) {
@@ -325,6 +342,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           settings: _settings,
           progress: _progress,
           blocked: _settingsOpen,
+          onPauseChanged: _setMusicPaused,
           onSettings: () => setState(() => _settingsOpen = true),
           onExit: () => _show(_Screen.home),
           onLevels: () => _show(_Screen.campaign),

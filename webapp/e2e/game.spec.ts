@@ -40,7 +40,7 @@ test('music volume and toggle survive reload without resetting existing preferen
   await expect(slider).toHaveValue('0');
 });
 
-test('real browser audio uses the chosen gain and advances sequentially', async ({ page }) => {
+async function captureBrowserAudio(page: Page) {
   await page.addInitScript(() => {
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[]; musicTestGains: GainNode[] };
     state.musicTestPlayers = [];
@@ -60,6 +60,10 @@ test('real browser audio uses the chosen gain and advances sequentially', async 
       }
     };
   });
+}
+
+test('real browser audio uses the chosen gain and advances sequentially', async ({ page }) => {
+  await captureBrowserAudio(page);
   await page.goto('/');
   await page.getByRole('button', { name: /Настройки/ }).click();
   await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
@@ -86,6 +90,47 @@ test('real browser audio uses the chosen gain and advances sequentially', async 
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
     return state.musicTestPlayers.every((audio) => audio.paused);
   })).toBe(true);
+});
+
+test('game pause stops music until Continue or leaving for the menu', async ({ page }) => {
+  await captureBrowserAudio(page);
+  await startCampaign(page);
+  const playing = () => page.evaluate(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
+    return state.musicTestPlayers.some((audio) => !audio.paused);
+  });
+  const time = () => page.evaluate(() => {
+    const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
+    return state.musicTestPlayers.find((audio) => !!audio.src)!.currentTime;
+  });
+  await expect.poll(playing).toBe(true);
+  await expect.poll(() => page.evaluate(() => {
+    const state = window as typeof window & { musicTestGains: GainNode[] };
+    return state.musicTestGains.at(-1)?.gain.value;
+  })).toBeCloseTo(0.1, 5);
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
+  await expect.poll(playing).toBe(false);
+  const pausedAt = await time();
+  await page.keyboard.press('Shift');
+  await page.getByRole('dialog', { name: 'Пауза', exact: true }).getByRole('button', { name: 'Настройки', exact: true }).click();
+  await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
+  await page.getByRole('slider', { name: 'Громкость музыки', exact: true }).fill('35');
+  await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
+  await page.getByRole('tabpanel').getByRole('button', { name: 'вкл', exact: true }).click();
+  await expect.poll(playing).toBe(false);
+  expect(await time()).toBe(pausedAt);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect.poll(playing).toBe(true);
+  await expect.poll(time).toBeGreaterThan(pausedAt);
+  await page.getByRole('button', { name: 'Пауза', exact: true }).click();
+  await expect.poll(playing).toBe(false);
+  await page.getByRole('button', { name: 'В меню', exact: true }).click();
+  await expect.poll(playing).toBe(true);
+  await page.getByRole('button', { name: /Продолжить/ }).click();
+  await page.getByRole('button', { name: /Кампания/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Пауза', exact: true })).toBeVisible();
+  await expect.poll(playing).toBe(false);
 });
 
 test('tutorial can be completed using only the keyboard with gated, repeat-safe Enter', async ({ page }) => {
