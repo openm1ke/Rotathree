@@ -25,6 +25,7 @@ class MusicService {
   var _track = 0;
   var _loaded = false;
   var _wanted = false;
+  var _suspended = false;
   var _disposed = false;
 
   /// Serialize native commands so a slow source load cannot undo mute/volume.
@@ -44,9 +45,16 @@ class MusicService {
   }
 
   Future<void> start() {
-    if (!_options.music || _disposed) return Future.value();
+    if (!_options.music || _suspended || _disposed) return Future.value();
     _wanted = true;
     return _enqueue(_playCurrent);
+  }
+
+  /// Keep the track position and volume while the game's pause menu is open.
+  Future<void> setSuspended(bool suspended) {
+    if (_suspended == suspended) return Future.value();
+    _suspended = suspended;
+    return suspended ? stop() : start();
   }
 
   Future<void> _playCurrent() async {

@@ -78,6 +78,7 @@ class GameScreen extends StatefulWidget {
     this.onCheckpoint,
     this.tutorial = false,
     this.onTutorialDone,
+    this.onPauseChanged,
   });
 
   final Session session;
@@ -108,6 +109,7 @@ class GameScreen extends StatefulWidget {
   final ValueChanged<RunSave?>? onCheckpoint;
   final bool tutorial;
   final VoidCallback? onTutorialDone;
+  final ValueChanged<bool>? onPauseChanged;
 
   @override
   State<GameScreen> createState() => GameScreenState();
@@ -265,7 +267,10 @@ class GameScreenState extends State<GameScreen>
     _checkpoint();
   }
 
-  void _setStatus(_Status status) => setState(() => _status = status);
+  void _setStatus(_Status status) {
+    setState(() => _status = status);
+    widget.onPauseChanged?.call(status == _Status.paused);
+  }
 
   GameEngine _newEngine(RunPlan plan) => GameEngine(config: plan.config)..setRamp(plan.ramp);
 

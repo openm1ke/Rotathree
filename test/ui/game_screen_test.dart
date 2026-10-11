@@ -26,6 +26,7 @@ Future<GameScreenState> pumpGame(
   ValueChanged<RunRecord>? onRecord,
   Size size = const Size(390, 844),
   VoidCallback? onTutorialDone,
+  ValueChanged<bool>? onPauseChanged,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -40,6 +41,7 @@ Future<GameScreenState> pumpGame(
         restore: restore,
         tutorial: tutorial,
         onTutorialDone: onTutorialDone,
+        onPauseChanged: onPauseChanged,
         onCheckpoint: onCheckpoint,
         onSettings: () {},
         onExit: onExit ?? () {},
@@ -154,10 +156,12 @@ void main() {
   });
 
   testWidgets('the pause button opens the pause dialog and the game stops', (tester) async {
-    final state = await pumpGame(tester);
+    final pauses = <bool>[];
+    final state = await pumpGame(tester, onPauseChanged: pauses.add);
     await tester.tap(find.text('Пауза'));
     await pumpFrames(tester, 2);
     expect(find.text('Продолжить'), findsOneWidget);
+    expect(pauses.last, isTrue);
 
     final before = state.engine.state.elapsedSeconds;
     await pumpFrames(tester, 20);
@@ -166,6 +170,13 @@ void main() {
     await tester.tap(find.text('Продолжить'));
     await pumpFrames(tester, 2);
     expect(find.text('Продолжить'), findsNothing);
+    expect(pauses.last, isFalse);
+    state.didChangeAppLifecycleState(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(pauses.last, isTrue);
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(pauses.last, isTrue);
   });
 
   testWidgets('a level banner stays frozen in pause and survives saving', (tester) async {

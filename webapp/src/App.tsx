@@ -54,6 +54,12 @@ type Route =
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const music = useRef<MusicPlayer | null>(null);
+  const musicPaused = useRef(false);
+  const onPauseChanged = useCallback((paused: boolean) => {
+    musicPaused.current = paused;
+    music.current?.setSuspended(paused);
+    if (document.hidden || isPlatformHidden()) music.current?.stop();
+  }, []);
   const i18n = useLanguage(settings.language);
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [stats, setStats] = useState<Stats>(() => loadStats());
@@ -109,6 +115,7 @@ export default function App() {
   useEffect(() => {
     const player = new MusicPlayer();
     music.current = player;
+    player.setSuspended(musicPaused.current);
     const unlock = () => { if (!document.hidden && !isPlatformHidden()) player.ensurePlaying(); };
     const onVisibility = () => {
       if (document.hidden || isPlatformHidden()) player.stop();
@@ -134,6 +141,10 @@ export default function App() {
     music.current?.setSettings(settings.audio);
     if (document.hidden || isPlatformHidden()) music.current?.stop();
   }, [settings.audio]);
+
+  useEffect(() => {
+    if (route.name !== 'play') onPauseChanged(false);
+  }, [route.name, onPauseChanged]);
 
   // Everything the player sets up is written at once, so it survives closing
   // the tab; the block colours follow the active set.
@@ -301,6 +312,7 @@ export default function App() {
           onCheckpoint={(save) => checkpoint(route.session.mode, save)}
           onTutorialDone={finishTutorial}
           onSettings={() => setSettingsOpen(true)}
+          onPauseChanged={onPauseChanged}
           onExit={exit}
           onLevels={levels}
           onRetry={retry}

@@ -76,6 +76,45 @@ describe('background music playback', () => {
     expect(TestAudio.instances).toHaveLength(1);
   });
 
+  it('keeps pause active through gestures, volume changes and music toggles', async () => {
+    await music.start();
+    const player = TestAudio.instances[0];
+    player.currentTime = 25;
+    music.setSuspended(true);
+    music.ensurePlaying();
+    music.setSettings({ music: false, musicVolume: 0.35 });
+    music.setSettings({ music: true, musicVolume: 0.35 });
+    player.dispatchEvent(new Event('ended'));
+    await music.start();
+    expect(player.paused).toBe(true);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(player.currentTime).toBe(25);
+    expect(player.src).toBe(`/${MUSIC_TRACKS[0]}`);
+    music.setSuspended(false);
+    await music.start();
+    expect(player.paused).toBe(false);
+    expect(player.currentTime).toBe(25);
+    expect(TestContext.instances[0].output.gain.value).toBe(0.35);
+  });
+
+  it('does not resume a pending play after the game is paused', async () => {
+    const player = TestAudio.instances[0];
+    let finish!: () => void;
+    player.play.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      finish = () => { player.paused = false; resolve(); };
+    }));
+    const starting = music.start();
+    await Promise.resolve();
+    music.setSuspended(true);
+    finish();
+    await starting;
+    expect(player.paused).toBe(true);
+    music.setSettings({ music: false, musicVolume: 0.1 });
+    music.setSuspended(false);
+    await music.start();
+    expect(player.play).toHaveBeenCalledTimes(1);
+  });
+
   it('mutes, ignores further gestures while disabled, and resumes at the chosen volume', async () => {
     await music.start();
     const player = TestAudio.instances[0];
