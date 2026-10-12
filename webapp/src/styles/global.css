@@ -2280,3 +2280,8 @@ select:focus-visible {
   .campaign-progress__fill { transition: none; }
   .campaign-progress__pulse { animation: none; }
 }
+
+.card--campaign-shortcut { text-align: left; cursor: pointer; color: var(--text); }
+.card--campaign-shortcut:hover, .card--campaign-shortcut:focus-visible { border-color: var(--accent); background: rgb(120 205 255 / .08); }
+.card--campaign-shortcut strong { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card--campaign-shortcut strong > span:last-child { color: var(--accent); font-size: 24px; }

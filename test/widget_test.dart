@@ -7,6 +7,7 @@ import 'package:rotathree/ui/data/store.dart';
 import 'package:rotathree/ui/i18n/strings.dart';
 import 'package:rotathree/game/config/modes.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
+import 'package:rotathree/ui/game/campaign_progress.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The backdrop animates for ever, so the screens are pumped for a while
@@ -32,6 +33,7 @@ void main() {
 
     expect(find.text('Кампания'), findsWidgets);
     expect(find.text('Настройки'), findsOneWidget);
+    expect(find.text('Кошмар'), findsNothing);
 
     await tester.tap(find.text('Кампания'));
     await settle(tester);
@@ -60,6 +62,7 @@ void main() {
     await settle(tester);
     expect(find.text('Кампания'), findsOneWidget);
     expect(find.text('пройдена'), findsOneWidget);
+    expect(find.byKey(const ValueKey('campaign-shortcut')), findsNothing);
     expect(find.text('открыт'), findsNothing);
     expect(find.text('Кошмар'), findsNothing);
     await tester.tap(find.text('Кампания'));
@@ -74,6 +77,64 @@ void main() {
     expect(find.text('Кошмар'), findsNothing);
     expect(tester.getSize(find.byTooltip('Пауза')), const Size(44, 44));
     expect(tester.getSize(find.byTooltip('Настройки')), const Size(44, 44));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('campaign home shortcut starts the highest reached level without a save', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    SharedPreferences.setMockInitialValues({
+      'rotathree.tutorial.v1': 'true',
+      'rotathree.progress.v1': jsonEncode({'unlocked': 4, 'completed': false, 'best': List.filled(15, 0)}),
+    });
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    final shortcut = find.byKey(const ValueKey('campaign-shortcut'));
+    await tester.scrollUntilVisible(shortcut, 180, scrollable: find.byType(Scrollable).first);
+    expect(find.text('уровень 5 из 15'), findsOneWidget);
+    expect(find.text('Кошмар'), findsNothing);
+    await tester.tap(shortcut);
+    await settle(tester);
+    expect(tester.widget<CampaignProgress>(find.byType(CampaignProgress)).level, 5);
+    expect(find.text('Пауза'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('campaign shortcut resumes the saved level immediately rather than the highest unlocked level', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    SharedPreferences.setMockInitialValues({
+      'rotathree.tutorial.v1': 'true',
+      'rotathree.progress.v1': jsonEncode({'unlocked': 4, 'completed': false, 'best': List.filled(15, 0)}),
+    });
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    await tester.tap(find.text('Кампания'));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('campaign-level-0')));
+    await settle(tester);
+    tester.state<GameScreenState>(find.byType(GameScreen)).engine.state.score = 300;
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    final saved = (await AppStore.open()).loadRuns()[ModeId.campaign]!;
+    final shortcut = find.byKey(const ValueKey('campaign-shortcut'));
+    await tester.scrollUntilVisible(shortcut, 180, scrollable: find.byType(Scrollable).first);
+    expect(find.text('уровень 1 из 15'), findsOneWidget);
+    await tester.tap(shortcut);
+    await settle(tester);
+    expect(tester.widget<GameScreen>(find.byType(GameScreen)).resumeImmediately, isTrue);
+    expect(tester.widget<CampaignProgress>(find.byType(CampaignProgress)).level, 1);
+    expect(tester.state<GameScreenState>(find.byType(GameScreen)).engine.state.score, 300);
+    expect(find.text('Пауза'), findsNothing);
+    expect((await AppStore.open()).loadRuns()[ModeId.campaign]!.id, saved.id);
     expect(tester.takeException(), isNull);
   });
 

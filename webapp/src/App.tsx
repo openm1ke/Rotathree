@@ -49,7 +49,7 @@ type Route =
   | { name: 'custom' }
   | { name: 'statistics' }
   | { name: 'settings' }
-  | { name: 'play'; session: Session; from: From; restore?: RunSave; tutorial?: boolean };
+  | { name: 'play'; session: Session; from: From; restore?: RunSave; resumeImmediately?: boolean; tutorial?: boolean };
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
@@ -188,7 +188,7 @@ export default function App() {
   }, []);
 
   const openGame = useCallback(
-    (session: Session, from: From, restore?: RunSave) => {
+    (session: Session, from: From, restore?: RunSave, resumeImmediately = false) => {
       if (!restore && savedRef.current[session.mode]) {
         const abandoned = abandonedRun(savedRef.current[session.mode]!);
         recordRun(abandoned);
@@ -196,7 +196,7 @@ export default function App() {
       }
       setNonce((n) => n + 1);
       setSettingsOpen(false);
-      setRoute({ name: 'play', session, from, restore });
+      setRoute({ name: 'play', session, from, restore, resumeImmediately });
     },
     [checkpoint, recordRun],
   );
@@ -255,6 +255,11 @@ export default function App() {
           tutorialDone={tutorialDone}
           onTutorial={() => openTutorial()}
           onResume={() => setRoute({ name: 'resume' })}
+          onPlayCampaign={() => {
+            const save = savedRef.current.campaign;
+            if (save) openGame(save.session, 'home', save, true);
+            else start({ mode: 'campaign', level: progress.unlocked }, 'home');
+          }}
           onOpen={(target: MenuTarget) => setRoute(routeOf(target))}
           active={!settingsOpen}
         />
@@ -312,6 +317,7 @@ export default function App() {
           progress={progress}
           blocked={settingsOpen}
           restore={route.restore}
+          resumeImmediately={route.resumeImmediately}
           tutorial={route.tutorial}
           onCheckpoint={(save) => checkpoint(route.session.mode, save)}
           onTutorialDone={finishTutorial}

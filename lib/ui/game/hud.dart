@@ -125,49 +125,43 @@ class GameReadout extends StatelessWidget {
   final HudState hud;
   final HudOptions options;
   final Callout? callout;
+
   @override
   Widget build(BuildContext context) => Opacity(
     opacity: options.opacity,
     child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (options.score) ...[
-                Row(
-                  children: [
-                    Expanded(child: LText(formatPoints(hud.score), style: Type.display(20))),
-                    if (hud.level > 0)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          LText(
-                            'Уровень ${hud.level} / ${campaignLevels.length}',
-                            style: Type.body(11, color: Palette.accent),
-                          ),
-                        ],
-                      ),
-                    if (hud.speed > 0) LText('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
-                  ],
-                ),
+          if (options.score) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: LText(formatPoints(hud.score), style: Type.display(20))),
+                const SizedBox(width: 12),
+                if (hud.level > 0)
+                  LText('Уровень ${hud.level} / ${campaignLevels.length}', style: Type.body(11, color: Palette.accent)),
+                if (hud.speed > 0)
+                  LText('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
               ],
-              if (options.stats)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: LText(
-                    '${formatClock(hud.seconds)} · Фигуры ${hud.pieces} · Матчи ${hud.matches} · Комбо ×${hud.bestCombo}',
-                    style: Type.body(11, color: Palette.textDim),
-                  ),
-                ),
-            ],
-          ),
-          if (callout != null)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: IgnorePointer(child: _CalloutView(callout: callout!, base: 10)),
+            ),
+            // A reserved bonus row avoids both overlap and camera jumps when points arrive.
+            SizedBox(
+              height: 20,
+              child: callout == null ? null : ClipRect(child: Align(
+                alignment: Alignment.topLeft,
+                child: IgnorePointer(child: _CalloutView(callout: callout!, base: 10)),
+              )),
+            ),
+          ],
+          if (options.stats)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: LText(
+                '${formatClock(hud.seconds)} · Фигуры ${hud.pieces} · Матчи ${hud.matches} · Комбо ×${hud.bestCombo}',
+                style: Type.body(11, color: Palette.textDim),
+              ),
             ),
         ],
       ),
