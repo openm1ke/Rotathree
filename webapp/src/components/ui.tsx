@@ -3,15 +3,32 @@ import { T } from '../i18n/Text';
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
+/** Compact game actions retain translated labels for keyboard and screen readers. */
+export function GameIconButton({ icon, label, onClick }: {
+  icon: 'pause' | 'settings'; label: string; onClick: () => void;
+}) {
+  const { t } = useI18n();
+  return <button type="button" className="game-icon" aria-label={t(label)} title={t(label)} onClick={onClick}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      {icon === 'pause' ? <><path d="M8 5v14M16 5v14" strokeWidth="3" strokeLinecap="round" /></> : <>
+        <path d="m9 3-.6 2.3-1.5.9-2.3-.6-3 5.2 1.7 1.7v1.8l-1.7 1.7 3 5.2 2.3-.6 1.5.9.6 2.3h6l.6-2.3 1.5-.9 2.3.6 3-5.2-1.7-1.7v-1.8l1.7-1.7-3-5.2-2.3.6-1.5-.9L15 3Z" transform="translate(1 0) scale(.9)" />
+        <circle cx="12" cy="12" r="3" />
+      </>}
+    </svg>
+  </button>;
+}
+
 /** A layer over the whole window, not just the field it was opened from. */
 export function Overlay({
   children,
   onDismiss,
   label = 'Меню игры',
+  className = '',
 }: {
   children: ReactNode;
   onDismiss?: () => void;
   label?: string;
+  className?: string;
 }) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
@@ -38,7 +55,7 @@ export function Overlay({
   return createPortal(
     <div
       ref={root}
-      className="overlay"
+      className={`overlay ${className}`}
       role="dialog"
       aria-modal="true"
       aria-label={t(label)}

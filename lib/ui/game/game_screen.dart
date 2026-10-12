@@ -770,14 +770,11 @@ class GameScreenState extends State<GameScreen>
                               icon: const Icon(Icons.arrow_back_rounded, size: 18),
                               label: const LText('Назад'),
                             ),
-                            const Spacer(),
                           ] else ...[
-                            Expanded(
-                              child: LText(modeTitle(_mode), style: Type.body(14, weight: FontWeight.w800)),
-                            ),
-                            TextButton(onPressed: _togglePause, child: const LText('Пауза')),
+                            GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
                           ],
-                          TextButton(onPressed: widget.onSettings, child: const LText('Настройки')),
+                          const Spacer(),
+                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
                         ],
                       ),
                     ),

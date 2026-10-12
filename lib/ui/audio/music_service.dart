@@ -25,8 +25,10 @@ class MusicService {
   var _track = 0;
   var _loaded = false;
   var _wanted = false;
-  var _suspended = false;
+  var _paused = false;
   var _disposed = false;
+
+  double get _volume => _options.music ? _options.musicVolume * (_paused ? 0.1 : 1) : 0;
 
   /// Serialize native commands so a slow source load cannot undo mute/volume.
   Future<void> _enqueue(Future<void> Function() command) {
@@ -40,21 +42,20 @@ class MusicService {
     _options = options;
     if (!options.music) return stop();
     return _enqueue(() async {
-      await _player?.setVolume(_options.music ? _options.musicVolume : 0);
+      await _player?.setVolume(_volume);
     });
   }
 
   Future<void> start() {
-    if (!_options.music || _suspended || _disposed) return Future.value();
+    if (!_options.music || _disposed) return Future.value();
     _wanted = true;
     return _enqueue(_playCurrent);
   }
 
-  /// Keep the track position and volume while the game's pause menu is open.
-  Future<void> setSuspended(bool suspended) {
-    if (_suspended == suspended) return Future.value();
-    _suspended = suspended;
-    return suspended ? stop() : start();
+  /// Duck music on pause without overwriting the player's volume preference.
+  Future<void> setPaused(bool paused) {
+    _paused = paused;
+    return _enqueue(() async => _player?.setVolume(_volume));
   }
 
   Future<void> _playCurrent() async {
@@ -74,8 +75,8 @@ class MusicService {
       await player.setSource(AssetSource(tracks[_track]));
       _loaded = true;
     }
-    await player.setVolume(_options.music ? _options.musicVolume : 0);
-    if (_wanted && _options.music && !_disposed) await player.resume();
+    await player.setVolume(_volume);
+    if (_wanted && _options.music && !_disposed && player.state != PlayerState.playing) await player.resume();
   }
 
   Future<void> stop() {

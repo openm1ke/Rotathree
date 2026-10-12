@@ -23,7 +23,7 @@ export class MusicPlayer {
   private track = 0;
   private loaded = false;
   private wanted = false;
-  private suspended = false;
+  private paused = false;
   private disposed = false;
   private pending: Promise<void> | undefined;
   private failures = 0;
@@ -45,13 +45,13 @@ export class MusicPlayer {
 
   /** Called from a pointer/key gesture to unlock browser audio. */
   ensurePlaying(): void {
-    if (!this.options.music || this.suspended || this.disposed) return;
-    if (!this.player.paused && this.wanted) return;
+    if (!this.options.music || this.disposed) return;
+    if (!this.player.paused && this.wanted && (!this.context || this.context.state === 'running')) return;
     void this.start();
   }
 
   async start(): Promise<void> {
-    if (!this.options.music || this.suspended || this.disposed) return;
+    if (!this.options.music || this.disposed) return;
     this.wanted = true;
     if (this.pending) return this.pending;
     this.pending = this.playCurrent();
@@ -67,12 +67,10 @@ export class MusicPlayer {
     this.player.pause();
   }
 
-  /** Game pause survives gestures, settings changes and visibility events. */
-  setSuspended(suspended: boolean): void {
-    if (this.suspended === suspended) return;
-    this.suspended = suspended;
-    if (suspended) this.stop();
-    else this.ensurePlaying();
+  /** Pause ducks to one tenth of the chosen volume without changing its setting. */
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.applyVolume();
   }
 
   dispose(): void {
@@ -87,14 +85,16 @@ export class MusicPlayer {
   }
 
   private applyVolume(): void {
-    const volume = this.options.music ? this.options.musicVolume : 0;
+    const volume = this.options.music ? this.options.musicVolume * (this.paused ? 0.1 : 1) : 0;
     if (this.gain) this.gain.gain.value = volume;
     else this.player.volume = volume;
   }
 
   private createAudioGraph(): void {
     if (this.context || typeof AudioContext === 'undefined') return;
-    const context = new AudioContext();
+    let context: AudioContext;
+    try { context = new AudioContext(); }
+    catch { return; } // Keep media playback usable when Web Audio is unavailable.
     const gain = context.createGain();
     context.createMediaElementSource(this.player).connect(gain);
     gain.connect(context.destination);
@@ -111,9 +111,12 @@ export class MusicPlayer {
     }
     try {
       this.createAudioGraph();
-      if (this.context?.state === 'suspended') await this.context.resume();
       if (!this.wanted || this.disposed) return;
-      await this.player.play();
+      // Start both operations inside the gesture, before yielding: Safari can
+      // reject media.play() if it is deferred until context.resume() completes.
+      const resuming = this.context && this.context.state !== 'running' ? this.context.resume() : Promise.resolve();
+      const playing = this.player.paused ? this.player.play() : Promise.resolve();
+      await Promise.all([resuming, playing]);
       if (!this.wanted || this.disposed) this.player.pause();
     } catch {
       // A rejected autoplay attempt is retried on the next user gesture.
@@ -137,7 +140,8 @@ export class MusicPlayer {
   private onError = (): void => {
     // Skip an unavailable file, but stop if the entire playlist is unavailable.
     if (++this.failures >= MUSIC_TRACKS.length) this.stop();
-    else if (this.pending) void this.pending.then(() => this.advance());
-    else this.advance();
+    // Media errors can arrive synchronously from play(), before start() has
+    // assigned its pending promise. Advance after it settles, never recursively.
+    else void Promise.resolve().then(() => this.pending).then(() => this.advance());
   };
 }

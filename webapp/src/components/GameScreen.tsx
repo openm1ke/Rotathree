@@ -24,7 +24,7 @@ import type { Palettes, Progress, RunRecord, Settings } from '../services/storag
 import { Hud } from './Hud';
 import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
-import { Button, Overlay } from './ui';
+import { Button, GameIconButton, Overlay } from './ui';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
@@ -764,14 +764,10 @@ export function GameScreen(props: Props) {
                     : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
                 </T></small>
               </div>
-              <button type="button" className="chip" onClick={() => actions.current.togglePause()}><T>
-                Пауза
-              </T></button>
+              <GameIconButton icon="pause" label="Пауза" onClick={() => actions.current.togglePause()} />
             </>
           )}
-          <button type="button" className="chip" onClick={props.onSettings}><T>
-            Настройки
-          </T></button>
+          <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
         </header>
       )}
       {!touch && !tutorial && <div className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>

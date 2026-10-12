@@ -54,7 +54,7 @@ export default function App() {
   const musicPaused = useRef(false);
   const onPauseChanged = useCallback((paused: boolean) => {
     musicPaused.current = paused;
-    music.current?.setSuspended(paused);
+    music.current?.setPaused(paused);
     if (document.hidden) music.current?.stop();
   }, []);
   const i18n = useLanguage(settings.language);
@@ -112,7 +112,7 @@ export default function App() {
   useEffect(() => {
     const player = new MusicPlayer();
     music.current = player;
-    player.setSuspended(musicPaused.current);
+    player.setPaused(musicPaused.current);
     const unlock = () => { if (!document.hidden) player.ensurePlaying(); };
     const onVisibility = () => {
       if (document.hidden) player.stop();
@@ -122,9 +122,11 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener('pointerdown', unlock);
+    window.addEventListener('click', unlock);
     window.addEventListener('keydown', unlock);
     return () => {
       window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('click', unlock);
       window.removeEventListener('keydown', unlock);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onPageHide);
@@ -343,7 +345,7 @@ export default function App() {
       )}
 
       {settingsOpen && route.name === 'play' && (
-        <Overlay label="Настройки" onDismiss={() => setSettingsOpen(false)}>
+        <Overlay label="Настройки" className="overlay--settings" onDismiss={() => setSettingsOpen(false)}>
           <SettingsScreen
             overlay
             settings={settings}

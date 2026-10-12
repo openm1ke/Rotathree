@@ -207,7 +207,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _setMusicPaused(bool paused) {
-    unawaited(_music.setSuspended(paused));
+    unawaited(_music.setPaused(paused));
     if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
       unawaited(_music.stop());
     }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/ui/app.dart';
@@ -43,6 +45,34 @@ void main() {
     expect(find.text('Цель 1\u00a0200'), findsOneWidget);
   });
 
+  testWidgets('completed campaign uses a compact label and unlocks Play inside its menu', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'rotathree.tutorial.v1': 'true',
+      'rotathree.progress.v1': jsonEncode({'unlocked': 14, 'completed': true, 'best': List.filled(15, 1200)}),
+    });
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+    expect(find.text('Кампания'), findsOneWidget);
+    expect(find.text('пройдена'), findsOneWidget);
+    expect(find.text('открыт'), findsNothing);
+    expect(find.text('Кошмар'), findsNothing);
+    await tester.tap(find.text('Кампания'));
+    await settle(tester);
+    await tester.ensureVisible(find.text('Играть'));
+    await tester.pump();
+    await tester.tap(find.text('Играть'));
+    await settle(tester);
+    final game = tester.state<GameScreenState>(find.byType(GameScreen));
+    expect(game.engine.config.numberOfColors, 6);
+    expect(game.engine.sides, hasLength(4));
+    expect(find.text('Кошмар'), findsNothing);
+    expect(tester.getSize(find.byTooltip('Пауза')), const Size(44, 44));
+    expect(tester.getSize(find.byTooltip('Настройки')), const Size(44, 44));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a custom game can be set up and started', (tester) async {
     tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
     addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
@@ -57,7 +87,7 @@ void main() {
     await tester.scrollUntilVisible(find.text('Начать'), 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Начать'));
     await settle(tester);
-    expect(find.text('Пауза'), findsOneWidget);
+    expect(find.byTooltip('Пауза'), findsOneWidget);
   });
 
   testWidgets('new players see training and can skip into the chosen game', (tester) async {
@@ -75,7 +105,7 @@ void main() {
     await tester.tap(find.text('Пропустить'));
     await settle(tester);
     expect(find.text('Одна фигура — три клетки'), findsNothing);
-    expect(find.text('Пауза'), findsOneWidget);
+    expect(find.byTooltip('Пауза'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('rotathree.tutorial.v1'), 'true');
   });
@@ -179,7 +209,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('campaign-level-0')));
     await settle(tester);
     final state = tester.state<GameScreenState>(find.byType(GameScreen));
-    await tester.tap(find.text('Настройки'));
+    await tester.tap(find.byTooltip('Настройки'));
     await settle(tester);
     final snapshot = state.engine.snapshot();
     await tester.ensureVisible(find.text('Интерфейс'));
@@ -190,10 +220,10 @@ void main() {
     expect(find.text('Interface'), findsOneWidget);
     expect(tester.state<GameScreenState>(find.byType(GameScreen)), same(state));
     expect(state.engine.snapshot(), snapshot);
-    expect(find.text('Pause'), findsWidgets);
+    expect(find.byTooltip('Pause'), findsWidgets);
     await tester.tap(find.byTooltip('Back'));
     await settle(tester);
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.byTooltip('Pause'), findsOneWidget);
     expect(tester.state<GameScreenState>(find.byType(GameScreen)), same(state));
     expect(tester.takeException(), isNull);
   });
