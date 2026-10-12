@@ -319,13 +319,21 @@ export class Effects {
     // A turn from standstill peaks at 1.5 quarter turns per `turnSeconds`.
     this.turnMotion = Math.min(1, (Math.abs(this.turnSpeedAt(this.turnProgress)) * this.turnSeconds) / 1.5);
 
-    // Spring back to rest.
-    const stiffness = 520;
-    const damping = 30;
-    this.kickVx += (-stiffness * this.kickX - damping * this.kickVx) * seconds;
-    this.kickVy += (-stiffness * this.kickY - damping * this.kickVy) * seconds;
-    this.kickX += this.kickVx * seconds;
-    this.kickY += this.kickVy * seconds;
+    // Solve the damped spring exactly: Euler steps at 20 FPS add energy
+    // instead of damping it and can send the entire field off-screen.
+    if (seconds > 0 && (this.kickX !== 0 || this.kickY !== 0 || this.kickVx !== 0 || this.kickVy !== 0)) {
+      const stiffness = 520;
+      const halfDamping = 15;
+      const frequency = Math.sqrt(stiffness - halfDamping * halfDamping);
+      const decay = Math.exp(-halfDamping * seconds);
+      const cosine = Math.cos(frequency * seconds);
+      const sine = Math.sin(frequency * seconds) / frequency;
+      const x = this.kickX, y = this.kickY, vx = this.kickVx, vy = this.kickVy;
+      this.kickX = decay * (x * cosine + (vx + halfDamping * x) * sine);
+      this.kickY = decay * (y * cosine + (vy + halfDamping * y) * sine);
+      this.kickVx = decay * (vx * cosine - (halfDamping * vx + stiffness * x) * sine);
+      this.kickVy = decay * (vy * cosine - (halfDamping * vy + stiffness * y) * sine);
+    }
     this.shake *= Math.exp(-14 * seconds);
     this.punch *= Math.exp(-9 * seconds);
     // Everything comes to a dead stop instead of creeping towards it for
