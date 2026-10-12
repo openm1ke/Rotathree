@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Effects } from '../render/effects';
 import { newEngine } from './helpers';
 import { findMatches } from '../game/matchDetector';
+import { computeDrop } from '../game/placement';
 
 const QUARTER = Math.PI / 2;
 
@@ -26,6 +27,62 @@ const setup = (turnSeconds = 0.3) => {
   };
   return { engine, fx, turn, play };
 };
+
+describe('field recoil', () => {
+  it('stays in view and settles during sustained 20 FPS frames', () => {
+    const { engine, fx } = setup();
+    fx.consume([{ type: 'pieceMoved', side: engine.activeSide, direction: 1, blocked: true }], engine);
+    for (let frame = 0; frame < 200; frame++) {
+      fx.update(.05, engine);
+      expect(Number.isFinite(fx.kickX)).toBe(true);
+      expect(Math.abs(fx.kickX)).toBeLessThan(.5);
+    }
+    expect(fx.kickX).toBe(0);
+    expect(fx.kickY).toBe(0);
+    expect(fx.settled).toBe(true);
+  });
+
+  it('keeps repeated drops and combos bounded through slow and irregular frames', () => {
+    const { engine, fx } = setup();
+    const piece = engine.activePiece!;
+    const placement = computeDrop(engine.board, piece.side, piece.piece, piece.column)!;
+    engine.board.paintCenter(['RRRRRR']);
+    const match = findMatches(engine.board);
+    const frames = [.05, .05, 1 / 60, .033, .25, .05];
+    for (let frame = 0; frame < 300; frame++) {
+      if (frame % 12 === 0) {
+        fx.consume([
+          { type: 'pieceMoved', side: engine.activeSide, direction: 1, blocked: true },
+          { type: 'pieceLanded', placement, dropped: true },
+          { type: 'matchScored', combo: 6, score: 600, match },
+        ], engine);
+      }
+      fx.update(frames[frame % frames.length], engine);
+      expect(Math.abs(fx.kickX + fx.shakeX)).toBeLessThan(1);
+      expect(Math.abs(fx.kickY + fx.shakeY)).toBeLessThan(1);
+      expect(fx.punch).toBeGreaterThanOrEqual(0);
+      expect(fx.punch).toBeLessThanOrEqual(.06);
+    }
+    for (let frame = 0; frame < 60; frame++) fx.update(.05, engine);
+    expect(fx.settled).toBe(true);
+  });
+
+  it('follows elapsed time regardless of frame rate and freezes at zero delta', () => {
+    const { engine, fx: slow } = setup();
+    const fast = new Effects();
+    fast.reset(engine.activeSide);
+    const event = { type: 'pieceMoved' as const, side: engine.activeSide, direction: 1, blocked: true };
+    slow.consume([event], engine);
+    fast.consume([event], engine);
+    slow.update(.2, engine);
+    for (let frame = 0; frame < 12; frame++) fast.update(1 / 60, engine);
+    expect(slow.kickX).not.toBe(0);
+    expect(slow.kickX).toBeCloseTo(fast.kickX, 9);
+    const before = slow.kickX;
+    slow.update(0, engine);
+    expect(slow.kickX).toBe(before);
+  });
+});
 
 describe('turning the cross', () => {
   it('eases to the new glass and stops there without swinging past', () => {

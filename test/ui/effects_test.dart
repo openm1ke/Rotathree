@@ -2,7 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/game/config/game_config.dart';
 import 'package:rotathree/game/engine/game_engine.dart';
+import 'package:rotathree/game/engine/game_event.dart';
 import 'package:rotathree/game/engine/match_detector.dart';
+import 'package:rotathree/game/engine/placement_engine.dart';
 import 'package:rotathree/game/model/color.dart';
 import 'package:rotathree/game/model/position.dart';
 import 'package:rotathree/game/state/game_state.dart';
@@ -40,6 +42,63 @@ Effects popping(List<MatchResult> lines, {required ExplosionStyle style}) {
 }
 
 void main() {
+  test('recoil stays in view and settles during sustained 20 FPS frames', () {
+    final engine = GameEngine(config: const GameConfig(glassCount: 1, seed: 5));
+    final fx = Effects()..reset(engine.activeSide);
+    fx.consume([PieceMoved(engine.activeSide, direction: 1, blocked: true)], engine);
+    for (var frame = 0; frame < 200; frame++) {
+      fx.update(0.05, engine);
+      expect(fx.kickX.isFinite, isTrue);
+      expect(fx.kickX.abs(), lessThan(0.5), reason: 'frame $frame');
+    }
+    expect(fx.kickX, 0);
+    expect(fx.kickY, 0);
+    expect(fx.settled, isTrue);
+  });
+
+  test('repeated drops and combos stay bounded through slow and irregular frames', () {
+    final engine = GameEngine(config: const GameConfig(glassCount: 1, seed: 5));
+    final fx = Effects()..reset(engine.activeSide);
+    final piece = engine.activePiece!;
+    final placement = const PlacementEngine().computeDrop(engine.board, piece.side, piece.piece, piece.column)!;
+    const frames = [0.05, 0.05, 1 / 60, 0.033, 0.25, 0.05];
+    for (var frame = 0; frame < 300; frame++) {
+      if (frame % 12 == 0) {
+        fx.consume([
+          PieceMoved(engine.activeSide, direction: 1, blocked: true),
+          PieceLanded(placement, dropped: true),
+          MatchScored(combo: 6, score: 600, match: lineOf(6)),
+        ], engine);
+      }
+      fx.update(frames[frame % frames.length], engine);
+      expect((fx.kickX + fx.shakeX).abs(), lessThan(1));
+      expect((fx.kickY + fx.shakeY).abs(), lessThan(1));
+      expect(fx.punch, inInclusiveRange(0, 0.06));
+    }
+    for (var frame = 0; frame < 60; frame++) {
+      fx.update(0.05, engine);
+    }
+    expect(fx.settled, isTrue);
+  });
+
+  test('recoil follows elapsed time regardless of frame rate and freezes at zero delta', () {
+    final engine = GameEngine(config: const GameConfig(glassCount: 1, seed: 5));
+    final slow = Effects()..reset(engine.activeSide);
+    final fast = Effects()..reset(engine.activeSide);
+    final events = [PieceMoved(engine.activeSide, direction: 1, blocked: true)];
+    slow.consume(events, engine);
+    fast.consume(events, engine);
+    slow.update(0.2, engine);
+    for (var frame = 0; frame < 12; frame++) {
+      fast.update(1 / 60, engine);
+    }
+    expect(slow.kickX, isNot(0));
+    expect(slow.kickX, closeTo(fast.kickX, 1e-9));
+    final before = slow.kickX;
+    slow.update(0, engine);
+    expect(slow.kickX, before);
+  });
+
   test('off skips bursts and clears existing decorative effects immediately', () {
     final off = popping([lineOf(6)], style: ExplosionStyle.off);
     expect(off.particles, isEmpty);
