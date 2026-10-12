@@ -22,6 +22,7 @@ import { GameRenderer } from '../render/renderer';
 import { paletteRevision } from '../render/theme';
 import type { Palettes, Progress, RunRecord, Settings } from '../services/storage';
 import { Hud } from './Hud';
+import { CampaignProgress } from './CampaignProgress';
 import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { Button, GameIconButton, Overlay } from './ui';
@@ -569,6 +570,7 @@ export function GameScreen(props: Props) {
     /** Frames in a row whose picture could not have changed. */
     let still = 0;
     let drawnPalette = -1;
+    let drawnEffects = live.current.settings.effects;
     const tick = (now: number) => {
       const frameMs = now - last;
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
@@ -587,6 +589,9 @@ export function GameScreen(props: Props) {
       // preference still reduces decorative motion and screen shake.
       fx.turnSeconds = s.effects.turnMs / 1000;
       fx.explosion = s.effects.explosion;
+      fx.fieldBackground = s.effects.fieldBackground;
+      dirty ||= drawnEffects !== s.effects;
+      drawnEffects = s.effects;
 
       if (current === 'playing' && !holding) {
         keyboard.update(seconds);
@@ -760,7 +765,7 @@ export function GameScreen(props: Props) {
                 <strong><T>{formatPoints(hud.score)}</T></strong>
                 <small><T>
                   {campaign
-                    ? `Уровень ${level + 1} · ${formatScore(hud.into)} / ${formatScore(hud.target)}`
+                    ? `Уровень ${level + 1}`
                     : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
                 </T></small>
               </div>
@@ -774,6 +779,8 @@ export function GameScreen(props: Props) {
         <Hud hud={hud} callout={callout} bindings={settings.bindings} options={settings.hud}
           onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
       </div>}
+      {campaign && !tutorial && !touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
+          animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
       <div className="game__frame" ref={frameRef}>
         <div
           className="stage"
@@ -796,6 +803,9 @@ export function GameScreen(props: Props) {
           {banner && <LevelBanner banner={banner} />}
         </div>
       </div>
+
+      {campaign && !tutorial && touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
+          animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
 
       {tutorial && (
         <TutorialPanel

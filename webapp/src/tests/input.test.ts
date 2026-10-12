@@ -188,7 +188,7 @@ describe('settings storage', () => {
     const settings: Settings = defaultSettings();
     settings.bindings = bindKey(settings.bindings, 'glassLeft', 0, 'KeyQ');
     settings.handling.dasMs = 90;
-    settings.effects = { explosion: 'unified', screenShake: false, turnMs: 420 };
+    settings.effects = { explosion: 'off', fieldBackground: false, screenShake: false, turnMs: 420 };
     settings.hud = { keyHints: false, score: true, stats: false, opacity: 0.35 };
     settings.palettes = {
       active: 'mine',
@@ -223,7 +223,7 @@ describe('settings storage', () => {
       hud: { keyHints: 'no', opacity: 0 },
     });
     expect(cleaned.handling).toEqual({ dasMs: 0, arrMs: 35 });
-    expect(cleaned.effects).toEqual({ explosion: 'varied', screenShake: true, turnMs: 800 });
+    expect(cleaned.effects).toEqual({ explosion: 'varied', fieldBackground: true, screenShake: true, turnMs: 800 });
     expect(cleaned.hud).toEqual({ keyHints: true, score: true, stats: true, opacity: 0.1 });
     expect(cleaned.bindings).toEqual(defaultBindings);
     expect(loadSettings({ getItem: () => '{broken' })).toEqual(defaultSettings());

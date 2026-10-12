@@ -13,6 +13,7 @@ import '../../game/model/piece.dart';
 import '../../game/model/position.dart';
 import '../../game/model/side.dart';
 import '../../game/state/game_state.dart';
+import '../data/settings.dart' show ExplosionStyle;
 import '../style.dart';
 import 'effects.dart';
 import 'field_viewport.dart';
@@ -806,7 +807,7 @@ class FieldPainter extends CustomPainter {
   /// Each world-side has its own quiet motif behind the grid and pieces.
   /// It follows the glass through turns and shares the effects' pause clock.
   void _drawAmbient(Canvas canvas, FieldGeometry g, Side side, double far) {
-    if (reduceMotion) return;
+    if (reduceMotion || !fx.fieldBackground) return;
     final half = g.half, n = g.n.toDouble(), arm = g.arm.toDouble();
     final t = fx.clock;
     const colours = [Palette.accentStrong, Palette.violet, Color(0xFF2EE6F0), Palette.orange];
@@ -1094,18 +1095,21 @@ class FieldPainter extends CustomPainter {
             frame.index,
             scaleX,
             scaleY,
-            0.85 * (1 - u) * (1 - u),
+            fx.explosion == ExplosionStyle.off ? 0 : 0.85 * (1 - u) * (1 - u),
           );
         }
       }
     }
 
     // Match: flash to white and swell, then collapse while shards fly off.
-    if (matched != null && matched.isNotEmpty) {
+    if (matched != null && matched.isNotEmpty &&
+        (fx.explosion != ExplosionStyle.off || state.phase != GamePhase.clearing)) {
       final t = state.phaseProgress;
       final popping = state.phase == GamePhase.clearing;
-      final scale = popping ? 1.22 * math.max(0.0, 1 - t * 1.7) : 1 + 0.22 * (1 - (1 - t) * (1 - t));
-      final flash = popping ? 1.0 : 0.3 + 0.7 * t;
+      final scale = fx.explosion == ExplosionStyle.off ? 1.0
+          : popping ? 1.22 * math.max(0.0, 1 - t * 1.7)
+          : 1 + 0.22 * (1 - (1 - t) * (1 - t));
+      final flash = fx.explosion == ExplosionStyle.off ? 0.0 : popping ? 1.0 : 0.3 + 0.7 * t;
       if (scale > 0.01) {
         for (final cell in matched) {
           final color = board.colorAt(cell);

@@ -156,7 +156,6 @@
   "Анимация взрыва": "Clear animation",
   "Разная для каждого типа": "Different for each type",
   "Одна для всех": "One for all",
-  "Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой. Одновременные линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.": "Different: matches of three, four and five have their own effects; six or more flash gold. Simultaneous lines add waves, and three lines flash the field. One: every clear uses the same effect.",
   "Поле": "Playfield",
   "Толчки и тряска поля": "Field kicks and shake",
   "Поворот поля": "Field rotation",
@@ -328,5 +327,12 @@
   "Полные лицензии": "Full licenses",
   "Не удалось загрузить лицензии.": "Could not load licenses.",
   "Полные тексты включают лицензии зависимостей библиотек.": "Full texts include the licenses of library dependencies.",
-  "Громкость треков выровнена, добавлены затухания в начале и конце.": "Tracks are loudness-matched, with fades added at the beginning and end."
+  "Громкость треков выровнена, добавлены затухания в начале и конце.": "Tracks are loudness-matched, with fades added at the beginning and end.",
+  "Фоновая анимация поля": "Playfield background animation",
+  "Отключите для снижения нагрузки на устройство.": "Turn off to reduce the load on your device.",
+  "Разная — эффект зависит от совпадения. Одна — одинаковые взрывы. Выкл — без частиц и вспышек.": "Different — effects depend on the match. One — identical bursts. Off — no particles or flashes.",
+  "Цель": "Goal",
+  "Ещё {remaining}": "To go {remaining}",
+  "Прогресс уровня {level}": "Level {level} progress",
+  "{into} / {target}. Ещё {remaining}.": "{into} / {target}. To go {remaining}."
 }

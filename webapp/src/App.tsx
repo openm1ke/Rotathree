@@ -52,8 +52,10 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const music = useRef<MusicPlayer | null>(null);
   const musicPaused = useRef(false);
+  const [gamePaused, setGamePaused] = useState(false);
   const onPauseChanged = useCallback((paused: boolean) => {
     musicPaused.current = paused;
+    setGamePaused(paused);
     music.current?.setPaused(paused);
     if (document.hidden) music.current?.stop();
   }, []);
@@ -328,7 +330,7 @@ export default function App() {
   return (
     <I18nContext.Provider value={i18n}>
     <div className="app">
-      <div className="backdrop" aria-hidden="true">
+      <div className={`backdrop${route.name === 'play' && !settings.effects.fieldBackground ? ' backdrop--static' : ''}`} data-paused={route.name === 'play' && gamePaused} aria-hidden="true">
         <div className="backdrop__glow backdrop__glow--a" />
         <div className="backdrop__glow backdrop__glow--b" />
         <div className="backdrop__grid" />

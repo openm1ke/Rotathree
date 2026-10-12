@@ -388,12 +388,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             options: const [
               (value: ExplosionStyle.varied, label: 'Разная для каждого типа'),
               (value: ExplosionStyle.unified, label: 'Одна для всех'),
+              (value: ExplosionStyle.off, label: 'выкл'),
             ],
             onChanged: (explosion) => _setEffects(e.copyWith(explosion: explosion)),
           ),
           LText(
-            'Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой. '
-            'Одновременные линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.',
+            'Разная — эффект зависит от совпадения. Одна — одинаковые взрывы. Выкл — без частиц и вспышек.',
             style: Type.body(12, color: Palette.textDim),
           ),
         ],
@@ -401,6 +401,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       Section(
         title: 'Поле',
         children: [
+          SwitchRow(
+            label: 'Фоновая анимация поля',
+            value: e.fieldBackground,
+            onChanged: (fieldBackground) => _setEffects(e.copyWith(fieldBackground: fieldBackground)),
+          ),
+          LText('Отключите для снижения нагрузки на устройство.', style: Type.body(12, color: Palette.textDim)),
           SwitchRow(
             label: 'Толчки и тряска поля',
             value: e.screenShake,
