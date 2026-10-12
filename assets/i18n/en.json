@@ -320,5 +320,15 @@
   "{glasses} · {colors} · рукав: {cells}": "{glasses} · {colors} · arm: {cells}",
   "Цель {points} · {colors} цв. · {glasses} ст.": "Target {points} · colors {colors} · glasses {glasses}",
   "Уровень {level} · {points} · {time}": "Level {level} · {points} · {time}",
-  "{points} · {time}": "{points} · {time}"
+  "{points} · {time}": "{points} · {time}",
+  "Лицензии": "Licenses",
+  "Спасибо авторам, чья музыка звучит в RotaThree.": "Thank you to the artists whose music plays in RotaThree.",
+  "Автор уточняется": "Artist to be confirmed",
+  "Условия использования уточняются": "Usage terms to be confirmed",
+  "Источник": "Source",
+  "Библиотеки и шрифт": "Libraries and font",
+  "Полные лицензии": "Full licenses",
+  "Не удалось загрузить лицензии.": "Could not load licenses.",
+  "Полные тексты включают лицензии зависимостей библиотек.": "Full texts include the licenses of library dependencies.",
+  "Громкость треков выровнена, добавлены затухания в начале и конце.": "Tracks are loudness-matched, with fades added at the beginning and end."
 }

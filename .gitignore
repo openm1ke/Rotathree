@@ -48,3 +48,9 @@ app.*.map.json
 .serena/
 .playwright-cli/
 /output/playwright/
+
+# Private store signing material
+*.jks
+*.keystore
+*.p12
+*.pfx

@@ -1,6 +1,6 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { cpSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => ({
@@ -10,8 +10,15 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), {
     name: 'vk-licensed-music',
     closeBundle() {
+      const output = mode === 'vk' ? 'dist-vk' : 'dist';
+      mkdirSync(`${output}/licenses`, { recursive: true });
+      for (const [source, name] of [
+        ['../assets/fonts/OFL.txt', 'Exo2-OFL.txt'],
+        ['node_modules/react/LICENSE', 'React-MIT.txt'],
+        ['node_modules/react-dom/LICENSE', 'ReactDOM-MIT.txt'],
+      ]) cpSync(source, `${output}/licenses/${name}`);
+      for (const name of ['deep-focus.m4a', 'deep-focus-1.m4a']) rmSync(`${output}/music/${name}`, { force: true });
       if (mode !== 'vk') return;
-      for (const name of ['deep-focus.m4a', 'deep-focus-1.m4a']) rmSync(`dist-vk/music/${name}`, { force: true });
       cpSync('vk-public', 'dist-vk', { recursive: true });
       for (const [source, name] of [
         ['../assets/fonts/OFL.txt', 'Exo2-OFL.txt'],

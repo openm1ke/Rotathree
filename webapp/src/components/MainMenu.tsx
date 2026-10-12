@@ -111,7 +111,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
                 <span className="navitem__heading">
                   <span className="navitem__title"><T>{item.title}</T></span>
                   {item.id === 'campaign' && progress.completed && (
-                    <span className="navitem__badge"><T>пройдена</T></span>
+                    <span className="navitem__badge"><span className="badge-check" aria-hidden="true"><i /><i /><i /><i /></span><T>пройдена</T></span>
                   )}
                 </span>
                 <span className="navitem__caption"><T>
