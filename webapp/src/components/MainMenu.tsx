@@ -44,15 +44,18 @@ interface Props {
   tutorialDone?: boolean;
   onResume?: () => void;
   onTutorial?: () => void;
+  onPlayCampaign: () => void;
 }
 
 /** The first screen: a column of large entries, the progress on the side. */
-export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, onResume, onTutorial }: Props) {
+export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, onResume, onTutorial, onPlayCampaign }: Props) {
   const { t } = useI18n();
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, () => {});
-  const opened = progress.unlocked + (progress.completed ? 1 : 0);
+  const savedSession = savedRuns?.campaign?.session;
+  const campaignLevel = savedSession?.mode === 'campaign' ? savedSession.level : progress.unlocked;
+  const opened = touch ? campaignLevel : progress.unlocked;
   return (
     <main className={`home ${touch ? 'home--touch' : ''} ${progress.completed ? 'home--completed' : ''}`} ref={rootRef}>
       <div className="home__drift" aria-hidden="true">
@@ -123,19 +126,22 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
         </nav>
 
         {!progress.completed && <aside className="home__side">
-          <div className="card">
+          {touch ? <button type="button" data-nav className="card card--campaign-shortcut"
+            onClick={onPlayCampaign} aria-label={t('Продолжить кампанию')}>
             <span className="kicker"><T>Кампания</T></span>
-            <strong><T>
-              {progress.completed ? 'пройдена' : `уровень ${progress.unlocked + 1} из ${CAMPAIGN_LAST + 1}`}
-            </T></strong>
-            <div className="progressbar">
-              <i style={{ width: `${(100 * opened) / (CAMPAIGN_LAST + 1)}%` }} />
+            <strong><T>уровень {campaignLevel + 1} из {CAMPAIGN_LAST + 1}</T><span aria-hidden="true">›</span></strong>
+            <div className="progressbar"><i style={{ width: `${100 * opened / (CAMPAIGN_LAST + 1)}%` }} /></div>
+          </button> : <>
+            <div className="card">
+              <span className="kicker"><T>Кампания</T></span>
+              <strong><T>уровень {progress.unlocked + 1} из {CAMPAIGN_LAST + 1}</T></strong>
+              <div className="progressbar"><i style={{ width: `${100 * opened / (CAMPAIGN_LAST + 1)}%` }} /></div>
             </div>
-          </div>
-          <div className={`card ${progress.completed ? '' : 'is-locked'}`}>
-            <span className="kicker"><T>Кошмар</T></span>
-            <strong><T>{progress.completed ? 'открыт' : 'откроется после кампании'}</T></strong>
-          </div>
+            <div className="card is-locked">
+              <span className="kicker"><T>Кошмар</T></span>
+              <strong><T>откроется после кампании</T></strong>
+            </div>
+          </>}
         </aside>}
 
         {!touch && (

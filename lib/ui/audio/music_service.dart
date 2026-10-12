@@ -26,7 +26,8 @@ class MusicService {
   var _paused = false;
   var _disposed = false;
 
-  double get _volume => _options.music ? _options.musicVolume * (_paused ? 0.1 : 1) : 0;
+  double get _volume =>
+      _options.music ? _options.musicVolume * (_paused ? 0.1 : 1) : 0;
 
   /// Serialize native commands so a slow source load cannot undo mute/volume.
   Future<void> _enqueue(Future<void> Function() command) {
@@ -41,6 +42,7 @@ class MusicService {
     if (!options.music) return stop();
     return _enqueue(() async {
       await _player?.setVolume(_volume);
+      if (_wanted) await _playCurrent();
     });
   }
 
@@ -53,7 +55,10 @@ class MusicService {
   /// Duck music on pause without overwriting the player's volume preference.
   Future<void> setPaused(bool paused) {
     _paused = paused;
-    return _enqueue(() async => _player?.setVolume(_volume));
+    return _enqueue(() async {
+      await _player?.setVolume(_volume);
+      if (!paused && _wanted) await _playCurrent();
+    });
   }
 
   Future<void> _playCurrent() async {
@@ -62,19 +67,21 @@ class MusicService {
       final player = AudioPlayer();
       _player = player;
       _completeSubscription = player.onPlayerComplete.listen((_) {
-        if (!_wanted || _disposed) return;
+        if (_disposed) return;
         _track = (_track + 1) % tracks.length;
         _loaded = false;
-        unawaited(_enqueue(_playCurrent));
+        if (_wanted) unawaited(_enqueue(_playCurrent));
       });
     }
     final player = _player!;
-    if (!_loaded) {
+    if (!_loaded || player.source == null) {
       await player.setSource(AssetSource(tracks[_track]));
       _loaded = true;
     }
     await player.setVolume(_volume);
-    if (_wanted && _options.music && !_disposed && player.state != PlayerState.playing) await player.resume();
+    // Native interruptions can pause playback without changing the Dart state.
+    // Resume is idempotent and also reacquires audio focus without seeking.
+    if (_wanted && _options.music && !_disposed) await player.resume();
   }
 
   Future<void> stop() {

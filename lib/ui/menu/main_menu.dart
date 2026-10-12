@@ -13,6 +13,8 @@ class MainMenu extends StatelessWidget {
     super.key,
     required this.progress,
     required this.onCampaign,
+    required this.onPlayCampaign,
+    this.campaignLevel,
     required this.onCustom,
     required this.onStatistics,
     required this.onSettings,
@@ -23,7 +25,8 @@ class MainMenu extends StatelessWidget {
   });
 
   final Progress progress;
-  final VoidCallback onCampaign;
+  final VoidCallback onCampaign, onPlayCampaign;
+  final int? campaignLevel;
   final VoidCallback onCustom;
   final VoidCallback onStatistics;
   final VoidCallback onSettings;
@@ -33,7 +36,7 @@ class MainMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final opened = progress.unlocked + (progress.completed ? 1 : 0);
+    final level = campaignLevel ?? progress.unlocked;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
@@ -82,15 +85,10 @@ class MainMenu extends StatelessWidget {
           _NavItem(title: 'Настройки', caption: 'Управление и оформление', onTap: onSettings),
           if (!progress.completed) ...[
             const SizedBox(height: 16),
-            _InfoCard(
-              kicker: 'Кампания',
-              value: progress.completed ? 'пройдена' : 'уровень ${progress.unlocked + 1} из ${campaignLevels.length}',
-              fraction: opened / campaignLevels.length,
-            ),
-            _InfoCard(
-              kicker: 'Кошмар',
-              value: progress.completed ? 'открыт' : 'откроется после кампании',
-              locked: !progress.completed,
+            _CampaignShortcut(
+              key: const ValueKey('campaign-shortcut'),
+              level: level,
+              onTap: onPlayCampaign,
             ),
           ],
         ],
@@ -129,7 +127,10 @@ class _NavItem extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        Flexible(child: LText(title, style: Type.display(22))),
+                        Flexible(child: completed
+                            ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                                child: LText(title, style: Type.display(22)))
+                            : LText(title, style: Type.display(22))),
                         if (completed) ...[
                           const SizedBox(width: 12),
                           const CompletedBadge(),
@@ -149,50 +150,42 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.kicker, required this.value, this.fraction, this.locked = false});
-
-  final String kicker;
-  final String value;
-  final double? fraction;
-  final bool locked;
+class _CampaignShortcut extends StatelessWidget {
+  const _CampaignShortcut({super.key, required this.level, required this.onTap});
+  final int level;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: locked ? 0.55 : 1,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Palette.panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Palette.line),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LText(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: context.tr('Продолжить кампанию'),
+    child: Material(
+      color: Palette.panel,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Palette.line)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            LText('КАМПАНИЯ', style: Type.label(11, color: Palette.accent)),
             const SizedBox(height: 4),
-            LText(value, style: Type.body(15, weight: FontWeight.w800)),
-            if (fraction != null) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: Stack(
-                  children: [
-                    Container(height: 6, color: Palette.line),
-                    FractionallySizedBox(
-                      widthFactor: fraction!.clamp(0.0, 1.0),
-                      child: Container(height: 6, color: Palette.accent),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
+            Row(children: [
+              Expanded(child: LText('уровень ${level + 1} из ${campaignLevels.length}', style: Type.body(15, weight: FontWeight.w800))),
+              const Icon(Icons.chevron_right_rounded, color: Palette.accent, size: 20),
+            ]),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: Stack(children: [
+                Container(height: 6, color: Palette.line),
+                FractionallySizedBox(widthFactor: (level / campaignLevels.length).clamp(0.0, 1.0),
+                  child: Container(height: 6, color: Palette.accent)),
+              ]),
+            ),
+          ]),
         ),
       ),
-    );
-  }
+    ),
+  );
 }

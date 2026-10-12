@@ -91,6 +91,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   final Set<String> _failedWrites = {};
   Map<ModeId, RunSave> _savedRuns = {};
   RunSave? _restore;
+  bool _resumeImmediately = false;
   bool _tutorialDone = false;
   bool _tutorial = false;
   Session? _afterTutorial;
@@ -186,7 +187,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     widget.onLanguageChanged(next.language);
     BlockTones.setColours(next.palettes.activeSet.colours);
     unawaited(_music.update(next.audio));
-    if (!wasMusicEnabled && next.audio.music) unawaited(_music.start());
+    if (!wasMusicEnabled && next.audio.music &&
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      unawaited(_music.start());
+    }
     _saved('settings', _store!.saveSettings(next));
   }
 
@@ -224,7 +228,21 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     });
   }
 
-  void _start(Session session, {RunSave? restore}) {
+  void _playCampaign() {
+    final save = _savedRuns[ModeId.campaign];
+    if (save != null) {
+      _start(save.session, restore: save, resumeImmediately: true);
+    } else {
+      _start(CampaignSession(_progress.unlocked));
+    }
+  }
+
+  int get _campaignHomeLevel {
+    final session = _savedRuns[ModeId.campaign]?.session;
+    return session is CampaignSession ? session.level : _progress.unlocked;
+  }
+
+  void _start(Session session, {RunSave? restore, bool resumeImmediately = false}) {
     if (restore == null && !_tutorialDone) {
       _openTutorial(after: session);
       return;
@@ -234,10 +252,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _recordRun(_savedRuns[mode]!.abandoned());
       _checkpoint(mode, null);
     }
-    _setMusicPaused(restore != null);
+    _setMusicPaused(restore != null && !resumeImmediately);
     setState(() {
       _gameKey = GlobalKey<GameScreenState>();
       _restore = restore;
+      _resumeImmediately = resumeImmediately;
       _tutorial = false;
       _settingsOpen = false;
       _session = session;
@@ -305,6 +324,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onTutorial: () => _openTutorial(),
           tutorialDone: _tutorialDone,
           onCampaign: () => _show(_Screen.campaign),
+          onPlayCampaign: _playCampaign,
+          campaignLevel: _campaignHomeLevel,
           onCustom: () => _show(_Screen.custom),
           onStatistics: () => _show(_Screen.statistics),
           onSettings: () => _show(_Screen.settings),
@@ -338,6 +359,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         _Screen.play => GameScreen(
           key: _gameKey,
           restore: _restore,
+          resumeImmediately: _resumeImmediately,
           onCheckpoint: (save) => _checkpoint(modeOf(_session!), save),
           tutorial: _tutorial,
           onTutorialDone: _finishTutorial,

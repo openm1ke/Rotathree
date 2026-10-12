@@ -334,5 +334,6 @@
   "Цель": "Goal",
   "Ещё {remaining}": "To go {remaining}",
   "Прогресс уровня {level}": "Level {level} progress",
-  "{into} / {target}. Ещё {remaining}.": "{into} / {target}. To go {remaining}."
+  "{into} / {target}. Ещё {remaining}.": "{into} / {target}. To go {remaining}.",
+  "Продолжить кампанию": "Continue campaign"
 }

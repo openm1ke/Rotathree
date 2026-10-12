@@ -76,6 +76,7 @@ class GameScreen extends StatefulWidget {
     required this.onRecord,
     required this.onProgress,
     this.restore,
+    this.resumeImmediately = false,
     this.onCheckpoint,
     this.tutorial = false,
     this.onTutorialDone,
@@ -107,6 +108,8 @@ class GameScreen extends StatefulWidget {
   final ValueChanged<RunRecord> onRecord;
   final ValueChanged<Progress> onProgress;
   final RunSave? restore;
+  /// A direct home-screen campaign shortcut resumes without another pause dialog.
+  final bool resumeImmediately;
   final ValueChanged<RunSave?>? onCheckpoint;
   final bool tutorial;
   final VoidCallback? onTutorialDone;
@@ -199,7 +202,7 @@ class GameScreenState extends State<GameScreen>
       _engine.restoreSnapshot(save.engine);
       _carry = save.carry;
       _levelBase = save.levelBase;
-      _status = _Status.paused;
+      _status = widget.resumeImmediately ? _Status.playing : _Status.paused;
       final b = save.banner;
       if (b != null) {
         _pendingLevel = b.pendingLevel;

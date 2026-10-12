@@ -53,6 +53,7 @@ interface Props {
   onRecord: (run: RunRecord) => void;
   onProgress: (progress: Progress) => void;
   restore?: RunSave | null;
+  resumeImmediately?: boolean;
   onCheckpoint?: (save: RunSave | null) => void;
   tutorial?: boolean;
   onTutorialDone?: () => void;
@@ -157,7 +158,7 @@ export function GameScreen(props: Props) {
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
 
-    let current: Status = props.restore ? 'paused' : 'playing';
+    let current: Status = props.restore && !props.resumeImmediately ? 'paused' : 'playing';
     setStatus(current);
     live.current.onPauseChanged?.(current === 'paused');
     const setRunStatus = (next: Status) => {
