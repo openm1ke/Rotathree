@@ -46,3 +46,9 @@ app.*.map.json
 
 # Local tool state
 .serena/
+
+# Private store signing material
+*.jks
+*.keystore
+*.p12
+*.pfx

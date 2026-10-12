@@ -1,6 +1,7 @@
 import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
 import { LanguagePicker } from '../i18n/LanguagePicker';
+import { LicensesTab } from './LicensesTab';
 import { TouchControls } from './TouchControls';
 import { DEFAULT_POSITIONS } from '../input/padPlacement';
 import { useEffect, useRef, useState } from 'react';
@@ -24,7 +25,7 @@ import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
 import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS } from '../input/pads';
 
-type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound';
+type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound' | 'licenses';
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['controls', 'Управление'],
@@ -32,6 +33,7 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['effects', 'Эффекты'],
   ['interface', 'Интерфейс'],
   ['sound', 'Звуки'],
+  ['licenses', 'Лицензии'],
 ];
 
 const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game'];
@@ -101,6 +103,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   const defaults = defaultSettings();
   let body: React.ReactNode;
   switch (tab) {
+    case 'licenses':
+      body = <LicensesTab />;
+      break;
     case 'controls':
       body = (
         <>

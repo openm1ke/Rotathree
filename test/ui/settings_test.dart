@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:rotathree/ui/input/dpad.dart';
 import 'package:rotathree/ui/menu/settings_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rotathree/ui/menu/licenses.dart';
 import 'package:rotathree/game/config/modes.dart';
 import 'package:rotathree/ui/data/bindings.dart';
 import 'package:rotathree/ui/data/progress.dart';
@@ -108,7 +109,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final tabs = find.byType(Tab);
-    expect(tabs, findsNWidgets(5));
+    expect(tabs, findsNWidgets(6));
     expect(tester.getTopLeft(tabs.at(0)).dy, tester.getTopLeft(tabs.at(3)).dy);
     final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
     final view = find.byType(TabBarView);
@@ -132,6 +133,33 @@ void main() {
     expect(find.text('Фоновая музыка'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('licenses show music credits and open the full Flutter registry', (tester) async {
+    registerAssetLicenses();
+    await tester.pumpWidget(MaterialApp(home: Material(child: SettingsScreen(
+      settings: Settings.defaults(), stored: true, onBack: () {}, onChange: (_) {},
+    ))));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Лицензии'));
+    await tester.pump();
+    await tester.tap(find.text('Лицензии'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+    await tester.pumpAndSettle();
+    expect(find.text('isaiah658'), findsOneWidget);
+    expect(find.text('Автор уточняется'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Полные лицензии'), 400,
+      scrollable: find.descendant(
+        of: find.ancestor(of: find.byType(MusicCredits), matching: find.byType(ListView)).first,
+        matching: find.byType(Scrollable),
+      ).first);
+    await tester.pump();
+    await tester.tap(find.text('Полные лицензии'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensePage), findsOneWidget);
+    expect(find.text('RotaThree'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('a key bound twice keeps its first use', () {
     final bindings = sanitizeBindings({
       'moveLeft': [PhysicalKeyboardKey.keyA.usbHidUsage],

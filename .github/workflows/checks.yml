@@ -30,7 +30,7 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - run: flutter build apk --debug
+      - run: flutter build apk --debug --flavor play
 
   web:
     runs-on: ubuntu-latest

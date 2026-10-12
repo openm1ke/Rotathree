@@ -1,6 +1,6 @@
 # Background music
 
-The game plays the seven files in `playback/` sequentially. The playlist repeats
+The game plays five CC0 files in `playback/` sequentially. The two Deep Focus files were made with Suno Basic and are excluded from release playlists and distributed assets; originals are retained for evaluation. The playlist repeats
 after the final track. Each file has a two-second fade-in and fade-out baked into
 the audio, so switching tracks cannot skip a fade or overlap two full-volume tracks.
 

@@ -5,6 +5,7 @@ import '../../game/config/campaign.dart';
 import '../data/progress.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
+import '../widgets/completed_badge.dart';
 
 /// The first screen: a column of large entries, the progress on the side.
 class MainMenu extends StatelessWidget {
@@ -131,15 +132,7 @@ class _NavItem extends StatelessWidget {
                         Flexible(child: LText(title, style: Type.display(22))),
                         if (completed) ...[
                           const SizedBox(width: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Palette.brandGreen.withValues(alpha: 0.08),
-                              border: Border.all(color: Palette.brandGreen.withValues(alpha: 0.3)),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: LText('пройдена', style: Type.body(12, color: Palette.brandGreen)),
-                          ),
+                          const CompletedBadge(),
                         ],
                       ]),
                       LText(caption, style: Type.body(12, color: Palette.textDim)),

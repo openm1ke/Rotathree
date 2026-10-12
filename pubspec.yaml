@@ -1,5 +1,5 @@
 name: rotathree
-description: "Rotathree — four glasses around one centre, match three."
+description: "RotaThree — four glasses around one centre, match three."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -23,7 +23,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/i18n/en.json
-    - assets/music/playback/
+    - assets/credits/music.json
+    - assets/fonts/OFL.txt
+    - assets/music/playback/ambient-relaxing-loop.m4a
+    - assets/music/playback/project-utopia-loop.m4a
+    - assets/music/playback/chill-loopable.m4a
+    - assets/music/playback/insistent-background-loop.m4a
+    - assets/music/playback/claimed-by-the-void-loop.m4a
 
   fonts:
     - family: Exo2

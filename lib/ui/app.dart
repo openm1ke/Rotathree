@@ -35,7 +35,7 @@ class _RotathreeAppState extends State<RotathreeApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Rotathree',
+      title: 'RotaThree',
       locale: _language == LanguageChoice.auto ? null : Locale(_language.name),
       supportedLocales: const [Locale('ru'), Locale('en')],
       localizationsDelegates: const [

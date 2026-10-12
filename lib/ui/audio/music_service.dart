@@ -9,8 +9,6 @@ import '../data/settings.dart';
 /// both ends. One player runs them in order, without overlapping their volume.
 class MusicService {
   static const tracks = <String>[
-    'music/playback/deep-focus.m4a',
-    'music/playback/deep-focus-1.m4a',
     'music/playback/ambient-relaxing-loop.m4a',
     'music/playback/project-utopia-loop.m4a',
     'music/playback/chill-loopable.m4a',

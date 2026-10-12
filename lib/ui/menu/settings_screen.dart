@@ -9,8 +9,9 @@ import '../input/pad_surface.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import 'colour_picker.dart';
+import 'licenses.dart';
 
-enum _Tab { controls, colours, effects, interface, sound }
+enum _Tab { controls, colours, effects, interface, sound, licenses }
 
 const _tabNames = {
   _Tab.controls: 'Управление',
@@ -18,6 +19,7 @@ const _tabNames = {
   _Tab.effects: 'Эффекты',
   _Tab.interface: 'Интерфейс',
   _Tab.sound: 'Звуки',
+  _Tab.licenses: 'Лицензии',
 };
 
 /// The settings: keys and buttons, colours, effects and the look of the
@@ -109,6 +111,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           _Tab.effects => _effects(),
           _Tab.interface => _interface(),
           _Tab.sound => _sound(),
+          _Tab.licenses => licenseSections(context),
         },
         Padding(
           padding: const EdgeInsets.only(top: 8),

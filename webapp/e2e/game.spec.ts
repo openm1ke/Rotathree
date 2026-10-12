@@ -84,7 +84,7 @@ test('real browser audio uses the chosen gain and advances sequentially', async 
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
     return state.musicTestPlayers.filter((audio) => !audio.paused).map((audio) => new URL(audio.src).pathname);
-  })).toEqual(['/music/deep-focus-1.m4a']);
+  })).toEqual(['/music/project-utopia-loop.m4a']);
   await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
@@ -250,7 +250,7 @@ test('web forms are centered and settings tabs scroll and swipe without wrapping
   expect(Math.abs(settingsHead!.width - settings!.width)).toBeLessThan(12);
   await page.getByRole('tab', { name: 'Управление', exact: true }).focus();
   await page.keyboard.press('End');
-  await expect(page.getByRole('tab', { name: 'Звуки', exact: true })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Лицензии', exact: true })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(page.getByRole('tab', { name: 'Управление', exact: true })).toBeFocused();
   await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
@@ -407,7 +407,7 @@ test.describe('automatic English locale', () => {
       await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await expectEnglish(page);
       if (title === 'Settings') {
-        for (const tab of ['Colors', 'Effects', 'Interface', 'Controls']) {
+        for (const tab of ['Colors', 'Effects', 'Interface', 'Controls', 'Sound', 'Licenses']) {
           await page.getByRole('tab', { name: tab, exact: true }).click();
           await expectEnglish(page);
         }

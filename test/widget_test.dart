@@ -46,6 +46,10 @@ void main() {
   });
 
   testWidgets('completed campaign uses a compact label and unlocks Play inside its menu', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({
       'rotathree.tutorial.v1': 'true',
       'rotathree.progress.v1': jsonEncode({'unlocked': 14, 'completed': true, 'best': List.filled(15, 1200)}),

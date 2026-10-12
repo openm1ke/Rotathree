@@ -6,38 +6,36 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val releaseKeys = Properties()
-val releaseKeyFile = rootProject.file("key.properties")
-if (releaseKeyFile.exists()) releaseKeyFile.inputStream().use { releaseKeys.load(it) }
-fun releaseValue(name: String, env: String): String? =
-    releaseKeys.getProperty(name)?.takeIf { it.isNotBlank() }
-        ?: providers.environmentVariable(env).orNull?.takeIf { it.isNotBlank() }
-val releaseStore = releaseValue("storeFile", "ROTATHREE_KEYSTORE")
-val releaseStorePassword = releaseValue("storePassword", "ROTATHREE_STORE_PASSWORD")
-val releaseAlias = releaseValue("keyAlias", "ROTATHREE_KEY_ALIAS")
-val releasePassword = releaseValue("keyPassword", "ROTATHREE_KEY_PASSWORD")
+fun signingProperties(name: String) = Properties().apply {
+    val file = rootProject.file(name)
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val storeKeys = mapOf("play" to signingProperties("key.properties"), "rustore" to signingProperties("key-rustore.properties"))
+val signingFields = mapOf("storeFile" to "KEYSTORE", "storePassword" to "STORE_PASSWORD", "keyAlias" to "KEY_ALIAS", "keyPassword" to "KEY_PASSWORD")
+fun releaseValue(store: String, field: String): String? =
+    storeKeys.getValue(store).getProperty(field)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("ROTATHREE_${store.uppercase()}_${signingFields.getValue(field)}").orNull?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("ROTATHREE_${signingFields.getValue(field)}").orNull?.takeIf { it.isNotBlank() }
+val releaseReady = storeKeys.keys.associateWith { store -> signingFields.keys.all { !releaseValue(store, it).isNullOrBlank() } }
 val releaseId = providers.gradleProperty("rotathreeApplicationId")
-    .orElse(providers.environmentVariable("ROTATHREE_APPLICATION_ID")).orNull
-// Local APK updates retain the ID of earlier installs. Store builds still
-// require an explicit publishing ID unless this flag is deliberately set.
-val localRelease = providers.gradleProperty("rotathreeLocalRelease")
-    .map { it == "true" }.getOrElse(false)
-val releaseReady = listOf(releaseStore, releaseStorePassword, releaseAlias, releasePassword)
-    .all { !it.isNullOrBlank() }
+    .orElse(providers.environmentVariable("ROTATHREE_APPLICATION_ID")).getOrElse("ru.izpz.rotathree")
+// Only an explicit local-update build may retain the old test application ID.
+val localRelease = providers.gradleProperty("rotathreeLocalRelease").map { it == "true" }.getOrElse(false)
 
-// Debug installs keep their existing ID and data. Publishing requires an
-// explicit ID and the owner's release key; never substitute the debug key.
 gradle.taskGraph.whenReady {
-    if (allTasks.any { it.project == project && it.name.endsWith("Release") }) {
-        check(releaseReady) { "Configure android/key.properties or ROTATHREE_* signing variables before building a release." }
-        check(!releaseId.isNullOrBlank() && (localRelease || !releaseId.startsWith("com.example."))) {
-            "Set ROTATHREE_APPLICATION_ID (or -ProtathreeApplicationId) to your publishing application ID."
+    val releaseTasks = allTasks.filter { it.project == project && it.name.endsWith("Release") }
+    if (releaseTasks.isNotEmpty()) {
+        for (store in storeKeys.keys) {
+            if (releaseTasks.any { it.name.contains("${store}Release", ignoreCase = true) }) {
+                check(releaseReady.getValue(store)) { "Configure signing for $store: android/key${if (store == "play") "" else "-rustore"}.properties or ROTATHREE_${store.uppercase()}_* variables." }
+            }
         }
+        check(localRelease || !releaseId.startsWith("com.example.")) { "A store release requires the publishing application ID." }
     }
 }
 
 android {
-    namespace = "com.example.rotathree"
+    namespace = "ru.izpz.rotathree"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -47,7 +45,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = releaseId ?: "com.example.rotathree"
+        applicationId = releaseId
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -57,18 +55,30 @@ android {
     }
 
     signingConfigs {
-        if (releaseReady) create("release") {
-            storeFile = rootProject.file(releaseStore!!)
-            storePassword = releaseStorePassword
-            keyAlias = releaseAlias
-            keyPassword = releasePassword
+        for (store in storeKeys.keys) {
+            if (releaseReady.getValue(store)) create("${store}Release") {
+                storeFile = rootProject.file(releaseValue(store, "storeFile")!!)
+                storePassword = releaseValue(store, "storePassword")
+                keyAlias = releaseValue(store, "keyAlias")
+                keyPassword = releaseValue(store, "keyPassword")
+            }
         }
     }
 
-    buildTypes {
-        release {
-            signingConfig = if (releaseReady) signingConfigs.getByName("release") else null
+    flavorDimensions += "store"
+    productFlavors {
+        create("play") {
+            dimension = "store"
+            if (releaseReady.getValue("play")) signingConfig = signingConfigs.getByName("playRelease")
         }
+        create("rustore") {
+            dimension = "store"
+            applicationIdSuffix = ".rustore"
+            if (releaseReady.getValue("rustore")) signingConfig = signingConfigs.getByName("rustoreRelease")
+        }
+    }
+    buildTypes {
+        debug { applicationIdSuffix = ".debug" }
     }
 }
 

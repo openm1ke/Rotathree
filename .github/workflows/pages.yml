@@ -6,6 +6,8 @@ on:
     paths:
       - 'webapp/**'
       - 'assets/i18n/**'
+      - 'assets/credits/**'
+      - 'assets/fonts/OFL.txt'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 

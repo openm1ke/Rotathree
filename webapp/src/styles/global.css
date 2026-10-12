@@ -423,14 +423,32 @@ input:focus-visible {
 .navitem__heading { display: flex; align-items: center; gap: 16px; }
 .navitem__badge {
   flex: none;
-  padding: 4px 8px;
-  border: 1px solid color-mix(in srgb, var(--brand-green) 30%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--brand-green) 8%, transparent);
-  color: var(--brand-green);
-  font-size: 12px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 4px;
+  background: linear-gradient(135deg, rgba(120, 205, 255, .12), rgba(0, 217, 130, .06));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .08), 0 0 16px rgba(0, 217, 130, .1);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
+.badge-check { position: relative; width: 16px; height: 12px; flex: none; }
+.badge-check i { position: absolute; width: 4px; height: 4px; background: var(--brand-green); }
+.badge-check i:nth-child(1) { left: 0; top: 4px; background: var(--brand-blue); }
+.badge-check i:nth-child(2) { left: 4px; top: 8px; }
+.badge-check i:nth-child(3) { left: 8px; top: 4px; }
+.badge-check i:nth-child(4) { left: 12px; top: 0; }
+.license-list { display: grid; gap: 12px; margin-bottom: 16px; }
+.license-card { padding: 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.license-card strong { font-weight: 800; }
+.license-card p { margin: 8px 0; color: var(--text-dim); font-size: 13px; overflow-wrap: anywhere; }
+.license-card a { color: var(--accent); font-size: 12px; }
 .home--completed .home__content {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
@@ -1235,6 +1253,7 @@ input:focus-visible {
 @media (max-width: 600px) {
   .screen--settings .settings-panel { padding-right: 12px; margin-right: -12px; }
   .navitem__heading { gap: 10px; }
+  .navitem__heading:has(.navitem__badge) .navitem__title { font-size: clamp(24px, 7.5vw, 30px); }
 }
 
 .dialog {

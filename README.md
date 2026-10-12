@@ -1,4 +1,4 @@
-# Rotathree
+# RotaThree
 
 Experimental gameplay prototype: four glasses joined in a cross around a shared
 10×10 centre. Each glass is one arm plus the centre. A three-square stick falls
@@ -116,11 +116,12 @@ The shared app/browser logo lives in [`assets/branding/`](assets/branding/README
 Run `python3 tool/generate_icons.py` with librsvg installed to regenerate the iOS,
 Android (including adaptive/themed) and web icons from the same SVG source.
 
-Debug builds retain the existing application ID. Release builds require the owner's
-publishing ID and release key: copy `android/key.properties.example` to the ignored
-`android/key.properties`, then set `ROTATHREE_APPLICATION_ID`. Equivalent environment
-variables for signing are documented in [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md).
-A release without these values fails explicitly instead of using the debug key.
+RotaThree uses `ru.izpz.rotathree` for Google Play and iOS, and
+`ru.izpz.rotathree.rustore` for RuStore. Android builds select `--flavor play`
+or `--flavor rustore`. Store keys are configured in the ignored
+`android/key.properties` and `android/key-rustore.properties`; unsigned release
+builds fail explicitly. See [store preparation](docs/stores/README.md) for
+signing, build commands, licenses and the remaining publishing steps.
 
 Pull requests and main pushes run Flutter analysis, tests and a debug APK build, plus
 web checks and browser regression tests in `.github/workflows/checks.yml`.
