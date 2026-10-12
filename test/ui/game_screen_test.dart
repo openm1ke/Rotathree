@@ -82,7 +82,7 @@ void main() {
       onTutorialDone: () => completions++,
     );
     expect(find.text('Пауза'), findsNothing);
-    expect(find.text('Настройки'), findsOneWidget);
+    expect(find.byTooltip('Настройки'), findsOneWidget);
     expect(tester.getSize(find.byType(TutorialPanel)).height, lessThan(190));
     final field = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is FieldPainter);
     expect(tester.getSize(field).height, greaterThan(280));
@@ -158,7 +158,7 @@ void main() {
   testWidgets('the pause button opens the pause dialog and the game stops', (tester) async {
     final pauses = <bool>[];
     final state = await pumpGame(tester, onPauseChanged: pauses.add);
-    await tester.tap(find.text('Пауза'));
+    await tester.tap(find.byTooltip('Пауза'));
     await pumpFrames(tester, 2);
     expect(find.text('Продолжить'), findsOneWidget);
     expect(pauses.last, isTrue);
@@ -184,7 +184,7 @@ void main() {
     final state = await pumpGame(tester, session: const CampaignSession(0), onCheckpoint: (value) => save = value);
     state.engine.state.score = campaignLevels[0].target;
     await pumpFrames(tester, 2);
-    await tester.tap(find.text('Пауза'));
+    await tester.tap(find.byTooltip('Пауза'));
     await pumpFrames(tester, 80);
     expect(state.engine.sides.length, 1);
     expect(save!.banner!.pendingLevel, 1);
@@ -232,7 +232,7 @@ void main() {
     final records = <RunRecord>[];
     RunSave? save;
     final state = await pumpGame(tester, onCheckpoint: (value) => save = value, onRecord: records.add);
-    await tester.tap(find.text('Пауза'));
+    await tester.tap(find.byTooltip('Пауза'));
     await tester.pump();
     expect(save, isNotNull);
     await tester.tap(find.text('Завершить партию'));

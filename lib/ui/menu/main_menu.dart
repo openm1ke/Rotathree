@@ -75,21 +75,23 @@ class MainMenu extends StatelessWidget {
               caption: tutorialDone ? 'Повторить основы' : 'Правила на практике',
               onTap: onTutorial!,
             ),
-          _NavItem(title: 'Кампания', caption: '15 уровней', onTap: onCampaign),
+          _NavItem(title: 'Кампания', caption: '15 уровней', onTap: onCampaign, completed: progress.completed),
           _NavItem(title: 'Кастом', caption: 'Ваши правила', onTap: onCustom),
           _NavItem(title: 'Статистика', caption: 'Результаты и рекорды', onTap: onStatistics),
           _NavItem(title: 'Настройки', caption: 'Управление и оформление', onTap: onSettings),
-          const SizedBox(height: 16),
-          _InfoCard(
-            kicker: 'Кампания',
-            value: progress.completed ? 'пройдена' : 'уровень ${progress.unlocked + 1} из ${campaignLevels.length}',
-            fraction: opened / campaignLevels.length,
-          ),
-          _InfoCard(
-            kicker: 'Кошмар',
-            value: progress.completed ? 'открыт' : 'откроется после кампании',
-            locked: !progress.completed,
-          ),
+          if (!progress.completed) ...[
+            const SizedBox(height: 16),
+            _InfoCard(
+              kicker: 'Кампания',
+              value: progress.completed ? 'пройдена' : 'уровень ${progress.unlocked + 1} из ${campaignLevels.length}',
+              fraction: opened / campaignLevels.length,
+            ),
+            _InfoCard(
+              kicker: 'Кошмар',
+              value: progress.completed ? 'открыт' : 'откроется после кампании',
+              locked: !progress.completed,
+            ),
+          ],
         ],
       ),
     );
@@ -97,11 +99,12 @@ class MainMenu extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.title, required this.caption, required this.onTap});
+  const _NavItem({required this.title, required this.caption, required this.onTap, this.completed = false});
 
   final String title;
   final String caption;
   final VoidCallback onTap;
+  final bool completed;
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +127,21 @@ class _NavItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      LText(title, style: Type.display(22)),
+                      Row(children: [
+                        Flexible(child: LText(title, style: Type.display(22))),
+                        if (completed) ...[
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Palette.brandGreen.withValues(alpha: 0.08),
+                              border: Border.all(color: Palette.brandGreen.withValues(alpha: 0.3)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: LText('пройдена', style: Type.body(12, color: Palette.brandGreen)),
+                          ),
+                        ],
+                      ]),
                       LText(caption, style: Type.body(12, color: Palette.textDim)),
                     ],
                   ),

@@ -6,6 +6,30 @@ import '../style.dart';
 /// One choice of an [OptionGroup].
 typedef Option<T> = ({T value, String label});
 
+/// A round game-header action with a full-size touch target and spoken label.
+class GameIconButton extends StatelessWidget {
+  const GameIconButton({super.key, required this.icon, required this.label, required this.onPressed});
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton.outlined(
+    tooltip: context.tr(label),
+    onPressed: onPressed,
+    icon: Icon(icon, size: 22),
+    style: IconButton.styleFrom(
+      minimumSize: const Size(44, 44),
+      maximumSize: const Size(44, 44),
+      padding: EdgeInsets.zero,
+      shape: const CircleBorder(),
+      side: const BorderSide(color: Palette.lineStrong),
+      foregroundColor: Palette.accent,
+      backgroundColor: Palette.panel,
+    ),
+  );
+}
+
 /// A page of the app: a heading with a way back, the content and a footer.
 class ScreenFrame extends StatelessWidget {
   const ScreenFrame({

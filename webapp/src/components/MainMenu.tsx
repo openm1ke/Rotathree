@@ -54,7 +54,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
   useScreenKeys(rootRef, active, () => {});
   const opened = progress.unlocked + (progress.completed ? 1 : 0);
   return (
-    <main className={`home ${touch ? 'home--touch' : ''}`} ref={rootRef}>
+    <main className={`home ${touch ? 'home--touch' : ''} ${progress.completed ? 'home--completed' : ''}`} ref={rootRef}>
       <div className="home__drift" aria-hidden="true">
         {DRIFT.map(([x, size, delay, colour], i) => (
           <i
@@ -108,7 +108,12 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
               onClick={() => onOpen(item.id)}
             >
               <span className="navitem__text">
-                <span className="navitem__title"><T>{item.title}</T></span>
+                <span className="navitem__heading">
+                  <span className="navitem__title"><T>{item.title}</T></span>
+                  {item.id === 'campaign' && progress.completed && (
+                    <span className="navitem__badge"><T>пройдена</T></span>
+                  )}
+                </span>
                 <span className="navitem__caption"><T>
                   {item.caption}
                 </T></span>
@@ -117,7 +122,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
           ))}
         </nav>
 
-        <aside className="home__side">
+        {!progress.completed && <aside className="home__side">
           <div className="card">
             <span className="kicker"><T>Кампания</T></span>
             <strong><T>
@@ -131,7 +136,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
             <span className="kicker"><T>Кошмар</T></span>
             <strong><T>{progress.completed ? 'открыт' : 'откроется после кампании'}</T></strong>
           </div>
-        </aside>
+        </aside>}
 
         {!touch && (
           <footer className="home__foot">

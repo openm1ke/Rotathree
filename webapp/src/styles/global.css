@@ -420,6 +420,23 @@ input:focus-visible {
   min-width: 0;
 }
 
+.navitem__heading { display: flex; align-items: center; gap: 16px; }
+.navitem__badge {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--brand-green) 30%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-green) 8%, transparent);
+  color: var(--brand-green);
+  font-size: 12px;
+  font-weight: 600;
+}
+.home--completed .home__content {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+}
+.home--completed .home__nav { width: 100%; margin-inline: auto; }
+
 .navitem__title {
   font-size: clamp(30px, min(5vw, 7vh), 64px);
   font-weight: 900;
@@ -530,9 +547,9 @@ input:focus-visible {
 }
 
 .screen--overlay {
-  width: min(760px, 94vw);
-  height: auto;
-  max-height: 92vh;
+  width: min(760px, 100%);
+  height: 100%;
+  min-height: 0;
   padding: 18px 20px 16px;
   border: 1px solid var(--line-strong);
   border-radius: 18px;
@@ -776,6 +793,27 @@ input:focus-visible {
 .screen--settings .form-layout {
   max-width: 640px;
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen--settings .screen__body {
+  overflow: visible;
+  min-height: 0;
+  padding-inline: 16px;
+  max-width: calc(var(--menu-width) + 32px);
+}
+.screen--settings .tabs { flex: none; }
+.screen--settings .settings-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 16px;
+  margin-right: -16px;
+  scrollbar-width: thin;
 }
 
 .screen--custom .screen__foot,
@@ -1186,6 +1224,17 @@ input:focus-visible {
   background: rgba(7, 7, 12, 0.66);
   backdrop-filter: blur(8px);
   animation: fade 160ms ease-out both;
+}
+
+.overlay--settings {
+  --settings-inset: clamp(16px, 4vh, 40px);
+  place-items: start center;
+  padding-block: var(--settings-inset);
+}
+
+@media (max-width: 600px) {
+  .screen--settings .settings-panel { padding-right: 12px; margin-right: -12px; }
+  .navitem__heading { gap: 10px; }
 }
 
 .dialog {
@@ -1808,6 +1857,21 @@ html[data-platform="vk"] .app {
   padding: 6px 9px;
   font-size: 12px;
 }
+.game-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent);
+}
+.game-icon svg { width: 22px; height: 22px; }
+.game-icon:hover { background: var(--bg-raised); border-color: var(--accent); }
+.game-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .tutorial-hud {
   width: min(1100px, 100%);
   align-self: center;

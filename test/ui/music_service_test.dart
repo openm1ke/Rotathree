@@ -8,7 +8,7 @@ import 'package:rotathree/ui/data/settings.dart';
 
 void main() {
   testWidgets(
-    'pause blocks native resume and preserves the source and chosen volume',
+    'pause ducks native music and restores the chosen volume without reloading',
     (tester) async {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -55,14 +55,16 @@ void main() {
               .arguments['volume'],
           0.1,
         );
-        await music.setSuspended(true);
-        expect(calls.where((call) => call.method == 'pause'), hasLength(1));
+        await music.setPaused(true);
+        expect(calls.where((call) => call.method == 'pause'), isEmpty);
+        expect(calls.lastWhere((call) => call.method == 'setVolume').arguments['volume'], closeTo(0.01, 0.0001));
         await music.update(const AudioOptions(music: false, musicVolume: 0.35));
         await music.update(const AudioOptions(music: true, musicVolume: 0.35));
         await music
             .start(); // Includes attempts after returning to the foreground.
-        expect(calls.where((call) => call.method == 'resume'), hasLength(1));
-        await music.setSuspended(false);
+        expect(calls.where((call) => call.method == 'resume'), hasLength(2));
+        expect(calls.lastWhere((call) => call.method == 'setVolume').arguments['volume'], closeTo(0.035, 0.0001));
+        await music.setPaused(false);
         expect(calls.where((call) => call.method == 'resume'), hasLength(2));
         expect(
           calls.where((call) => call.method == 'setSourceUrl'),
@@ -75,9 +77,9 @@ void main() {
               .arguments['volume'],
           0.35,
         );
-        await music.setSuspended(true);
+        await music.setPaused(true);
         await music.update(const AudioOptions(music: false));
-        await music.setSuspended(false);
+        await music.setPaused(false);
         expect(calls.where((call) => call.method == 'resume'), hasLength(2));
         await music.dispose();
       });

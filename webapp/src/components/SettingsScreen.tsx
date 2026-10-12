@@ -55,6 +55,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const [tab, setTab] = useState<Tab>('controls');
   /** The key slot waiting for its new key. */
@@ -68,7 +69,13 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   };
 
   useEffect(() => {
-    tabsRef.current?.querySelector<HTMLElement>(`#settings-tab-${tab}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (panelRef.current) panelRef.current.scrollTop = 0;
+    const reveal = () => tabsRef.current?.querySelector<HTMLElement>(`#settings-tab-${tab}`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    if (tabsRef.current) observer.observe(tabsRef.current);
+    return () => observer.disconnect();
   }, [tab]);
 
   // While a slot waits, the very next key is its new key.
@@ -402,7 +409,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               </T></button>
           ))}
         </nav>
-        <div className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}
+        <div ref={panelRef} className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}
           tabIndex={0}
           onPointerDown={(event) => {
             swipe.current = null;

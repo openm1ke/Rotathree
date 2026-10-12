@@ -10,6 +10,7 @@ class TestAudio extends EventTarget {
     this.source = value;
     this.error = null;
     this.currentTime = 0;
+    this.paused = true;
   }
   preload = '';
   volume = 1;
@@ -76,43 +77,53 @@ describe('background music playback', () => {
     expect(TestAudio.instances).toHaveLength(1);
   });
 
-  it('keeps pause active through gestures, volume changes and music toggles', async () => {
+  it('ducks pause to a tenth of the chosen volume and restores it without restarting', async () => {
     await music.start();
     const player = TestAudio.instances[0];
+    const output = TestContext.instances[0].output;
     player.currentTime = 25;
-    music.setSuspended(true);
+    music.setPaused(true);
+    expect(output.gain.value).toBeCloseTo(0.01);
     music.ensurePlaying();
-    music.setSettings({ music: false, musicVolume: 0.35 });
-    music.setSettings({ music: true, musicVolume: 0.35 });
-    player.dispatchEvent(new Event('ended'));
-    await music.start();
-    expect(player.paused).toBe(true);
-    expect(player.play).toHaveBeenCalledTimes(1);
-    expect(player.currentTime).toBe(25);
-    expect(player.src).toBe(`/${MUSIC_TRACKS[0]}`);
-    music.setSuspended(false);
-    await music.start();
     expect(player.paused).toBe(false);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    music.setSettings({ music: true, musicVolume: 0.35 });
+    expect(output.gain.value).toBeCloseTo(0.035);
+    music.setPaused(false);
+    expect(output.gain.value).toBe(0.35);
     expect(player.currentTime).toBe(25);
-    expect(TestContext.instances[0].output.gain.value).toBe(0.35);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    music.setSettings({ music: false, musicVolume: 0.35 });
+    music.setPaused(true);
+    music.setPaused(false);
+    expect(player.paused).toBe(true);
+    expect(output.gain.value).toBe(0);
   });
 
-  it('does not resume a pending play after the game is paused', async () => {
-    const player = TestAudio.instances[0];
-    let finish!: () => void;
-    player.play.mockImplementationOnce(() => new Promise<void>((resolve) => {
-      finish = () => { player.paused = false; resolve(); };
-    }));
-    const starting = music.start();
-    await Promise.resolve();
-    music.setSuspended(true);
-    finish();
-    await starting;
-    expect(player.paused).toBe(true);
-    music.setSettings({ music: false, musicVolume: 0.1 });
-    music.setSuspended(false);
+  it('restores a suspended or interrupted audio context even if the track is already playing', async () => {
     await music.start();
-    expect(player.play).toHaveBeenCalledTimes(1);
+    const player = TestAudio.instances[0];
+    const context = TestContext.instances[0];
+    for (const state of ['suspended', 'interrupted']) {
+      context.state = state;
+      music.ensurePlaying();
+      await music.start();
+      expect(context.state).toBe('running');
+      expect(player.play).toHaveBeenCalledTimes(1);
+    }
+    expect(context.resume).toHaveBeenCalledTimes(3);
+  });
+
+  it('calls media play within the gesture, before audio context resume settles', async () => {
+    let resumed!: () => void;
+    class DelayedContext extends TestContext {
+      resume = vi.fn(() => new Promise<void>((resolve) => { resumed = resolve; }));
+    }
+    vi.stubGlobal('AudioContext', DelayedContext);
+    const starting = music.start();
+    expect(TestAudio.instances[0].play).toHaveBeenCalledTimes(1);
+    resumed();
+    await starting;
   });
 
   it('mutes, ignores further gestures while disabled, and resumes at the chosen volume', async () => {
@@ -166,6 +177,15 @@ describe('background music playback', () => {
     expect(TestAudio.instances[0].volume).toBe(0.05);
   });
 
+  it('still plays at the selected volume if AudioContext construction is rejected', async () => {
+    vi.stubGlobal('AudioContext', class { constructor() { throw new Error('context unavailable'); } });
+    music.setSettings({ music: true, musicVolume: 0.2 });
+    music.setPaused(true);
+    await music.start();
+    expect(TestAudio.instances[0].paused).toBe(false);
+    expect(TestAudio.instances[0].volume).toBeCloseTo(0.02);
+  });
+
   it('skips an unavailable track even when its play promise is still pending', async () => {
     const player = TestAudio.instances[0];
     player.play.mockImplementationOnce(async () => {
@@ -174,8 +194,9 @@ describe('background music playback', () => {
       throw new Error('unsupported source');
     });
     await music.start();
-    await music.start();
-    expect(player.src).toBe(`/${MUSIC_TRACKS[1]}`);
-    expect(player.paused).toBe(false);
+    await vi.waitFor(() => {
+      expect(player.src).toBe(`/${MUSIC_TRACKS[1]}`);
+      expect(player.paused).toBe(false);
+    });
   });
 });
