@@ -315,23 +315,39 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
         <>
           <LanguagePicker value={settings.language} onChange={(language) => onChange({ ...settings, language })} />
           <section className="group">
-            <h3><T>Надписи на поле</T></h3>
+            <h3><T>Игровое поле</T></h3>
             <Toggle
-              label={touch ? 'Подписи экранных кнопок' : 'Подсказки клавиш'}
+              label="Следующая фигура"
+              value={settings.hud.nextPiece}
+              on="показывать"
+              off="скрыть"
+              onChange={(nextPiece) => onChange({ ...settings, hud: { ...settings.hud, nextPiece } })}
+            />
+            {settings.hud.nextPiece && <Slider
+              label="Непрозрачность подсказки"
+              value={Math.round(settings.hud.nextPieceOpacity * 100)}
+              min={10}
+              max={100}
+              step={5}
+              unit="%"
+              onChange={(percent) => onChange({ ...settings, hud: { ...settings.hud, nextPieceOpacity: percent / 100 } })}
+            />}
+            {touch && <Toggle
+              label="Подписи экранных кнопок"
               value={settings.hud.keyHints}
               on="показывать"
               off="скрыть"
               onChange={(keyHints) => onChange({ ...settings, hud: { ...settings.hud, keyHints } })}
-            />
+            />}
             <Toggle
-              label="Очки, уровень и комбо"
+              label="Очки и уровень"
               value={settings.hud.score}
               on="показывать"
               off="скрыть"
               onChange={(score) => onChange({ ...settings, hud: { ...settings.hud, score } })}
             />
             <Toggle
-              label="Время, фигуры, матчи"
+              label="Время и фигуры"
               value={settings.hud.stats}
               on="показывать"
               off="скрыть"

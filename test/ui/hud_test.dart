@@ -16,10 +16,12 @@ void main() {
         )),
       ))));
       await tester.pump(const Duration(milliseconds: 220));
-      final bonus = tester.getRect(find.text('+400  3× комбо'));
+      final bonus = tester.getRect(find.text('+400'));
       final level = tester.getRect(find.text('Уровень 2 / 15'));
       expect(bonus.overlaps(level), isFalse);
       expect(find.text('1 500 очков'), findsOneWidget);
+      expect(find.textContaining('Матчи'), findsNothing);
+      expect(find.textContaining('комбо'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }

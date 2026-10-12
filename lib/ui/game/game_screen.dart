@@ -634,6 +634,8 @@ class GameScreenState extends State<GameScreen>
       devicePixelRatio: _pixelRatio,
       angle: _fx.viewAngle,
       sides: _engine.sides,
+      focusSingleGlass: widget.tutorial,
+      showNextPiece: widget.settings.hud.nextPiece && !widget.tutorial,
     ).zoneAt(details.localPosition);
     final slot = switch (zone) {
       FieldZone.right => Side.right,
@@ -883,6 +885,8 @@ class GameScreenState extends State<GameScreen>
                   fx: _fx,
                   assets: _assets,
                   focusSingleGlass: widget.tutorial,
+                  showNextPiece: widget.settings.hud.nextPiece && !widget.tutorial,
+                  nextPieceOpacity: widget.settings.hud.nextPieceOpacity,
                   devicePixelRatio: _pixelRatio,
                   reduceMotion: _reduceMotion,
                   repaint: _repaint,

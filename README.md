@@ -46,6 +46,14 @@ timing, the nine block colours with saved palettes, the explosions (a different
 one for each length of line, or one for all), the shake and turn duration, and
 what is written on the field.
 
+Settings → Interface → **Next piece** shows a small framed preview above the
+entry of each glass, enabled by default in Campaign, Custom and Nightmare.
+The detached cards are centered over their glasses; **Next piece opacity**
+adjusts the whole card from 10% to 100%, independently of label opacity.
+Each glass has its own reserved successor; turning or hiding previews never
+rerolls it. Queues are saved with the game, including during drops and cascades.
+Older saves keep their current pieces and receive a queue on first resume.
+
 New players get six practical lessons before their first game. Training freezes
 automatic falling, requires movement, rotation, a real match and a glass switch,
 and can be skipped or replayed from the menu. Training uses your selected controls, including pad placement. Practice does not affect statistics.

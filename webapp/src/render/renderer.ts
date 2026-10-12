@@ -6,7 +6,7 @@ import type { IncomingPiece } from '../game/incoming';
 import { isHorizontal, pieceDepth, pieceWidth, type BlockColor, type Piece } from '../game/piece';
 import { SIDES, type Side } from '../game/side';
 import type { Effects } from './effects';
-import { fieldViewport } from './viewport';
+import { fieldViewport, nextPiecePreviewRect } from './viewport';
 import { THEME, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
 
 const QUARTER = Math.PI / 2;
@@ -78,6 +78,8 @@ export class GameRenderer {
   private centreGrid!: Path2D;
   private armOutline!: Path2D;
   private wallOutline!: Path2D;
+  private previewOutline!: Path2D;
+  private previewGrid!: Path2D;
   private beamFill: CanvasGradient | null = null;
   private laneFill: CanvasGradient | null = null;
 
@@ -155,7 +157,7 @@ export class GameRenderer {
     return null;
   }
 
-  draw(engine: GameEngine, fx: Effects, reduceMotion = false, focusSingleGlass = false): void {
+  draw(engine: GameEngine, fx: Effects, reduceMotion = false, focusSingleGlass = false, showNextPiece = false, nextPieceOpacity = 1): void {
     const { ctx, pixels } = this;
     if (pixels < 2 || this.cssSize <= 0) return;
     const config = engine.config;
@@ -163,7 +165,7 @@ export class GameRenderer {
     const grid = gridSize(config);
     const viewport = fieldViewport(config.boardSize, config.armLength, engine.sides, fx.viewAngle,
       state.phase === 'building' ? state.buildingSide : null,
-      state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1, reduceMotion, focusSingleGlass);
+      state.phaseDuration > 0 ? state.phaseElapsed / state.phaseDuration : 1, reduceMotion, focusSingleGlass, showNextPiece);
     const unit = Math.max(1, Math.floor(pixels * FIT / viewport.span));
     this.grow = viewport.grow;
     this.ambientTime = fx.clock;
@@ -227,12 +229,38 @@ export class GameRenderer {
     this.drawParticles(fx);
     for (const piece of state.incoming.values()) this.drawIncoming(engine, fx, piece);
     this.drawDrop(state);
+    if (showNextPiece) this.drawNextPieces(engine, nextPieceOpacity);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     for (const piece of state.incoming.values()) this.drawCountdown(engine, fx, piece, scale);
   }
 
   // ----------------------------------------------------------- transforms
+
+  private drawNextPieces(engine: GameEngine, opacity: number): void {
+    const { ctx } = this;
+    const rect = nextPiecePreviewRect(this.n, this.arm);
+    ctx.globalAlpha = Math.max(0.1, Math.min(1, opacity));
+    for (const side of engine.sides) {
+      const piece = engine.incoming.nextPieceAt(side);
+      if (!piece) continue;
+      this.frame(side);
+      const active = side === engine.activeSide;
+      ctx.fillStyle = 'rgba(74, 113, 138, 0.16)';
+      ctx.fill(this.previewOutline);
+      ctx.lineWidth = this.px * 0.6;
+      ctx.strokeStyle = 'rgba(120, 205, 255, 0.12)';
+      ctx.stroke(this.previewGrid);
+      ctx.lineWidth = this.px;
+      ctx.strokeStyle = active ? 'rgba(240, 250, 255, 0.55)' : 'rgba(240, 250, 255, 0.28)';
+      ctx.stroke(this.previewOutline);
+      const step = (rect.width - 0.6) / piece.colors.length;
+      piece.colors.forEach((color, i) => {
+        this.block(color, rect.x + 0.3 + (i + 0.5) * step, rect.y + rect.height / 2, side, step * 0.88, step * 0.88);
+      });
+    }
+    ctx.globalAlpha = 1;
+  }
 
   /** Draws in the frame of glass `frame`: its arm on top, cells as units. */
   private frame(frame: number): void {
@@ -425,6 +453,25 @@ export class GameRenderer {
     if (key === this.pathKey) return;
     this.pathKey = key;
     const { n, arm, half, reach } = this;
+    const p = nextPiecePreviewRect(n, arm), cut = 0.18;
+    const right = p.x + p.width, bottom = p.y + p.height;
+    this.previewOutline = new Path2D();
+    this.previewOutline.moveTo(p.x + cut, p.y);
+    this.previewOutline.lineTo(right - cut, p.y);
+    this.previewOutline.lineTo(right, p.y + cut);
+    this.previewOutline.lineTo(right, bottom - cut);
+    this.previewOutline.lineTo(right - cut, bottom);
+    this.previewOutline.lineTo(p.x + cut, bottom);
+    this.previewOutline.lineTo(p.x, bottom - cut);
+    this.previewOutline.lineTo(p.x, p.y + cut);
+    this.previewOutline.closePath();
+    this.previewGrid = new Path2D();
+    for (let x = Math.ceil(p.x); x < right; x++) {
+      this.previewGrid.moveTo(x, p.y + 0.05); this.previewGrid.lineTo(x, bottom - 0.05);
+    }
+    for (let y = Math.ceil(p.y); y < bottom; y++) {
+      this.previewGrid.moveTo(p.x + 0.05, y); this.previewGrid.lineTo(right - 0.05, y);
+    }
 
     this.armGrid = new Path2D();
     for (let i = 1; i < n; i++) {

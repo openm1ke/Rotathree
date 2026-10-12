@@ -189,7 +189,7 @@ describe('settings storage', () => {
     settings.bindings = bindKey(settings.bindings, 'glassLeft', 0, 'KeyQ');
     settings.handling.dasMs = 90;
     settings.effects = { explosion: 'off', fieldBackground: false, screenShake: false, turnMs: 420 };
-    settings.hud = { keyHints: false, score: true, stats: false, opacity: 0.35 };
+    settings.hud = { nextPiece: false, nextPieceOpacity: 0.45, keyHints: false, score: true, stats: false, opacity: 0.35 };
     settings.palettes = {
       active: 'mine',
       sets: [
@@ -224,9 +224,18 @@ describe('settings storage', () => {
     });
     expect(cleaned.handling).toEqual({ dasMs: 0, arrMs: 35 });
     expect(cleaned.effects).toEqual({ explosion: 'varied', fieldBackground: true, screenShake: true, turnMs: 800 });
-    expect(cleaned.hud).toEqual({ keyHints: true, score: true, stats: true, opacity: 0.1 });
+    expect(cleaned.hud).toEqual({ nextPiece: true, nextPieceOpacity: 1, keyHints: true, score: true, stats: true, opacity: 0.1 });
     expect(cleaned.bindings).toEqual(defaultBindings);
     expect(loadSettings({ getItem: () => '{broken' })).toEqual(defaultSettings());
+  });
+
+  it('clamps preview opacity and keeps it separate from label opacity', () => {
+    for (const nextPieceOpacity of [undefined, 'bad', NaN]) {
+      expect(sanitizeSettings({ hud: { nextPieceOpacity } }).hud.nextPieceOpacity).toBe(1);
+    }
+    expect(sanitizeSettings({ hud: { nextPieceOpacity: 0 } }).hud.nextPieceOpacity).toBe(0.1);
+    expect(sanitizeSettings({ hud: { nextPieceOpacity: 2 } }).hud.nextPieceOpacity).toBe(1);
+    expect(sanitizeSettings({ hud: { nextPieceOpacity: 0.45, opacity: 0.8 } }).hud.opacity).toBe(0.8);
   });
 
   it('a palette that is not there any more falls back to the classic one', () => {

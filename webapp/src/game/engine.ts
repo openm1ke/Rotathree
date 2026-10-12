@@ -146,6 +146,10 @@ export class GameEngine {
         piece: { ...p.piece, colors: [...p.piece.colors] },
       })),
       phase: s.phase,
+      next: this.sides.flatMap((side) => {
+        const piece = this.incoming.nextPieceAt(side);
+        return piece ? [{ side, piece: { ...piece, colors: [...piece.colors] } }] : [];
+      }),
       phaseElapsed: s.phaseElapsed,
       phaseDuration: s.phaseDuration,
       score: s.score,
@@ -298,6 +302,17 @@ export class GameEngine {
     const base = { active: number(r.rampBaseActive, 0.01, 60), inactive: number(r.rampBaseInactive, 0.01, 60) };
     const seed = integer(r.randomSeed, 0, 0xffffffff),
       generated = integer(r.generated, 0, 100000);
+    const queuedSides = sides.filter((s) => phase !== 'building' || s !== buildingSide);
+    let next: Map<Side, Piece> | undefined;
+    if ('next' in r) {
+      next = new Map();
+      for (const rawNext of list(r.next, 4)) {
+        const entry = record(rawNext), s = side(entry.side), shape = piece(entry.piece);
+        if (!queuedSides.includes(s) || next.has(s) || shape.orientation !== 0) throw new Error('Invalid next piece');
+        next.set(s, shape);
+      }
+      if (next.size !== queuedSides.length) throw new Error('Missing next piece');
+    }
     const restored: GameState = {
       board,
       incoming: this.incoming.pieces,
@@ -324,6 +339,8 @@ export class GameEngine {
     this.setSteps(steps.active, steps.inactive);
     this.rampBase = base;
     this.incoming.generator.restore(seed, generated);
+    // Older saves reserve their first queue on migration.
+    this.incoming.restoreNext(next ?? new Map(queuedSides.map((side) => [side, this.incoming.generator.next()])));
     this.incoming.pieces.clear();
     for (const p of incoming) this.incoming.pieces.set(p.side, p);
     this.incoming.softDrop = false;

@@ -54,6 +54,7 @@ const KICKS: readonly (readonly [number, number])[] = [
  * only with settled blocks. */
 export class IncomingController {
   readonly pieces = new Map<Side, IncomingPiece>();
+  private readonly next = new Map<Side, Piece>();
 
   /** The last landing row worked out for each glass, and what it was worked
    * out from. It is asked for several times a frame and changes once a step. */
@@ -81,6 +82,16 @@ export class IncomingController {
     return this.pieces.get(side);
   }
 
+  /** Reserved for this glass, regardless of which glass locks first. */
+  nextPieceAt(side: Side): Piece | undefined {
+    return this.next.get(side);
+  }
+
+  restoreNext(pieces: ReadonlyMap<Side, Piece>): void {
+    this.next.clear();
+    for (const [side, piece] of pieces) this.next.set(side, piece);
+  }
+
   /** Seconds between two steps of `piece` while `active` is on top. */
   stepSeconds(piece: IncomingPiece, active: Side, board: Board): number {
     if (piece.side !== active) return this.config.inactiveStepSeconds;
@@ -97,18 +108,22 @@ export class IncomingController {
    * its arm. */
   reset(sides: readonly Side[]): void {
     this.pieces.clear();
+    this.next.clear();
+    this.rest.clear();
     this.softDrop = false;
     sides.forEach((side, i) => {
       const headStart = (sides.length - 1 - i) * this.config.initialProgressStagger;
       this.put(side, this.generator.next(), { row: Math.round(headStart * this.config.armLength) });
     });
+    for (const side of sides) this.next.set(side, this.generator.next());
   }
 
   /** Puts a new piece at the far end of `side`'s glass. Returns null when
    * the glass is full up to there — the game is over. */
   spawn(side: Side, board: Board): IncomingPiece | null {
-    const piece = this.generator.next();
+    const piece = this.next.get(side) ?? this.generator.next();
     if (!fits(board, side, piece, 0, this.spawnColumn)) return null;
+    this.next.set(side, this.generator.next());
     return this.put(side, piece);
   }
 

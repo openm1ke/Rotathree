@@ -3,6 +3,14 @@ import 'dart:ui';
 
 import '../../game/model/side.dart';
 
+/// Centered above a glass's entry with an air gap, in its own cell axes.
+Rect nextPiecePreviewRect(int boardSize, int armLength) => Rect.fromLTWH(
+  -math.min(3.6, boardSize.toDouble()) / 2,
+  -boardSize / 2 - armLength - 2.2,
+  math.min(3.6, boardSize.toDouble()),
+  1.6,
+);
+
 /// Fit arms around the fixed board center; make room before growing a new arm.
 class FieldViewport {
   const FieldViewport(this.bounds, this.grow);
@@ -20,6 +28,7 @@ class FieldViewport {
     double progress = 1,
     bool reduceMotion = false,
     bool focusSingleGlass = false,
+    bool showNextPiece = false,
   }) {
     final half = boardSize / 2;
     Rect bounds(List<Side> visible) {
@@ -40,6 +49,10 @@ class FieldViewport {
       rect(-half, -half, half, half, angle);
       for (final side in visible) {
         rect(-half, -half - armLength, half, -half, angle + side.index * math.pi / 2);
+        if (showNextPiece) {
+          final preview = nextPiecePreviewRect(boardSize, armLength);
+          rect(preview.left, preview.top, preview.right, preview.bottom, angle + side.index * math.pi / 2);
+        }
       }
       // Early lessons can fill the canvas with their only glass. As the
       // second arm grows, interpolate back to the fixed board center.

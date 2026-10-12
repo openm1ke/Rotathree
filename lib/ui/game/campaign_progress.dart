@@ -63,8 +63,7 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
                 decoration: BoxDecoration(
                   color: Palette.panelStrong,
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Palette.accent.withValues(alpha: .4 + wave * .5)),
-                  boxShadow: wave > .01 ? [BoxShadow(color: Palette.accent.withValues(alpha: wave * .25), blurRadius: 8)] : [],
+                  border: Border.all(color: Palette.accent.withValues(alpha: .3 + wave * .4)),
                 ),
                 child: child,
               );
@@ -72,7 +71,7 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: SizedBox(
-                height: 32,
+                height: 22,
                 child: Stack(children: [
                   Positioned.fill(
                     child: TweenAnimationBuilder<double>(
@@ -83,23 +82,18 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
                       builder: (context, value, child) => FractionallySizedBox(
                         alignment: Alignment.centerLeft, widthFactor: value, child: child,
                       ),
-                      child: const DecoratedBox(decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Color(0x9936A9FF), Color(0x992EE6C0), Color(0x998F5BFF)]),
-                      )),
+                      child: DecoratedBox(decoration: BoxDecoration(color: Palette.accent.withValues(alpha: .4))),
                     ),
                   ),
-                  const Positioned.fill(child: CustomPaint(painter: _Ticks())),
                   Positioned.fill(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(children: [
-                        Expanded(child: LText('Цель', style: Type.label(9, color: Palette.accent), maxLines: 1)),
-                        Expanded(flex: 2, child: FittedBox(fit: BoxFit.scaleDown, child: LText(
-                          '${formatNumber(earned)} / ${formatNumber(widget.target)}', style: Type.display(15),
-                        ))),
-                        Expanded(child: LText('Ещё ${formatNumber(remaining)}', textAlign: TextAlign.right,
-                          maxLines: 1, overflow: TextOverflow.ellipsis, style: Type.body(10, weight: FontWeight.w700))),
-                      ]),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FittedBox(fit: BoxFit.scaleDown, child: LText(
+                          '${formatNumber(earned)} / ${formatNumber(widget.target)}', style: Type.display(12),
+                        )),
+                      ),
                     ),
                   ),
                 ]),
@@ -110,17 +104,4 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
       ),
     );
   }
-}
-
-class _Ticks extends CustomPainter {
-  const _Ticks();
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withValues(alpha: .07)..strokeWidth = 1;
-    for (double x = 24; x < size.width; x += 24) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-  }
-  @override
-  bool shouldRepaint(_Ticks oldDelegate) => false;
 }

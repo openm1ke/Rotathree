@@ -27,12 +27,9 @@ export function CampaignProgress({ level, into, target, animated }: Props) {
     data-animated={animated}
   >
     <div className="campaign-progress__fill" style={{ transform: `scaleX(${fraction})` }} />
-    <div className="campaign-progress__ticks" />
     {earned > 0 && <div className="campaign-progress__pulse" key={`${level}:${earned}`} />}
     <div className="campaign-progress__text" aria-hidden="true">
-      <span><T>Цель</T></span>
       <strong><T>{formatScore(earned)} / {formatScore(target)}</T></strong>
-      <span><T>Ещё {formatScore(remaining)}</T></span>
     </div>
   </div>;
 }

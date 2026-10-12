@@ -6,9 +6,14 @@ export interface FieldViewport {
 }
 const ease = (t: number): number => 1 - (1 - Math.max(0, Math.min(1, t))) ** 3;
 
+/** Centered above a glass's entry with an air gap, in that glass's cell axes. */
+export const nextPiecePreviewRect = (n: number, arm: number) => ({
+  x: -Math.min(3.6, n) / 2, y: -n / 2 - arm - 2.2, width: Math.min(3.6, n), height: 1.6,
+});
+
 /** Fit the arms around the fixed board center; make room before growing a new arm. */
 export function fieldViewport(n: number, arm: number, sides: readonly Side[], angle = 0,
-  building: Side | null = null, progress = 1, reduceMotion = false, focusSingleGlass = false): FieldViewport {
+  building: Side | null = null, progress = 1, reduceMotion = false, focusSingleGlass = false, showNextPiece = false): FieldViewport {
   const half = n / 2;
   const bounds = (visible: readonly Side[]) => {
     let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
@@ -21,7 +26,14 @@ export function fieldViewport(n: number, arm: number, sides: readonly Side[], an
       }
     };
     rect(-half, -half, half, half, angle);
-    for (const side of visible) rect(-half, -half - arm, half, -half, angle + side * Math.PI / 2);
+    for (const side of visible) {
+      const turn = angle + side * Math.PI / 2;
+      rect(-half, -half - arm, half, -half, turn);
+      if (showNextPiece) {
+        const p = nextPiecePreviewRect(n, arm);
+        rect(p.x, p.y, p.x + p.width, p.y + p.height, turn);
+      }
+    }
     if (focusSingleGlass && visible.length === 1) return { left, top, right, bottom };
     // A little more breathing room with each added glass makes every addition readable.
     const pad = Math.max(0, visible.length - 1) * 0.25;

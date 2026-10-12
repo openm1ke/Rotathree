@@ -14,11 +14,15 @@ import { ACTIONS } from '../input/bindings';
 export type ExplosionStyle = 'unified' | 'varied' | 'off';
 
 export interface HudOptions {
+  /** A preview of the next stick above each glass's entry. */
+  nextPiece: boolean;
+  /** Opacity of the entire next-piece card, 0.1 … 1. */
+  nextPieceOpacity: number;
   /** The reminder of which key does what. */
   keyHints: boolean;
-  /** The score, the level and the combo callouts. */
+  /** The score, level and score-gain callouts. */
   score: boolean;
-  /** Time, pieces, matches, best combo. */
+  /** Elapsed time and placed pieces. */
   stats: boolean;
   /** Opacity of the writing on the field, 0.1 … 1. */
   opacity: number;
@@ -87,7 +91,7 @@ export const defaultSettings = (): Settings => ({
   handling: { ...defaultHandling },
   palettes: { active: 'classic', sets: BUILTIN_PALETTES.map((set) => ({ ...set, colours: [...set.colours] })) },
   effects: { explosion: 'varied', fieldBackground: true, screenShake: true, turnMs: 260 },
-  hud: { keyHints: true, score: true, stats: true, opacity: 1 },
+  hud: { nextPiece: true, nextPieceOpacity: 1, keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
   padPositions: structuredClone(DEFAULT_POSITIONS),
   audio: { music: true, musicVolume: 0.1 },
@@ -159,6 +163,8 @@ export function sanitizeSettings(raw: unknown): Settings {
       turnMs: Math.round(numberIn(effects.turnMs, 0, 800, base.effects.turnMs)),
     },
     hud: {
+      nextPiece: hud.nextPiece !== false,
+      nextPieceOpacity: numberIn(hud.nextPieceOpacity, 0.1, 1, base.hud.nextPieceOpacity),
       keyHints: hud.keyHints !== false,
       score: hud.score !== false,
       stats: hud.stats !== false,

@@ -6,7 +6,7 @@ import '../data/settings.dart';
 import '../format.dart';
 import '../style.dart';
 
-/// The numbers shown in the corners of the field.
+/// The numbers used by the game readout and campaign progress.
 class HudState {
   const HudState({
     required this.score,
@@ -101,7 +101,7 @@ class _CalloutView extends StatelessWidget {
     final text = callout.isSpeed
         ? LText('Скорость ${callout.speed}', style: Type.display(base * 1.3, color: Palette.warning))
         : LText(
-            callout.combo > 1 ? '+${callout.points}  ${callout.combo}× комбо' : '+${callout.points}',
+            '+${callout.points}',
             style: Type.display(base * 1.5, color: Palette.accent),
           );
     // A new key per callout makes it pop again each time.
@@ -159,7 +159,7 @@ class GameReadout extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: LText(
-                '${formatClock(hud.seconds)} · Фигуры ${hud.pieces} · Матчи ${hud.matches} · Комбо ×${hud.bestCombo}',
+                '${formatClock(hud.seconds)} · Фигуры ${hud.pieces}',
                 style: Type.body(11, color: Palette.textDim),
               ),
             ),

@@ -1,8 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import { GLASS_ORDER } from '../game/config';
-import { fieldViewport } from '../render/viewport';
+import { fieldViewport, nextPiecePreviewRect } from '../render/viewport';
 
 describe('field camera', () => {
+  it('keeps next-piece cards outside the glasses and inside the camera through turns', () => {
+    for (const arm of [4, 9, 12]) {
+      const p = nextPiecePreviewRect(10, arm);
+      expect(p.x + p.width / 2).toBe(0);
+      expect(p.y + p.height).toBeCloseTo(-5 - arm - 0.6);
+      for (let count = 1; count <= 4; count++) {
+        const sides = GLASS_ORDER.slice(0, count);
+        for (let step = 0; step <= 32; step++) {
+          const angle = step * Math.PI / 16;
+          const v = fieldViewport(10, arm, sides, angle, null, 1, false, false, true);
+          expect(v.cx).toBe(0);
+          expect(v.cy).toBe(0);
+          for (const side of sides) {
+            const turn = angle + side * Math.PI / 2;
+            for (const x of [p.x, p.x + p.width]) for (const y of [p.y, p.y + p.height]) {
+              const px = Math.cos(turn) * x - Math.sin(turn) * y;
+              const py = Math.sin(turn) * x + Math.cos(turn) * y;
+              expect(px).toBeGreaterThanOrEqual(v.left - 1e-8);
+              expect(px).toBeLessThanOrEqual(v.right + 1e-8);
+              expect(py).toBeGreaterThanOrEqual(v.top - 1e-8);
+              expect(py).toBeLessThanOrEqual(v.bottom + 1e-8);
+            }
+          }
+        }
+      }
+    }
+  });
   it('reserves space around the board center and steps back with each addition', () => {
     const views = [1, 2, 3, 4].map((count) => fieldViewport(6, 9, GLASS_ORDER.slice(0, count)));
     expect(views[0].span).toBe(24);

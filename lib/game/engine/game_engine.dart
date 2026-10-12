@@ -175,6 +175,11 @@ class GameEngine {
         },
     ],
     'phase': phase.index,
+    'next': [
+      for (final side in _sides)
+        if (incoming.nextPieceAt(side) case final piece?)
+          {'side': side.index, 'piece': _pieceJson(piece)},
+    ],
     'phaseElapsed': state.phaseElapsed,
     'phaseDuration': state.phaseDuration,
     'score': state.score,
@@ -318,6 +323,22 @@ class GameEngine {
     final baseInactive = r.number('rampBaseInactive', min: 0.01, max: 60);
     final seed = r.integer('randomSeed', max: 1 << 32);
     final generated = r.integer('generated', max: 100000);
+    final queuedSides = sides.where((s) => phase != GamePhase.building || s != restored.buildingSide).toSet();
+    Map<Side, Piece>? next;
+    if (r.data.containsKey('next')) {
+      next = {};
+      for (final rawNext in r.list('next', max: 4)) {
+        final entry = SnapshotReader(rawNext);
+        final side = _readSide(entry.data['side']);
+        if (!queuedSides.contains(side) || next.containsKey(side)) {
+          throw const FormatException('Invalid next glass');
+        }
+        final piece = _readPiece(entry.data['piece']);
+        if (piece.orientation != PieceOrientation.horizontal) throw const FormatException('Invalid next orientation');
+        next[side] = piece;
+      }
+      if (next.length != queuedSides.length) throw const FormatException('Missing next piece');
+    }
     final dropCooldown = r.data.containsKey('dropCooldown')
         ? r.number('dropCooldown', max: _dropDebounceSeconds)
         : 0.0;
@@ -325,6 +346,8 @@ class GameEngine {
     _rampBaseActive = baseActive;
     _rampBaseInactive = baseInactive;
     incoming.generator.restore(seed, generated);
+    // Saves made before previews reserve their first queue on migration.
+    incoming.restoreNext(next ?? {for (final side in queuedSides) side: incoming.generator.next()});
     incoming.pieces.clear();
     for (final p in pieces) {
       incoming.pieces[p.side] = p;
