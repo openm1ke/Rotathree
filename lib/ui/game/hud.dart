@@ -147,24 +147,11 @@ class GameReadout extends StatelessWidget {
                             'Уровень ${hud.level} / ${campaignLevels.length}',
                             style: Type.body(11, color: Palette.accent),
                           ),
-                          LText(
-                            '${formatNumber(hud.into)} / ${formatNumber(hud.target)}',
-                            style: Type.body(11, color: Palette.textDim),
-                          ),
                         ],
                       ),
                     if (hud.speed > 0) LText('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
                   ],
                 ),
-                if (hud.target > 0) ...[
-                  const SizedBox(height: 4),
-                  LinearProgressIndicator(
-                    value: (hud.into / hud.target).clamp(0, 1),
-                    minHeight: 3,
-                    color: Palette.accent,
-                    backgroundColor: Palette.line,
-                  ),
-                ],
               ],
               if (options.stats)
                 Padding(

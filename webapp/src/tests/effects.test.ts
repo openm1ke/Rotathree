@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Effects } from '../render/effects';
 import { newEngine } from './helpers';
+import { findMatches } from '../game/matchDetector';
 
 const QUARTER = Math.PI / 2;
 
@@ -96,5 +97,41 @@ describe('level-up celebration', () => {
     play(2.4);
     expect(fx.rings).toHaveLength(0);
     expect(fx.particles).toHaveLength(0);
+  });
+});
+
+
+describe('disabled decorative effects', () => {
+  it('skips bursts and celebrations without changing the board or glass navigation', () => {
+    const { fx, engine, turn, play } = setup();
+    engine.board.paintCenter(Array.from({ length: 10 }, () => 'RRRRRRRRRR'));
+    const match = findMatches(engine.board);
+    engine.state.activeMatch = match;
+    engine.state.phase = 'clearing';
+    fx.explosion = 'off';
+    fx.update(.001, engine);
+    fx.celebrate(3);
+    expect(fx.particles).toHaveLength(0);
+    expect(fx.rings).toHaveLength(0);
+    expect(fx.flashes).toHaveLength(0);
+    expect(fx.veils).toHaveLength(0);
+    expect(findMatches(engine.board)).toEqual(match);
+    engine.state.phase = 'playing';
+    turn(1);
+    expect(play(.3).at(-1)).toBeCloseTo(-QUARTER, 9);
+  });
+
+  it('clears a running burst immediately when switched off', () => {
+    const { fx, engine } = setup();
+    engine.board.paintCenter(Array.from({ length: 10 }, () => 'RRRRRRRRRR'));
+    engine.state.activeMatch = findMatches(engine.board);
+    engine.state.phase = 'clearing';
+    fx.update(.001, engine);
+    expect(fx.particles.length).toBeGreaterThan(0);
+    fx.explosion = 'off';
+    expect(fx.particles).toHaveLength(0);
+    expect(fx.rings).toHaveLength(0);
+    expect(fx.flashes).toHaveLength(0);
+    expect(fx.veils).toHaveLength(0);
   });
 });

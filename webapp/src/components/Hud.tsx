@@ -37,12 +37,6 @@ export function Hud({ hud, callout, bindings, options, onPause, onOpenSettings }
                   {hud.colours} цв · {hud.glasses} ст
                 </T></span>
               </div>
-              <div className="level__bar">
-                <i style={{ width: `${Math.min(100, (100 * hud.into) / Math.max(1, hud.target))}%` }} />
-              </div>
-              <span className="level__numbers"><T>
-                {formatScore(hud.into)} / {formatScore(hud.target)}
-              </T></span>
             </div>
           )}
           {hud.speed > 0 && <span className="speed"><T>Скорость {hud.speed}</T></span>}

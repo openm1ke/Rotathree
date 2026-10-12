@@ -89,7 +89,7 @@ const SIGNATURES: Record<3 | 4 | 5 | 6, Signature> = {
 /** The one explosion the "unified" style uses for everything. */
 const UNIFIED = SIGNATURES[3];
 
-export type ExplosionStyle = 'unified' | 'varied';
+export type ExplosionStyle = 'unified' | 'varied' | 'off';
 
 interface StepTrack {
   piece: IncomingPiece;
@@ -113,7 +113,16 @@ export class Effects {
   /** Board kicks and shakes can be switched off in the settings. */
   screenShake = true;
   /** Whether each kind of clear explodes in its own way. */
-  explosion: ExplosionStyle = 'varied';
+  fieldBackground = true;
+  private explosionStyle: ExplosionStyle = 'varied';
+  get explosion(): ExplosionStyle { return this.explosionStyle; }
+  set explosion(style: ExplosionStyle) {
+    if (style === this.explosionStyle) return;
+    this.explosionStyle = style;
+    if (style === 'off') {
+      this.particles.length = this.rings.length = this.flashes.length = this.veils.length = 0;
+    }
+  }
   /** Seconds a quarter turn of the cross takes; 0 turns it at once. */
   turnSeconds = 0.26;
   /** How fast the cross is turning right now, 0 at rest … 1 at the fastest
@@ -268,7 +277,7 @@ export class Effects {
           const [dx, dy] = travelOnScreen(slotOfSide(active, event.placement.side));
           const force = event.dropped ? 0.3 : 0.08;
           this.kick(dx * force, dy * force);
-          if (event.dropped) this.sparks(event.placement, engine);
+          if (event.dropped && this.explosion !== 'off') this.sparks(event.placement, engine);
           break;
         }
         case 'matchScored':
@@ -276,6 +285,7 @@ export class Effects {
           if (this.screenShake) this.punch = Math.min(0.06, 0.012 * event.combo);
           break;
         case 'glassAdded': {
+          if (this.explosion === 'off') break;
           // A ring runs out from the far end of the glass as it is finished.
           const far = farEnd(event.side, engine.config.armLength + engine.config.boardSize / 2);
           this.rings.push({ x: far.x, y: far.y, age: 0, life: 0.7, color: 'rgb(120, 205, 255)', reach: 3 });
@@ -325,8 +335,8 @@ export class Effects {
     if (this.punch < 1e-5) this.punch = 0;
     if (Math.abs(this.kickX) < 1e-4 && Math.abs(this.kickVx) < 1e-3) this.kickX = this.kickVx = 0;
     if (Math.abs(this.kickY) < 1e-4 && Math.abs(this.kickVy) < 1e-3) this.kickY = this.kickVy = 0;
-    this.shakeX = (Math.random() * 2 - 1) * this.shake;
-    this.shakeY = (Math.random() * 2 - 1) * this.shake;
+    this.shakeX = this.shake === 0 ? 0 : (Math.random() * 2 - 1) * this.shake;
+    this.shakeY = this.shake === 0 ? 0 : (Math.random() * 2 - 1) * this.shake;
 
     const drag = Math.max(0, 1 - 3.4 * seconds);
     for (const particle of this.particles) {
@@ -378,6 +388,7 @@ export class Effects {
   /** A level has been finished: rings roll out from the centre of the cross
    * and confetti in the colours in play flies after them. */
   celebrate(colours: number): void {
+    if (this.explosion === 'off') return;
     for (let i = 0; i < 3; i++) {
       this.rings.push({ x: 0, y: 0, age: -0.16 * i, life: 0.9, color: '#ffffff', reach: 13 });
     }
@@ -439,6 +450,7 @@ export class Effects {
    * kind of explosion; several lines at once send a wave out from each of
    * them, and three or more also flash the whole field. */
   private burst(match: MatchResult, engine: GameEngine): void {
+    if (this.explosion === 'off') return;
     const board = engine.board;
     const half = board.size / 2;
     const at = (index: number) => ({

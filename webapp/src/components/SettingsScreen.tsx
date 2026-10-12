@@ -275,16 +275,22 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               options={[
                 ['varied', 'Разная для каждого типа'],
                 ['unified', 'Одна для всех'],
+                ['off', 'выкл'],
               ]}
               onChange={(explosion) => onChange({ ...settings, effects: { ...settings.effects, explosion } })}
             />
             <p className="hint"><T>
-              Разная: тройки, четвёрки и пятёрки взрываются по-своему, шесть и больше — с золотой вспышкой.
-              Одновременные линии добавляют волны, три линии сразу — вспышку поля. Одна: все взрывы одинаковые.
+              Разная — эффект зависит от совпадения. Одна — одинаковые взрывы. Выкл — без частиц и вспышек.
             </T></p>
           </section>
           <section className="group">
             <h3><T>Поле</T></h3>
+            <Toggle
+              label="Фоновая анимация поля"
+              value={settings.effects.fieldBackground}
+              onChange={(fieldBackground) => onChange({ ...settings, effects: { ...settings.effects, fieldBackground } })}
+            />
+            <p className="hint"><T>Отключите для снижения нагрузки на устройство.</T></p>
             <Toggle
               label="Толчки и тряска поля"
               value={settings.effects.screenShake}

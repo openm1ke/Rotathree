@@ -176,7 +176,21 @@ class Effects {
   bool screenShake = true;
 
   /// Whether each kind of clear explodes in its own way.
-  ExplosionStyle explosion = ExplosionStyle.varied;
+  bool fieldBackground = true;
+  /// Bound burst work even when many lines clear together.
+  static const maxParticles = 1500;
+  ExplosionStyle _explosion = ExplosionStyle.varied;
+  ExplosionStyle get explosion => _explosion;
+  set explosion(ExplosionStyle style) {
+    if (style == _explosion) return;
+    _explosion = style;
+    if (style == ExplosionStyle.off) {
+      particles.clear();
+      rings.clear();
+      flashes.clear();
+      veils.clear();
+    }
+  }
 
   /// Seconds a quarter turn of the cross takes; 0 turns it at once.
   double turnSeconds = 0.26;
@@ -332,11 +346,12 @@ class Effects {
           final (dx, dy) = _travelOnScreen(RotationTransform.slotOfSide(active, placement.side));
           final force = dropped ? 0.3 : 0.08;
           _kick(dx * force, dy * force);
-          if (dropped) _sparks(placement, engine);
+          if (dropped && explosion != ExplosionStyle.off) _sparks(placement, engine);
         case MatchScored(:final combo):
           _addShake(0.05 + 0.04 * combo);
           if (screenShake) punch = math.min(0.06, 0.012 * combo);
         case GlassAdded(:final side):
+          if (explosion == ExplosionStyle.off) continue;
           // A ring runs out from the far end of the glass as it is finished.
           final config = engine.config;
           final far = _farEnd(side, config.armLength + config.boardSize / 2);
@@ -394,8 +409,8 @@ class Effects {
       kickY = 0;
       _kickVy = 0;
     }
-    shakeX = (_random.nextDouble() * 2 - 1) * _shake;
-    shakeY = (_random.nextDouble() * 2 - 1) * _shake;
+    shakeX = _shake == 0 ? 0 : (_random.nextDouble() * 2 - 1) * _shake;
+    shakeY = _shake == 0 ? 0 : (_random.nextDouble() * 2 - 1) * _shake;
 
     final drag = math.max(0.0, 1 - 3.4 * seconds);
     for (final particle in particles) {
@@ -495,6 +510,7 @@ class Effects {
   /// kind of explosion; several lines at once send a wave out from each of
   /// them, and three or more also flash the whole field.
   void _burst(MatchResult match, GameEngine engine) {
+    if (explosion == ExplosionStyle.off) return;
     final board = engine.board;
     final half = board.size / 2;
     Offset at(CellPosition cell) => Offset(-half + cell.col + 0.5, -half + cell.row + 0.5);
@@ -557,7 +573,7 @@ class Effects {
   }
 
   void _shards(Offset p, BlockTones tones, _Signature sig) {
-    for (var i = 0; i < sig.shards; i++) {
+    for (var i = 0; i < sig.shards && particles.length < maxParticles; i++) {
       final angle = _random.nextDouble() * math.pi * 2;
       final speed = 2.5 + _random.nextDouble() * sig.speed;
       final gold = sig.gold && i % 4 == 0;
@@ -583,7 +599,7 @@ class Effects {
   void _sparks(Placement placement, GameEngine engine) {
     final half = engine.board.size / 2;
     for (final cell in placement.cells) {
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 4 && particles.length < maxParticles; i++) {
         final angle = _random.nextDouble() * math.pi * 2;
         final speed = 1.5 + _random.nextDouble() * 3.5;
         particles.add(Particle(

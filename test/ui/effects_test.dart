@@ -40,6 +40,26 @@ Effects popping(List<MatchResult> lines, {required ExplosionStyle style}) {
 }
 
 void main() {
+  test('off skips bursts and clears existing decorative effects immediately', () {
+    final off = popping([lineOf(6)], style: ExplosionStyle.off);
+    expect(off.particles, isEmpty);
+    expect(off.rings, isEmpty);
+    expect(off.flashes, isEmpty);
+    expect(off.veils, isEmpty);
+    final active = popping([lineOf(6)], style: ExplosionStyle.varied);
+    expect(active.particles, isNotEmpty);
+    active.explosion = ExplosionStyle.off;
+    expect(active.particles, isEmpty);
+    expect(active.rings, isEmpty);
+    expect(active.flashes, isEmpty);
+    expect(active.veils, isEmpty);
+  });
+
+  test('large simultaneous clears have a bounded particle budget', () {
+    final fx = popping([for (var row = 9; row < 19; row++) lineOf(10, row: row)], style: ExplosionStyle.varied);
+    expect(fx.particles.length, Effects.maxParticles);
+  });
+
   test('unified explosions are the same whatever the line', () {
     final short = popping([lineOf(3)], style: ExplosionStyle.unified);
     final long = popping([lineOf(6)], style: ExplosionStyle.unified);

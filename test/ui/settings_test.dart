@@ -27,6 +27,17 @@ void main() {
     expect(again.audio.musicVolume, 0.1);
   });
 
+  test('effect opt-outs survive storage and older saves keep animation defaults', () {
+    final settings = Settings.defaults().copyWith(
+      effects: const EffectOptions(explosion: ExplosionStyle.off, fieldBackground: false),
+    );
+    final again = Settings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
+    expect(again.effects.explosion, ExplosionStyle.off);
+    expect(again.effects.fieldBackground, isFalse);
+    expect(Settings.fromJson({'effects': {'explosion': 'unified'}}).effects.fieldBackground, isTrue);
+    expect(Settings.fromJson({'effects': {'explosion': 'invalid'}}).effects.explosion, ExplosionStyle.varied);
+  });
+
   test('music preferences persist and invalid values use safe defaults', () {
     final settings = Settings.defaults().copyWith(
       audio: const AudioOptions(music: false, musicVolume: 0.35),

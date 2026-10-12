@@ -12,7 +12,7 @@ import { getPlatformStorage } from '../platform/storageBackend';
 
 /** How the explosion of a match looks: one animation for everything, or one
  * per kind of match. */
-export type ExplosionStyle = 'unified' | 'varied';
+export type ExplosionStyle = 'unified' | 'varied' | 'off';
 
 export interface HudOptions {
   /** The reminder of which key does what. */
@@ -41,6 +41,8 @@ export interface Palettes {
 
 export interface Effects {
   explosion: ExplosionStyle;
+  /** Decorative animation behind the glasses and the game screen. */
+  fieldBackground: boolean;
   screenShake: boolean;
   /** Milliseconds the cross takes to turn a quarter; 0 turns it at once. */
   turnMs: number;
@@ -85,7 +87,7 @@ export const defaultSettings = (): Settings => ({
   bindings: cloneBindings(defaultBindings),
   handling: { ...defaultHandling },
   palettes: { active: 'classic', sets: BUILTIN_PALETTES.map((set) => ({ ...set, colours: [...set.colours] })) },
-  effects: { explosion: 'varied', screenShake: true, turnMs: 260 },
+  effects: { explosion: 'varied', fieldBackground: true, screenShake: true, turnMs: 260 },
   hud: { keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
   padPositions: structuredClone(DEFAULT_POSITIONS),
@@ -152,7 +154,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     },
     palettes: sanitizePalettes(stored.palettes),
     effects: {
-      explosion: effects.explosion === 'unified' ? 'unified' : 'varied',
+      explosion: effects.explosion === 'off' ? 'off' : effects.explosion === 'unified' ? 'unified' : 'varied',
+      fieldBackground: effects.fieldBackground !== false,
       screenShake: effects.screenShake !== false,
       turnMs: Math.round(numberIn(effects.turnMs, 0, 800, base.effects.turnMs)),
     },

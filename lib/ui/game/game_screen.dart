@@ -29,6 +29,7 @@ import '../input/pad_controller.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import 'hud.dart';
+import 'campaign_progress.dart';
 import 'level_banner.dart';
 import 'tutorial.dart';
 
@@ -232,6 +233,7 @@ class GameScreenState extends State<GameScreen>
   @override
   void didUpdateWidget(GameScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings.effects != widget.settings.effects) _still = 0;
     if (!oldWidget.blocked && widget.blocked) {
       _pads.releaseAll();
       _checkpoint();
@@ -259,7 +261,13 @@ class GameScreenState extends State<GameScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appActive = state == AppLifecycleState.resumed;
-    if (_appActive) return;
+    if (_appActive) {
+      _last = Duration.zero;
+      _still = 0;
+      if (!_ticker.isActive) _ticker.start();
+      return;
+    }
+    _ticker.stop();
     _pads.releaseAll();
     if (!widget.tutorial && _status == _Status.playing) {
       _setStatus(_Status.paused);
@@ -649,6 +657,7 @@ class GameScreenState extends State<GameScreen>
     // Glass navigation follows the explicit game setting on every platform.
     _fx.turnSeconds = settings.effects.turnMs / 1000;
     _fx.explosion = settings.effects.explosion;
+    _fx.fieldBackground = settings.effects.fieldBackground;
 
     if (_status == _Status.playing && !holding) {
       _pads.update(seconds);
@@ -804,6 +813,18 @@ class GameScreenState extends State<GameScreen>
                         },
                       ),
                     ),
+                    if (_isCampaign && !widget.tutorial)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                        child: ValueListenableBuilder<HudState>(
+                          valueListenable: _hud,
+                          builder: (context, hud, _) => CampaignProgress(
+                            level: hud.level, into: hud.into, target: hud.target,
+                            animated: _status == _Status.playing && !widget.blocked && _appActive &&
+                                !_reduceMotion && settings.effects.fieldBackground,
+                          ),
+                        ),
+                      ),
                     if (widget.tutorial)
                       ConstrainedBox(
                         constraints: BoxConstraints(maxHeight: math.min(constraints.maxHeight * 0.3, 190)),

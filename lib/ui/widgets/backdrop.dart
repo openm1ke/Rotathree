@@ -8,8 +8,8 @@ import '../style.dart';
 
 /// Soft glows over a faint grid, with the web menu's drifting squares.
 class Backdrop extends StatefulWidget {
-  const Backdrop({super.key, this.menu = false, this.paused = false});
-  final bool menu, paused;
+  const Backdrop({super.key, this.menu = false, this.paused = false, this.animated = true});
+  final bool menu, paused, animated;
 
   @override
   State<Backdrop> createState() => _BackdropState();
@@ -38,7 +38,7 @@ class _BackdropState extends State<Backdrop> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(Backdrop oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.menu != oldWidget.menu || widget.paused != oldWidget.paused) {
+    if (widget.menu != oldWidget.menu || widget.paused != oldWidget.paused || widget.animated != oldWidget.animated) {
       _syncAnimation();
     }
   }
@@ -51,7 +51,7 @@ class _BackdropState extends State<Backdrop> with WidgetsBindingObserver {
 
   void _syncAnimation() {
     _timer?.cancel();
-    if (_reduceMotion || !_visible || !_active || widget.paused) {
+    if (!widget.animated || _reduceMotion || !_visible || !_active || widget.paused) {
       _clock.stop();
       return;
     }

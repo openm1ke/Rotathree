@@ -206,7 +206,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('custom', _store!.saveCustom(next));
   }
 
+  bool _gamePaused = false;
+
   void _setMusicPaused(bool paused) {
+    if (_gamePaused != paused) setState(() => _gamePaused = paused);
     unawaited(_music.setPaused(paused));
     if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
       unawaited(_music.stop());
@@ -366,7 +369,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         child: Stack(
           children: [
             Positioned.fill(
-              child: Backdrop(menu: _screen != _Screen.play, paused: _settingsOpen),
+              child: Backdrop(
+                menu: _screen != _Screen.play,
+                paused: _settingsOpen || _gamePaused,
+                animated: _screen != _Screen.play || _settings.effects.fieldBackground,
+              ),
             ),
             Positioned.fill(
               child: Column(

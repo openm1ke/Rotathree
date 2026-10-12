@@ -7,6 +7,7 @@ import 'package:rotathree/game/state/game_state.dart';
 import 'package:rotathree/ui/data/progress.dart';
 import 'package:rotathree/ui/data/settings.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
+import 'package:rotathree/ui/game/campaign_progress.dart';
 import 'package:rotathree/ui/input/dpad.dart';
 import 'package:rotathree/ui/data/run_save.dart';
 import 'package:rotathree/ui/data/stats.dart';
@@ -72,6 +73,37 @@ Future<void> pumpFrames(WidgetTester tester, int frames) async {
 }
 
 void main() {
+  testWidgets('campaign goal uses level points and fits below the field on a small phone', (tester) async {
+    final state = await pumpGame(tester, session: const CampaignSession(0), size: const Size(320, 568),
+      settings: Settings.defaults().copyWith(hud: const HudOptions(score: false, stats: false)));
+    state.engine.state.score = 600;
+    await pumpFrames(tester, 2);
+    final progress = tester.widget<CampaignProgress>(find.byType(CampaignProgress));
+    expect(progress.into, 600);
+    expect(progress.target, campaignLevels.first.target);
+    expect(find.text('600 / 1 200'), findsOneWidget);
+    expect(find.text('Ещё 600'), findsOneWidget);
+    final bar = tester.getRect(find.byType(CampaignProgress));
+    final field = tester.getRect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is FieldPainter));
+    expect(bar.top, greaterThanOrEqualTo(field.bottom));
+    expect(bar.left, greaterThanOrEqualTo(0));
+    expect(bar.right, lessThanOrEqualTo(320));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Пауза'));
+    await tester.pump();
+    expect(tester.widget<CampaignProgress>(find.byType(CampaignProgress)).animated, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('custom games and training have no campaign goal', (tester) async {
+    await pumpGame(tester);
+    expect(find.byType(CampaignProgress), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpGame(tester, tutorial: true, session: const CampaignSession(0));
+    expect(find.byType(CampaignProgress), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('training leaves through Back without completing the tutorial or showing a pause', (tester) async {
     var exits = 0, completions = 0;
     final state = await pumpGame(

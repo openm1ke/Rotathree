@@ -120,6 +120,7 @@ export class GameRenderer {
   private grow = 1;
   private ambientTime = 0;
   private reduceMotion = false;
+  private fieldBackground = true;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -167,6 +168,7 @@ export class GameRenderer {
     this.grow = viewport.grow;
     this.ambientTime = fx.clock;
     this.reduceMotion = reduceMotion;
+    this.fieldBackground = fx.fieldBackground;
     this.visible = engine.sides;
     this.viewAngle = fx.viewAngle;
     const scale = pixels / this.cssSize;
@@ -538,7 +540,7 @@ export class GameRenderer {
 
   /** World-side motifs stay with their glass and share the paused effects clock. */
   private drawAmbient(side: Side, far: number): void {
-    if (this.reduceMotion) return;
+    if (this.reduceMotion || !this.fieldBackground) return;
     const { ctx, half, n, arm, reach, ambientTime: t } = this;
     const colours = ['#36a9ff', '#8f5bff', '#2ee6f0', '#ff9a2e'];
     ctx.save();
@@ -808,18 +810,18 @@ export class GameRenderer {
             frame,
             scaleX,
             scaleY,
-            0.85 * (1 - u) * (1 - u),
+            fx.explosion === 'off' ? 0 : 0.85 * (1 - u) * (1 - u),
           );
         }
       }
     }
 
     // Match: flash to white and swell, then collapse while shards fly off.
-    if (matched !== undefined && matched.size > 0) {
+    if (matched !== undefined && matched.size > 0 && (fx.explosion !== 'off' || state.phase !== 'clearing')) {
       const t = state.phaseDuration > 0 ? Math.min(1, state.phaseElapsed / state.phaseDuration) : 1;
       const popping = state.phase === 'clearing';
-      const scale = popping ? 1.22 * Math.max(0, 1 - t * 1.7) : 1 + 0.22 * (1 - (1 - t) * (1 - t));
-      const flash = popping ? 1 : 0.3 + 0.7 * t;
+      const scale = fx.explosion === 'off' ? 1 : popping ? 1.22 * Math.max(0, 1 - t * 1.7) : 1 + 0.22 * (1 - (1 - t) * (1 - t));
+      const flash = fx.explosion === 'off' ? 0 : popping ? 1 : 0.3 + 0.7 * t;
       if (scale > 0.01) {
         for (const index of matched) {
           const color = board.atIndex(index);

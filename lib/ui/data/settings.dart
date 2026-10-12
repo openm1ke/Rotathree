@@ -8,16 +8,20 @@ import 'bindings.dart';
 
 /// How the lines of a match explode: one animation for everything, or one per
 /// kind of match.
-enum ExplosionStyle { unified, varied }
+enum ExplosionStyle { unified, varied, off }
 
 class EffectOptions {
   const EffectOptions({
     this.explosion = ExplosionStyle.varied,
     this.screenShake = true,
+    this.fieldBackground = true,
     this.turnMs = 260,
   });
 
   final ExplosionStyle explosion;
+
+  /// Decorative animation behind the glasses and the game screen.
+  final bool fieldBackground;
 
   /// Kicks and shakes of the field.
   final bool screenShake;
@@ -25,10 +29,11 @@ class EffectOptions {
   /// Milliseconds the cross takes to turn a quarter; 0 turns it at once.
   final int turnMs;
 
-  EffectOptions copyWith({ExplosionStyle? explosion, bool? screenShake, int? turnMs}) =>
+  EffectOptions copyWith({ExplosionStyle? explosion, bool? screenShake, bool? fieldBackground, int? turnMs}) =>
       EffectOptions(
         explosion: explosion ?? this.explosion,
         screenShake: screenShake ?? this.screenShake,
+        fieldBackground: fieldBackground ?? this.fieldBackground,
         turnMs: turnMs ?? this.turnMs,
       );
 }
@@ -279,7 +284,8 @@ class Settings {
       ),
       palettes: Palettes.fromJson(map['palettes']),
       effects: EffectOptions(
-        explosion: effects['explosion'] == 'unified' ? ExplosionStyle.unified : ExplosionStyle.varied,
+        explosion: ExplosionStyle.values.firstWhere((style) => style.name == effects['explosion'], orElse: () => ExplosionStyle.varied),
+        fieldBackground: effects['fieldBackground'] != false,
         screenShake: effects['screenShake'] != false,
         turnMs: _intIn(effects['turnMs'], 0, 800, base.effects.turnMs),
       ),
@@ -344,6 +350,7 @@ class Settings {
         'palettes': palettes.toJson(),
         'effects': {
           'explosion': effects.explosion.name,
+          'fieldBackground': effects.fieldBackground,
           'screenShake': effects.screenShake,
           'turnMs': effects.turnMs,
         },
