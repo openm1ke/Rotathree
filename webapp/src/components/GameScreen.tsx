@@ -574,6 +574,8 @@ export function GameScreen(props: Props) {
     let still = 0;
     let drawnPalette = -1;
     let drawnEffects = live.current.settings.effects;
+    let drawnNextPiece = live.current.settings.hud.nextPiece;
+    let drawnNextPieceOpacity = live.current.settings.hud.nextPieceOpacity;
     const tick = (now: number) => {
       const frameMs = now - last;
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
@@ -595,6 +597,10 @@ export function GameScreen(props: Props) {
       fx.fieldBackground = s.effects.fieldBackground;
       dirty ||= drawnEffects !== s.effects;
       drawnEffects = s.effects;
+      dirty ||= drawnNextPiece !== s.hud.nextPiece;
+      drawnNextPiece = s.hud.nextPiece;
+      dirty ||= drawnNextPieceOpacity !== s.hud.nextPieceOpacity;
+      drawnNextPieceOpacity = s.hud.nextPieceOpacity;
 
       if (current === 'playing' && !holding) {
         keyboard.update(seconds);
@@ -648,7 +654,7 @@ export function GameScreen(props: Props) {
       const effectsRunning = current !== 'paused' && !frozen;
       still = !engineRunning && (!effectsRunning || fx.settled) ? still + 1 : 0;
       if (still <= 2 || dirty || drawnPalette !== paletteRevision()) {
-        renderer.draw(engine, fx, reduceMotion.matches, tutorial);
+        renderer.draw(engine, fx, reduceMotion.matches, tutorial, s.hud.nextPiece && !tutorial, s.hud.nextPieceOpacity);
         dirty = false;
         drawnPalette = paletteRevision();
       }
@@ -757,32 +763,19 @@ export function GameScreen(props: Props) {
   return (
     <main
       className={`game ${touch ? 'game--touch' : ''} ${tutorial ? 'game--tutorial' : ''}`}
+      style={{ ['--field-size' as string]: size > 0 ? `${size}px` : '100%' }}
       data-frozen={status === 'paused' || blocked}
     >
-      {(touch || tutorial) && (
-        <header className={`touch-hud ${tutorial ? 'tutorial-hud' : ''}`}>
-          {tutorial ? (
-            <button type="button" className="chip" onClick={props.onExit}><T>← Назад</T></button>
-          ) : (
-            <>
-              <div>
-                <strong><T>{formatPoints(hud.score)}</T></strong>
-                <small><T>
-                  {campaign
-                    ? `Уровень ${level + 1}`
-                    : `${hud.pieces} фиг. · ${formatDuration(hud.seconds)}`}
-                </T></small>
-              </div>
-              <GameIconButton icon="pause" label="Пауза" onClick={() => actions.current.togglePause()} />
-            </>
-          )}
+      {tutorial && (
+        <header className="touch-hud tutorial-hud">
+          <button type="button" className="chip" onClick={props.onExit}><T>← Назад</T></button>
           <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
         </header>
       )}
-      {!touch && !tutorial && <div className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
-        <Hud hud={hud} callout={callout} bindings={settings.bindings} options={settings.hud}
+      {!tutorial && <header className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
+        <Hud hud={hud} callout={callout} options={settings.hud}
           onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
-      </div>}
+      </header>}
       {campaign && !tutorial && !touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
       <div className="game__frame" ref={frameRef}>

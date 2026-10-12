@@ -47,7 +47,7 @@ interface Props {
   onPlayCampaign: () => void;
 }
 
-/** The first screen: a column of large entries, the progress on the side. */
+/** A centered menu with an optional campaign shortcut on phones. */
 export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, onResume, onTutorial, onPlayCampaign }: Props) {
   const { t } = useI18n();
   const touch = useTouchControls();
@@ -55,9 +55,8 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
   useScreenKeys(rootRef, active, () => {});
   const savedSession = savedRuns?.campaign?.session;
   const campaignLevel = savedSession?.mode === 'campaign' ? savedSession.level : progress.unlocked;
-  const opened = touch ? campaignLevel : progress.unlocked;
   return (
-    <main className={`home ${touch ? 'home--touch' : ''} ${progress.completed ? 'home--completed' : ''}`} ref={rootRef}>
+    <main className={`home ${touch ? 'home--touch' : ''}`} ref={rootRef}>
       <div className="home__drift" aria-hidden="true">
         {DRIFT.map(([x, size, delay, colour], i) => (
           <i
@@ -125,23 +124,13 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
           ))}
         </nav>
 
-        {!progress.completed && <aside className="home__side">
-          {touch ? <button type="button" data-nav className="card card--campaign-shortcut"
+        {touch && !progress.completed && <aside className="home__side">
+          <button type="button" data-nav className="card card--campaign-shortcut"
             onClick={onPlayCampaign} aria-label={t('Продолжить кампанию')}>
             <span className="kicker"><T>Кампания</T></span>
             <strong><T>уровень {campaignLevel + 1} из {CAMPAIGN_LAST + 1}</T><span aria-hidden="true">›</span></strong>
-            <div className="progressbar"><i style={{ width: `${100 * opened / (CAMPAIGN_LAST + 1)}%` }} /></div>
-          </button> : <>
-            <div className="card">
-              <span className="kicker"><T>Кампания</T></span>
-              <strong><T>уровень {progress.unlocked + 1} из {CAMPAIGN_LAST + 1}</T></strong>
-              <div className="progressbar"><i style={{ width: `${100 * opened / (CAMPAIGN_LAST + 1)}%` }} /></div>
-            </div>
-            <div className="card is-locked">
-              <span className="kicker"><T>Кошмар</T></span>
-              <strong><T>откроется после кампании</T></strong>
-            </div>
-          </>}
+            <div className="progressbar"><i style={{ width: `${100 * campaignLevel / (CAMPAIGN_LAST + 1)}%` }} /></div>
+          </button>
         </aside>}
 
         {!touch && (

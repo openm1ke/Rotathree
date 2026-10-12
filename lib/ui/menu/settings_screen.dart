@@ -449,8 +449,25 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ],
       ),
       Section(
-        title: 'Надписи на поле',
+        title: 'Игровое поле',
         children: [
+          SwitchRow(
+            label: 'Следующая фигура',
+            value: h.nextPiece,
+            on: 'показывать',
+            off: 'скрыть',
+            onChanged: (nextPiece) => _setHud(h.copyWith(nextPiece: nextPiece)),
+          ),
+          if (h.nextPiece)
+            SliderRow(
+              label: 'Непрозрачность подсказки',
+              value: (h.nextPieceOpacity * 100).round(),
+              min: 10,
+              max: 100,
+              step: 5,
+              unit: '%',
+              onChanged: (percent) => _setHud(h.copyWith(nextPieceOpacity: percent / 100)),
+            ),
           SwitchRow(
             label: 'Подписи экранных кнопок',
             value: h.keyHints,
@@ -459,14 +476,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             onChanged: (keyHints) => _setHud(h.copyWith(keyHints: keyHints)),
           ),
           SwitchRow(
-            label: 'Очки, уровень и комбо',
+            label: 'Очки и уровень',
             value: h.score,
             on: 'показывать',
             off: 'скрыть',
             onChanged: (score) => _setHud(h.copyWith(score: score)),
           ),
           SwitchRow(
-            label: 'Время, фигуры, матчи',
+            label: 'Время и фигуры',
             value: h.stats,
             on: 'показывать',
             off: 'скрыть',

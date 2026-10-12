@@ -6,6 +6,33 @@ import 'package:rotathree/ui/field/field_painter.dart';
 import 'package:rotathree/ui/field/field_viewport.dart';
 
 void main() {
+  test('next-piece cards stay outside the glass and inside the camera through turns', () {
+    for (final arm in [4, 9, 12]) {
+      final preview = nextPiecePreviewRect(10, arm);
+      expect(preview.center.dx, 0);
+      expect(preview.bottom, closeTo(-5 - arm - 0.6, 1e-8));
+      for (var count = 1; count <= 4; count++) {
+        final sides = glassOrder.take(count).toList();
+        for (var step = 0; step <= 32; step++) {
+          final angle = step * math.pi / 16;
+          final view = FieldViewport.fit(boardSize: 10, armLength: arm, sides: sides,
+              angle: angle, showNextPiece: true);
+          expect(view.center, Offset.zero);
+          for (final side in sides) {
+            final turn = angle + side.index * math.pi / 2;
+            for (final x in [preview.left, preview.right]) {
+              for (final y in [preview.top, preview.bottom]) {
+                final px = math.cos(turn) * x - math.sin(turn) * y;
+                final py = math.sin(turn) * x + math.cos(turn) * y;
+                expect(px, inInclusiveRange(view.bounds.left - 1e-8, view.bounds.right + 1e-8));
+                expect(py, inInclusiveRange(view.bounds.top - 1e-8, view.bounds.bottom + 1e-8));
+              }
+            }
+          }
+        }
+      }
+    }
+  });
   FieldViewport view(
     List<Side> sides, {
     Side? building,

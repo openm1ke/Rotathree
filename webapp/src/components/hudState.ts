@@ -1,4 +1,4 @@
-/** The numbers shown in the corners of the field. */
+/** The numbers used by the game readout and campaign progress. */
 export interface HudState {
   /** Points of the whole game so far. */
   score: number;

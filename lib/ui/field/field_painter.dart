@@ -50,6 +50,7 @@ class FieldGeometry {
     double progress = 1,
     bool reduceMotion = false,
     bool focusSingleGlass = false,
+    bool showNextPiece = false,
   }) : n = config.boardSize,
        arm = config.armLength,
        grid = config.gridSize,
@@ -63,6 +64,7 @@ class FieldGeometry {
          progress: progress,
          reduceMotion: reduceMotion,
          focusSingleGlass: focusSingleGlass,
+         showNextPiece: showNextPiece,
        );
 
   /// The cross is drawn a touch smaller than its canvas so that glows and
@@ -246,6 +248,10 @@ class FieldAssets {
   final Paint _imagePaint = Paint()..filterQuality = FilterQuality.low;
   final Paint _glowPaint = Paint()..filterQuality = FilterQuality.low;
   final Paint _flashPaint = Paint();
+  final Paint _previewPaint = Paint();
+  final Paint _previewImagePaint = Paint()..filterQuality = FilterQuality.low;
+  Path _previewOutline = Path();
+  Path _previewGrid = Path();
   final Float64List _matrix = Float64List(16)
     ..[10] = 1
     ..[15] = 1;
@@ -455,6 +461,20 @@ class FieldAssets {
   void _makePaths(FieldGeometry g) {
     final half = g.half;
     final reach = g.reach;
+    final p = nextPiecePreviewRect(g.n, g.arm);
+    const cut = 0.18;
+    _previewOutline = Path()
+      ..moveTo(p.left + cut, p.top)..lineTo(p.right - cut, p.top)
+      ..lineTo(p.right, p.top + cut)..lineTo(p.right, p.bottom - cut)
+      ..lineTo(p.right - cut, p.bottom)..lineTo(p.left + cut, p.bottom)
+      ..lineTo(p.left, p.bottom - cut)..lineTo(p.left, p.top + cut)..close();
+    _previewGrid = Path();
+    for (var x = p.left.ceilToDouble(); x < p.right; x++) {
+      _previewGrid..moveTo(x, p.top + 0.05)..lineTo(x, p.bottom - 0.05);
+    }
+    for (var y = p.top.ceilToDouble(); y < p.bottom; y++) {
+      _previewGrid..moveTo(p.left + 0.05, y)..lineTo(p.right - 0.05, y);
+    }
     _armGrid = Path();
     for (var i = 1; i < g.n; i++) {
       _armGrid
@@ -528,6 +548,8 @@ class FieldPainter extends CustomPainter {
     required this.devicePixelRatio,
     this.reduceMotion = false,
     this.focusSingleGlass = false,
+    this.showNextPiece = false,
+    this.nextPieceOpacity = 1,
     required Listenable repaint,
   }) : super(repaint: repaint);
 
@@ -537,6 +559,8 @@ class FieldPainter extends CustomPainter {
   final double devicePixelRatio;
   final bool reduceMotion;
   final bool focusSingleGlass;
+  final bool showNextPiece;
+  final double nextPieceOpacity;
 
   // ------------------------------------------------ the frame being drawn
   /// One logical pixel, in cells.
@@ -563,7 +587,9 @@ class FieldPainter extends CustomPainter {
       oldDelegate.fx != fx ||
       oldDelegate.devicePixelRatio != devicePixelRatio ||
       oldDelegate.reduceMotion != reduceMotion ||
-      oldDelegate.focusSingleGlass != focusSingleGlass;
+      oldDelegate.focusSingleGlass != focusSingleGlass ||
+      oldDelegate.showNextPiece != showNextPiece ||
+      oldDelegate.nextPieceOpacity != nextPieceOpacity;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -579,6 +605,7 @@ class FieldPainter extends CustomPainter {
       progress: state.phaseProgress,
       reduceMotion: reduceMotion,
       focusSingleGlass: focusSingleGlass,
+      showNextPiece: showNextPiece,
     );
     if (g.cell <= 0) return;
     assets._prepare(g);
@@ -634,6 +661,7 @@ class FieldPainter extends CustomPainter {
       _drawIncoming(canvas, g, piece);
     }
     _drawDrop(canvas, g, state);
+    if (showNextPiece) _drawNextPieces(canvas, g);
     canvas.restore();
 
     for (final piece in state.incoming.values) {
@@ -642,6 +670,34 @@ class FieldPainter extends CustomPainter {
   }
 
   // ----------------------------------------------------------- transforms
+
+  void _drawNextPieces(Canvas canvas, FieldGeometry g) {
+    final rect = nextPiecePreviewRect(g.n, g.arm);
+    final paint = assets._previewPaint;
+    final opacity = nextPieceOpacity.clamp(0.1, 1.0);
+    final imagePaint = assets._previewImagePaint..color = _white.withValues(alpha: opacity);
+    for (final side in engine.sides) {
+      final piece = engine.incoming.nextPieceAt(side);
+      if (piece == null) continue;
+      final active = side == engine.activeSide;
+      _enter(canvas, side.index);
+      canvas.drawPath(assets._previewOutline, paint
+        ..style = PaintingStyle.fill..color = const Color(0xFF4A718A).withValues(alpha: 0.16 * opacity));
+      canvas.drawPath(assets._previewGrid, paint
+        ..shader = null..style = PaintingStyle.stroke..strokeWidth = _px * 0.6
+        ..color = _accent.withValues(alpha: 0.12 * opacity));
+      canvas.drawPath(assets._previewOutline, paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _px
+        ..color = _ice.withValues(alpha: (active ? 0.55 : 0.28) * opacity));
+      canvas.restore();
+      final step = (rect.width - 0.6) / piece.length;
+      for (var i = 0; i < piece.length; i++) {
+        _stretched(canvas, piece.colors[i], rect.left + 0.3 + (i + 0.5) * step,
+            rect.center.dy, side.index, step * 0.88, step * 0.88, 0, imagePaint: imagePaint);
+      }
+    }
+  }
 
   /// Starts drawing in the frame of glass [frame]: its arm on top. Undone by
   /// `canvas.restore()`.
@@ -687,8 +743,9 @@ class FieldPainter extends CustomPainter {
     int frame,
     double scaleX,
     double scaleY,
-    double flash,
-  ) {
+    double flash, {
+    Paint? imagePaint,
+  }) {
     final c = _cos[frame];
     final s = _sin[frame];
     // On the screen the frame's axes are swapped when it ends up a quarter
@@ -698,7 +755,7 @@ class FieldPainter extends CustomPainter {
     canvas.translate(c * x - s * y, s * x + c * y);
     if (!_atRest) canvas.rotate(_left);
     canvas.scale(swapped ? scaleY : scaleX, swapped ? scaleX : scaleY);
-    canvas.drawImageRect(assets._atlas!, assets._blocks[color.index], FieldAssets._unitRect, assets._imagePaint);
+    canvas.drawImageRect(assets._atlas!, assets._blocks[color.index], FieldAssets._unitRect, imagePaint ?? assets._imagePaint);
     if (flash > 0) {
       canvas.drawRRect(
         FieldAssets._flashShape,

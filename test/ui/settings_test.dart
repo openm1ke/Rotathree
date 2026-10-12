@@ -16,6 +16,25 @@ import 'package:rotathree/ui/input/game_action.dart';
 import 'package:rotathree/ui/input/pad_placement.dart';
 
 void main() {
+  test('next preview defaults on for old preferences and persists when disabled', () {
+    expect(Settings.fromJson({'hud': {}}).hud.nextPiece, isTrue);
+    final settings = Settings.defaults().copyWith(hud: const HudOptions(nextPiece: false));
+    expect(Settings.fromJson(jsonDecode(jsonEncode(settings.toJson()))).hud.nextPiece, isFalse);
+    expect(settings.hud.copyWith(opacity: 0.5).nextPiece, isFalse);
+  });
+  test('next preview opacity persists independently and older preferences use full opacity', () {
+    final settings = Settings.defaults().copyWith(hud: const HudOptions(nextPieceOpacity: 0.45, opacity: 0.8));
+    final again = Settings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
+    expect(again.hud.nextPieceOpacity, 0.45);
+    expect(again.hud.opacity, 0.8);
+    expect(again.hud.copyWith(nextPiece: false).nextPieceOpacity, 0.45);
+    expect(Settings.fromJson({'hud': {}}).hud.nextPieceOpacity, 1);
+    for (final value in [null, 'bad', double.nan]) {
+      expect(Settings.fromJson({'hud': {'nextPieceOpacity': value}}).hud.nextPieceOpacity, 1);
+    }
+    expect(Settings.fromJson({'hud': {'nextPieceOpacity': 0}}).hud.nextPieceOpacity, 0.1);
+    expect(Settings.fromJson({'hud': {'nextPieceOpacity': 2}}).hud.nextPieceOpacity, 1);
+  });
   test('the defaults survive a round trip through JSON', () {
     final stored = jsonDecode(jsonEncode(Settings.defaults().toJson()));
     final again = Settings.fromJson(stored);

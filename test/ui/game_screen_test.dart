@@ -82,7 +82,8 @@ void main() {
     expect(progress.into, 600);
     expect(progress.target, campaignLevels.first.target);
     expect(find.text('600 / 1 200'), findsOneWidget);
-    expect(find.text('Ещё 600'), findsOneWidget);
+    expect(find.text('Ещё 600'), findsNothing);
+    expect(find.text('Цель'), findsNothing);
     final bar = tester.getRect(find.byType(CampaignProgress));
     final field = tester.getRect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is FieldPainter));
     expect(bar.top, greaterThanOrEqualTo(field.bottom));

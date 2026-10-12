@@ -23,6 +23,7 @@ class IncomingController {
   final PieceGenerator generator;
   final PlacementEngine _placement = const PlacementEngine();
   final Map<Side, IncomingPiece> _pieces = {};
+  final Map<Side, Piece> _next = {};
 
   /// The last landing row worked out for each glass, and what it was worked
   /// out from. It is asked for several times a frame and changes once a step.
@@ -38,6 +39,13 @@ class IncomingController {
   void setConfig(GameConfig value) => config = value;
 
   IncomingPiece? pieceAt(Side side) => _pieces[side];
+
+  /// Reserved for this glass, independent of when the other glasses lock.
+  Piece? nextPieceAt(Side side) => _next[side];
+
+  void restoreNext(Map<Side, Piece> pieces) => _next
+    ..clear()
+    ..addAll(pieces);
 
   int get spawnColumn => config.spawnColumn ?? config.defaultSpawnColumn;
 
@@ -61,18 +69,24 @@ class IncomingController {
   /// the first glass is the furthest along.
   void reset(List<Side> sides) {
     _pieces.clear();
+    _next.clear();
+    _rest.clear();
     softDrop = false;
     for (var i = 0; i < sides.length; i++) {
       final headStart = (sides.length - 1 - i) * config.initialProgressStagger;
       put(sides[i], generator.next(), row: (headStart * config.armLength).round());
+    }
+    for (final side in sides) {
+      _next[side] = generator.next();
     }
   }
 
   /// Puts a new piece at the far end of [side]'s glass. Returns null when the
   /// glass is full up to there — the game is over.
   IncomingPiece? spawn(Side side, Board board) {
-    final piece = generator.next();
+    final piece = _next[side] ?? generator.next();
     if (!_placement.fits(board, side, piece, 0, spawnColumn)) return null;
+    _next[side] = generator.next();
     return put(side, piece);
   }
 

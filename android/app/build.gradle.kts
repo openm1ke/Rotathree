@@ -91,3 +91,12 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Flutter writes AOT libraries during its compile task. AGP's cached JNI
+// merges can retain an older libapp.so even after that file has changed.
+tasks.configureEach {
+    if (name.startsWith("merge") &&
+        (name.endsWith("JniLibFolders") || name.endsWith("NativeLibs"))) {
+        outputs.upToDateWhen { false }
+    }
+}

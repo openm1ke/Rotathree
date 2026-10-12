@@ -41,6 +41,8 @@ class EffectOptions {
 class HudOptions {
   const HudOptions({
     this.keyHints = true,
+    this.nextPiece = true,
+    this.nextPieceOpacity = 1,
     this.score = true,
     this.stats = true,
     this.opacity = 1,
@@ -49,17 +51,25 @@ class HudOptions {
   /// The reminder of which key does what.
   final bool keyHints;
 
-  /// The score, the level and the combo callouts.
+  /// A preview of the next stick above each glass's entry.
+  final bool nextPiece;
+
+  /// Opacity of the entire next-piece card, 0.1 … 1.
+  final double nextPieceOpacity;
+
+  /// The score, level and score-gain callouts.
   final bool score;
 
-  /// Time, pieces, matches and the best combo.
+  /// Elapsed time and placed pieces.
   final bool stats;
 
   /// Opacity of the writing on the field, 0.1 … 1.
   final double opacity;
 
-  HudOptions copyWith({bool? keyHints, bool? score, bool? stats, double? opacity}) => HudOptions(
+  HudOptions copyWith({bool? keyHints, bool? nextPiece, double? nextPieceOpacity, bool? score, bool? stats, double? opacity}) => HudOptions(
         keyHints: keyHints ?? this.keyHints,
+        nextPiece: nextPiece ?? this.nextPiece,
+        nextPieceOpacity: nextPieceOpacity ?? this.nextPieceOpacity,
         score: score ?? this.score,
         stats: stats ?? this.stats,
         opacity: opacity ?? this.opacity,
@@ -291,6 +301,8 @@ class Settings {
       ),
       hud: HudOptions(
         keyHints: hud['keyHints'] != false,
+        nextPiece: hud['nextPiece'] != false,
+        nextPieceOpacity: _doubleIn(hud['nextPieceOpacity'], 0.1, 1, base.hud.nextPieceOpacity),
         score: hud['score'] != false,
         stats: hud['stats'] != false,
         opacity: _doubleIn(hud['opacity'], 0.1, 1, base.hud.opacity),
@@ -356,6 +368,8 @@ class Settings {
         },
         'hud': {
           'keyHints': hud.keyHints,
+          'nextPiece': hud.nextPiece,
+          'nextPieceOpacity': hud.nextPieceOpacity,
           'score': hud.score,
           'stats': hud.stats,
           'opacity': hud.opacity,
