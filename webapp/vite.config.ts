@@ -20,6 +20,8 @@ export default defineConfig(({ mode }) => ({
       for (const name of ['deep-focus.m4a', 'deep-focus-1.m4a']) rmSync(`${output}/music/${name}`, { force: true });
       if (mode !== 'vk') return;
       cpSync('vk-public', 'dist-vk', { recursive: true });
+      // The store privacy page is published with the web build only.
+      rmSync('dist-vk/privacy', { recursive: true, force: true });
       for (const [source, name] of [
         ['../assets/fonts/OFL.txt', 'Exo2-OFL.txt'],
         ['node_modules/@vkontakte/vk-bridge/LICENSE', 'VK-Bridge-MIT.txt'],
