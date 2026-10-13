@@ -17,7 +17,7 @@ void main() {
       ))));
       await tester.pump(const Duration(milliseconds: 220));
       final bonus = tester.getRect(find.text('+400'));
-      final level = tester.getRect(find.text('2/15'));
+      final level = tester.getRect(find.text('2/16'));
       expect(bonus.overlaps(level), isFalse);
       expect(find.text('1 500'), findsOneWidget);
       expect(find.textContaining('Матчи'), findsNothing);

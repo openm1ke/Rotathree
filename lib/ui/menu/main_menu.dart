@@ -79,7 +79,7 @@ class MainMenu extends StatelessWidget {
               caption: tutorialDone ? 'Повторить основы' : 'Правила на практике',
               onTap: onTutorial!,
             ),
-          _NavItem(title: 'Кампания', caption: '15 уровней', onTap: onCampaign, completed: progress.completed),
+          _NavItem(title: 'Кампания', caption: '16 уровней', onTap: onCampaign, completed: progress.completed),
           _NavItem(title: 'Кастом', caption: 'Ваши правила', onTap: onCustom),
           _NavItem(title: 'Статистика', caption: 'Результаты и рекорды', onTap: onStatistics),
           _NavItem(title: 'Настройки', caption: 'Управление и оформление', onTap: onSettings),

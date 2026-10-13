@@ -26,7 +26,7 @@ historical prototype audit, with its original test and playtest results.
 flutter run
 ```
 
-The app opens on a menu: **Кампания** (fifteen levels, each a score target with
+The app opens on a menu: **Кампания** (sixteen levels, each a score target with
 more glasses and colours), **Кастом** (your own game, set up before it starts),
 **Статистика** (per mode: points, pieces, matches, the best combo, and the last
 runs) and **Настройки**. **Кошмар** opens once the campaign is finished.

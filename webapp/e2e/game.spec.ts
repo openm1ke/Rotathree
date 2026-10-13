@@ -174,7 +174,7 @@ test('tutorial can be completed using only the keyboard with gated, repeat-safe 
   await expect(page.locator('.tutorial__next')).toBeEnabled();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
-  await expect(page.getByText('Уровень 1 / 15', { exact: true })).toBeVisible();
+  await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
 });
 
@@ -228,7 +228,7 @@ test('tutorial shortcuts respect settings and custom Enter bindings, Backspace s
   await expect(page.getByRole('heading', { name: 'Поверните фигуру' })).toBeVisible();
   await page.keyboard.press('Backspace');
   await expect(page.locator('.tutorial')).toHaveCount(0);
-  await expect(page.getByText('Уровень 1 / 15', { exact: true })).toBeVisible();
+  await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
 });
 

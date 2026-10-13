@@ -17,7 +17,7 @@ interface Props {
 const MODES: ModeId[] = ['campaign', 'insane', 'custom'];
 
 const DESCRIPTIONS: Record<ModeId, string> = {
-  campaign: 'Пятнадцать уровней, каждый со своей целью очков',
+  campaign: 'Шестнадцать уровней, каждый со своей целью очков',
   insane: 'Шесть цветов, четыре стакана, скорость растёт',
   custom: 'Своя настройка, скорость — по желанию',
 };

@@ -95,7 +95,7 @@ void main() {
     await settle(tester);
     final shortcut = find.byKey(const ValueKey('campaign-shortcut'));
     await tester.scrollUntilVisible(shortcut, 180, scrollable: find.byType(Scrollable).first);
-    expect(find.text('уровень 5 из 15'), findsOneWidget);
+    expect(find.text('уровень 5 из 16'), findsOneWidget);
     expect(find.text('Кошмар'), findsNothing);
     await tester.tap(shortcut);
     await settle(tester);
@@ -127,7 +127,7 @@ void main() {
     final saved = (await AppStore.open()).loadRuns()[ModeId.campaign]!;
     final shortcut = find.byKey(const ValueKey('campaign-shortcut'));
     await tester.scrollUntilVisible(shortcut, 180, scrollable: find.byType(Scrollable).first);
-    expect(find.text('уровень 1 из 15'), findsOneWidget);
+    expect(find.text('уровень 1 из 16'), findsOneWidget);
     await tester.tap(shortcut);
     await settle(tester);
     expect(tester.widget<GameScreen>(find.byType(GameScreen)).resumeImmediately, isTrue);

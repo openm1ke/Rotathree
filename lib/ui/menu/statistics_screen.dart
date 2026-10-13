@@ -9,7 +9,7 @@ import '../style.dart';
 import '../widgets/controls.dart';
 
 const _descriptions = {
-  ModeId.campaign: 'Пятнадцать уровней, каждый со своей целью очков',
+  ModeId.campaign: 'Шестнадцать уровней, каждый со своей целью очков',
   ModeId.insane: 'Шесть цветов, четыре стакана, скорость растёт',
   ModeId.custom: 'Своя настройка, скорость — по желанию',
 };
