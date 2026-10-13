@@ -5,6 +5,7 @@ import '../data/settings.dart';
 import '../i18n/language_picker.dart';
 import '../input/game_action.dart';
 import '../input/pad_placement.dart';
+import '../input/pad_shape.dart';
 import '../input/pad_surface.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
@@ -50,6 +51,10 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabs;
+
+  /// The button the controls tab is editing, shown outlined in the preview.
+  PadSide _editSide = PadSide.left;
+  PadSlot _editSlot = PadSlot.up;
 
   @override
   void initState() {
@@ -131,6 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   List<Widget> _controls() {
     final s = widget.settings;
+    final tweak = s.padButtons[_editSide]?[_editSlot] ?? const PadTweak();
     return [
       Section(
         title: 'Размер и положение',
@@ -148,6 +154,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             onDown: (_) {},
             onUp: (_) {},
             onEdit: (positions) => widget.onChange(s.copyWith(padPositions: positions)),
+            highlight: (_editSide, _editSlot),
           ),
           for (final side in PadSide.values)
             SliderRow(
@@ -163,6 +170,88 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 ),
               ),
             ),
+        ],
+      ),
+      Section(
+        title: 'Вид кнопок',
+        note:
+            'Форма и подписи одинаковы у обеих крестовин. Размер и сдвиг задаются для каждой кнопки отдельно: выбранная кнопка подсвечивается в поле.',
+        children: [
+          OptionGroup<PadShape>(
+            label: 'Форма',
+            value: s.padShape,
+            options: [for (final shape in PadShape.values) (value: shape, label: shape.label)],
+            onChanged: (shape) => widget.onChange(s.copyWith(padShape: shape)),
+          ),
+          SwitchRow(
+            label: 'Подписи кнопок',
+            value: s.hud.keyHints,
+            on: 'показывать',
+            off: 'скрыть',
+            onChanged: (keyHints) => widget.onChange(s.copyWith(hud: s.hud.copyWith(keyHints: keyHints))),
+          ),
+          OptionGroup<PadSide>(
+            label: 'Крестовина',
+            value: _editSide,
+            options: const [(value: PadSide.left, label: 'Левая'), (value: PadSide.right, label: 'Правая')],
+            onChanged: (side) => setState(() => _editSide = side),
+          ),
+          OptionGroup<PadSlot>(
+            label: 'Кнопка',
+            value: _editSlot,
+            options: [for (final slot in PadSlot.values) (value: slot, label: slot.label)],
+            onChanged: (slot) => setState(() => _editSlot = slot),
+          ),
+          SliderRow(
+            label: 'Размер кнопки',
+            value: (tweak.scale * 100).roundToDouble(),
+            min: 50,
+            max: 150,
+            step: 5,
+            unit: '%',
+            onChanged: (percent) => widget.onChange(s.withButton(_editSide, _editSlot, tweak.copyWith(scale: percent / 100))),
+          ),
+          SliderRow(
+            label: 'Сдвиг по горизонтали',
+            value: (tweak.dx * 100).roundToDouble(),
+            min: -25,
+            max: 25,
+            step: 1,
+            unit: '%',
+            onChanged: (percent) => widget.onChange(s.withButton(_editSide, _editSlot, tweak.copyWith(dx: percent / 100))),
+          ),
+          SliderRow(
+            label: 'Сдвиг по вертикали',
+            value: (tweak.dy * 100).roundToDouble(),
+            min: -25,
+            max: 25,
+            step: 1,
+            unit: '%',
+            onChanged: (percent) => widget.onChange(s.withButton(_editSide, _editSlot, tweak.copyWith(dy: percent / 100))),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlineButton(
+              label: 'Вернуть эту кнопку',
+              onPressed: () => widget.onChange(s.withButton(_editSide, _editSlot, const PadTweak())),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: OutlineButton(
+              label: 'Сбросить кнопки',
+              onPressed: () => widget.onChange(
+                s.copyWith(
+                  leftPad: defaultLeftPad,
+                  rightPad: defaultRightPad,
+                  padPositions: const PadPositions(),
+                  padShape: PadShape.square,
+                  padButtons: const {},
+                  hud: s.hud.copyWith(keyHints: true),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       Section(
@@ -218,6 +307,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               leftPad: defaultLeftPad,
               rightPad: defaultRightPad,
               padPositions: const PadPositions(),
+              padShape: PadShape.square,
+              padButtons: const {},
+              hud: s.hud.copyWith(keyHints: true),
             ),
           ),
         ),
@@ -238,6 +330,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               child: LText('$pad · ${slot.label}', maxLines: 1, softWrap: false, style: Type.body(13, weight: FontWeight.w700)),
             ),
           ),
+          const SizedBox(width: 10),
           DropdownButton<GameAction>(
             value: layout[slot]!,
             dropdownColor: Palette.panelStrong,
@@ -472,13 +565,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               unit: '%',
               onChanged: (percent) => _setHud(h.copyWith(nextPieceOpacity: percent / 100)),
             ),
-          SwitchRow(
-            label: 'Подписи экранных кнопок',
-            value: h.keyHints,
-            on: 'показывать',
-            off: 'скрыть',
-            onChanged: (keyHints) => _setHud(h.copyWith(keyHints: keyHints)),
-          ),
           SwitchRow(
             label: 'Очки и уровень',
             value: h.score,

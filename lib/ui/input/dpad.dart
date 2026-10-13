@@ -2,10 +2,12 @@ import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
 import 'game_action.dart';
+import 'pad_shape.dart';
 import '../style.dart';
 
 /// A cross of four buttons with a fifth in the middle. What each of them
-/// does is set by [layout].
+/// does is set by [layout]; how they look and where they sit is set by
+/// [shape] and [tweaks].
 ///
 /// Touches are tracked one finger at a time, so both pads and several
 /// buttons can be used at once. A finger that slides from one held action to
@@ -20,25 +22,22 @@ class DPad extends StatefulWidget {
     required this.onUp,
     this.showLabels = true,
     this.opacity = 1,
+    this.shape = PadShape.square,
+    this.tweaks = const {},
+    this.highlight,
   });
 
   final PadLayout layout;
   final double size;
   final bool showLabels;
   final double opacity;
+  final PadShape shape;
+  final PadTweaks tweaks;
+
+  /// The button to outline while the layout is being edited.
+  final PadSlot? highlight;
   final ValueChanged<GameAction> onDown;
   final ValueChanged<GameAction> onUp;
-
-  /// The button under a point of a pad [size] wide.
-  static PadSlot slotAt(Offset point, double size) {
-    final dx = point.dx - size / 2;
-    final dy = point.dy - size / 2;
-    if (dx * dx + dy * dy < size * size * 0.028) {
-      return PadSlot.center;
-    }
-    if (dx.abs() > dy.abs()) return dx > 0 ? PadSlot.right : PadSlot.left;
-    return dy > 0 ? PadSlot.down : PadSlot.up;
-  }
 
   @override
   State<DPad> createState() => _DPadState();
@@ -52,7 +51,10 @@ class _DPadState extends State<DPad> {
 
   bool _isPressed(PadSlot slot) => _fingers.containsValue(slot);
 
-  PadSlot _slotAt(Offset point) => DPad.slotAt(point, widget.size);
+  Map<PadSlot, Rect> get _rects => padButtonRects(widget.size, widget.tweaks);
+
+  PadSlot _slotAt(Offset point) =>
+      padSlotAt(point, _rects, widget.shape, slop: padTouchSlop(widget.size));
 
   void _down(PointerDownEvent event) {
     final slot = _slotAt(event.localPosition);
@@ -90,33 +92,35 @@ class _DPadState extends State<DPad> {
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.size;
-    final cell = size / 3;
-    Widget button(PadSlot slot, int column, int row) => Positioned(
-      left: column * cell,
-      top: row * cell,
-      width: cell,
-      height: cell,
-      child: Semantics(
-        button: true,
-        enabled: _actionOf(slot) != GameAction.none,
-        label: context.tr(_actionOf(slot).hint),
-        excludeSemantics: true,
-        onTap: _actionOf(slot) == GameAction.none
-            ? null
-            : () {
-                widget.onDown(_actionOf(slot));
-                widget.onUp(_actionOf(slot));
-              },
-        child: _PadButton(
-          slot: slot,
-          action: _actionOf(slot),
-          pressed: _isPressed(slot),
-          showLabel: widget.showLabels,
-          size: cell,
+    final rects = _rects;
+    Widget button(PadSlot slot) {
+      final rect = rects[slot]!;
+      final action = _actionOf(slot);
+      return Positioned.fromRect(
+        rect: rect,
+        child: Semantics(
+          button: true,
+          enabled: action != GameAction.none,
+          label: context.tr(action.hint),
+          excludeSemantics: true,
+          onTap: action == GameAction.none
+              ? null
+              : () {
+                  widget.onDown(action);
+                  widget.onUp(action);
+                },
+          child: _PadButton(
+            slot: slot,
+            action: action,
+            shape: widget.shape,
+            pressed: _isPressed(slot),
+            highlighted: widget.highlight == slot,
+            showLabel: widget.showLabels,
+            size: rect.width,
+          ),
         ),
-      ),
-    );
+      );
+    }
 
     return Opacity(
       opacity: widget.opacity,
@@ -127,14 +131,14 @@ class _DPadState extends State<DPad> {
         onPointerUp: _up,
         onPointerCancel: _up,
         child: SizedBox.square(
-          dimension: size,
+          dimension: widget.size,
           child: Stack(
             children: [
-              button(PadSlot.up, 1, 0),
-              button(PadSlot.left, 0, 1),
-              button(PadSlot.center, 1, 1),
-              button(PadSlot.right, 2, 1),
-              button(PadSlot.down, 1, 2),
+              button(PadSlot.up),
+              button(PadSlot.left),
+              button(PadSlot.center),
+              button(PadSlot.right),
+              button(PadSlot.down),
             ],
           ),
         ),
@@ -147,87 +151,128 @@ class _PadButton extends StatelessWidget {
   const _PadButton({
     required this.slot,
     required this.action,
+    required this.shape,
     required this.pressed,
+    required this.highlighted,
     required this.showLabel,
     required this.size,
   });
 
   final PadSlot slot;
   final GameAction action;
+  final PadShape shape;
   final bool pressed;
+  final bool highlighted;
   final bool showLabel;
+
+  /// The width of the button, which is also its height.
   final double size;
 
   @override
   Widget build(BuildContext context) {
     final empty = action == GameAction.none;
-    final outer = Radius.circular(size * 0.3);
-    final inner = Radius.circular(size * 0.1);
-    // The arms are rounded at their outer ends, like one cross-shaped key.
-    final radius = switch (slot) {
-      PadSlot.up => BorderRadius.vertical(top: outer, bottom: inner),
-      PadSlot.down => BorderRadius.vertical(top: inner, bottom: outer),
-      PadSlot.left => BorderRadius.horizontal(left: outer, right: inner),
-      PadSlot.right => BorderRadius.horizontal(left: inner, right: outer),
-      PadSlot.center => BorderRadius.all(Radius.circular(size * 0.5)),
-    };
     final tint = padActionTint(action);
+    final shift = padContentShift(shape, slot) * size;
 
-    return Padding(
-      padding: EdgeInsets.all(size * (slot == PadSlot.center ? 0.1 : 0.035)),
-      child: AnimatedScale(
-        scale: pressed ? 0.93 : 1,
-        duration: const Duration(milliseconds: 70),
-        curve: Motion.snap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 70),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: pressed ? tint.withValues(alpha: 0.34) : Colors.white.withValues(alpha: empty ? 0.025 : 0.075),
-            border: Border.all(
-              color: pressed
-                  ? tint
-                  : empty
-                  ? Palette.line
-                  : Palette.lineStrong,
-              width: 1.2,
-            ),
-            boxShadow: pressed ? [BoxShadow(color: tint.withValues(alpha: 0.5), blurRadius: 16)] : null,
-          ),
-          child: empty
-              ? null
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      padActionIcon(action),
-                      size: size * (showLabel ? 0.42 : 0.5),
-                      color: pressed ? Colors.white : Palette.text,
-                    ),
-                    if (showLabel && slot != PadSlot.center)
-                      Padding(
-                        padding: EdgeInsets.only(top: size * 0.02),
-                        // The caption shrinks to the button instead of being cut off.
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: LText(
-                            padActionCaption(action),
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                            softWrap: false,
-                            style: Type.label(
-                              9,
-                              color: pressed ? Colors.white : Palette.textDim,
-                            ).copyWith(letterSpacing: 0.3),
+    return AnimatedScale(
+      scale: pressed ? 0.93 : 1,
+      duration: const Duration(milliseconds: 70),
+      curve: Motion.snap,
+      child: CustomPaint(
+        painter: _KeyPainter(
+          path: padButtonPath(shape, slot, Offset.zero & Size.square(size)),
+          fill: pressed ? tint.withValues(alpha: 0.34) : Colors.white.withValues(alpha: empty ? 0.025 : 0.075),
+          stroke: highlighted
+              ? Palette.accent
+              : pressed
+              ? tint
+              : empty
+              ? Palette.line
+              : Palette.lineStrong,
+          strokeWidth: highlighted ? 2.2 : 1.2,
+          glow: pressed ? tint : null,
+        ),
+        child: empty
+            ? null
+            : Center(
+                child: Transform.translate(
+                  offset: shift,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        padActionIcon(action),
+                        size: size * (showLabel ? 0.42 : 0.5),
+                        color: pressed ? Colors.white : Palette.text,
+                      ),
+                      if (showLabel && slot != PadSlot.center)
+                        Padding(
+                          padding: EdgeInsets.only(top: size * 0.02),
+                          // The caption shrinks to the button instead of being cut off.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: LText(
+                              padActionCaption(action),
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              softWrap: false,
+                              style: Type.label(
+                                9,
+                                color: pressed ? Colors.white : Palette.textDim,
+                              ).copyWith(letterSpacing: 0.3),
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-        ),
+              ),
       ),
     );
   }
+}
+
+/// Fills a button's outline and strokes it; a pressed button glows in the
+/// colour of its action.
+class _KeyPainter extends CustomPainter {
+  const _KeyPainter({
+    required this.path,
+    required this.fill,
+    required this.stroke,
+    required this.strokeWidth,
+    this.glow,
+  });
+
+  final Path path;
+  final Color fill, stroke;
+  final double strokeWidth;
+  final Color? glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final glowing = glow;
+    if (glowing != null) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = glowing.withValues(alpha: 0.5)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, size.width * 0.1),
+      );
+    }
+    canvas.drawPath(path, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeJoin = StrokeJoin.round
+        ..color = stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_KeyPainter oldDelegate) => true;
 }
 
 /// The picture of an action on its button.

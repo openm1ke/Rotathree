@@ -10,10 +10,13 @@ import 'pad_placement.dart';
 
 /// Shared game/editor geometry. The game reclaims empty space above the pads.
 class PadSurface extends StatefulWidget {
-  const PadSurface({super.key, required this.settings, required this.onDown, required this.onUp, this.onEdit});
+  const PadSurface({super.key, required this.settings, required this.onDown, required this.onUp, this.onEdit, this.highlight});
   final Settings settings;
   final ValueChanged<GameAction> onDown, onUp;
   final ValueChanged<PadPositions>? onEdit;
+
+  /// The button to outline in the preview: the pad and its button.
+  final (PadSide, PadSlot)? highlight;
   @override
   State<PadSurface> createState() => _PadSurfaceState();
 }
@@ -66,9 +69,13 @@ class _PadSurfaceState extends State<PadSurface> {
     final pad = DPad(
       layout: side == PadSide.left ? widget.settings.leftPad : widget.settings.rightPad,
       size: rect.width,
-      showLabels: widget.settings.hud.keyHints || preview,
+      // The preview shows what the player will see, captions included.
+      showLabels: widget.settings.hud.keyHints,
       onDown: widget.onDown,
       onUp: widget.onUp,
+      shape: widget.settings.padShape,
+      tweaks: widget.settings.padButtons[side] ?? const {},
+      highlight: widget.highlight?.$1 == side ? widget.highlight?.$2 : null,
     );
     if (!preview) return pad;
     void move(Offset point) => widget.onEdit!(movePad(_start, side, point, area));

@@ -68,4 +68,9 @@ List<Widget> licenseSections(BuildContext context) => [
     const SizedBox(height: 12),
     OutlineButton(label: 'Полные лицензии', onPressed: () => showLicensePage(context: context, applicationName: 'RotaThree')),
   ]),
+  Section(title: 'Автор', children: [
+    Text('Mikhail Shmyrev', style: Type.body(14, weight: FontWeight.w800)),
+    const SizedBox(height: 4),
+    SelectableText('muxaujish@yandex.ru', style: Type.body(13, color: Palette.accent)),
+  ]),
 ];

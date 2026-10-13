@@ -23,5 +23,11 @@ export function LicensesTab() {
         <article className="license-card"><strong>Exo 2</strong><p>The Exo 2 Project Authors · SIL OFL 1.1</p><a href="./licenses/Exo2-OFL.txt" target="_blank" rel="noopener noreferrer">SIL OFL 1.1 ↗</a></article>
       </div>
     </section>
+    <section className="group">
+      <h3><T>Автор</T></h3>
+      <div className="license-list">
+        <article className="license-card"><strong>Mikhail Shmyrev</strong><p><a href="mailto:muxaujish@yandex.ru">muxaujish@yandex.ru</a></p></article>
+      </div>
+    </section>
   </>;
 }

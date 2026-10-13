@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../input/game_action.dart';
 import '../i18n/strings.dart';
 import '../input/pad_placement.dart';
+import '../input/pad_shape.dart';
 import '../style.dart';
 import 'bindings.dart';
 
@@ -255,6 +256,8 @@ class Settings {
     required this.leftPad,
     required this.rightPad,
     this.padPositions = const PadPositions(),
+    this.padShape = PadShape.square,
+    this.padButtons = const {},
     this.language = LanguageChoice.auto,
     this.audio = const AudioOptions(),
   });
@@ -313,6 +316,8 @@ class Settings {
       ),
       leftPad: _padFromJson(pads['left'], base.leftPad),
       rightPad: _padFromJson(pads['right'], base.rightPad),
+      padShape: PadShape.fromName(pads['shape']),
+      padButtons: _buttonsFromJson(pads['buttons']),
     );
   }
 
@@ -325,7 +330,26 @@ class Settings {
   final PadLayout leftPad;
   final PadLayout rightPad;
   final PadPositions padPositions;
+
+  /// The outline of every pad button.
+  final PadShape padShape;
+
+  /// Size and place of single buttons, by pad. Only buttons that differ from
+  /// their default are kept here.
+  final Map<PadSide, PadTweaks> padButtons;
   final AudioOptions audio;
+
+  /// The same settings with one button of one pad changed. A default tweak
+  /// removes the entry.
+  Settings withButton(PadSide side, PadSlot slot, PadTweak tweak) {
+    final pad = {...?padButtons[side]};
+    if (tweak.isDefault) {
+      pad.remove(slot);
+    } else {
+      pad[slot] = tweak;
+    }
+    return copyWith(padButtons: {...padButtons, side: pad});
+  }
 
   Settings copyWith({
     LanguageChoice? language,
@@ -337,6 +361,8 @@ class Settings {
     PadLayout? leftPad,
     PadLayout? rightPad,
     PadPositions? padPositions,
+    PadShape? padShape,
+    Map<PadSide, PadTweaks>? padButtons,
     AudioOptions? audio,
   }) =>
       Settings(
@@ -349,6 +375,8 @@ class Settings {
         leftPad: leftPad ?? this.leftPad,
         rightPad: rightPad ?? this.rightPad,
         padPositions: padPositions ?? this.padPositions,
+        padShape: padShape ?? this.padShape,
+        padButtons: padButtons ?? this.padButtons,
         audio: audio ?? this.audio,
       );
 
@@ -382,8 +410,29 @@ class Settings {
         'pads': {
           'left': {for (final slot in PadSlot.values) slot.name: leftPad[slot]!.name},
           'right': {for (final slot in PadSlot.values) slot.name: rightPad[slot]!.name},
+          'shape': padShape.name,
+          'buttons': {
+            for (final side in PadSide.values)
+              side.name: {
+                for (final entry in (padButtons[side] ?? const <PadSlot, PadTweak>{}).entries)
+                  if (!entry.value.isDefault) entry.key.name: entry.value.toJson(),
+              },
+          },
         },
       };
+}
+
+Map<PadSide, PadTweaks> _buttonsFromJson(Object? raw) {
+  if (raw is! Map) return const {};
+  return {
+    for (final side in PadSide.values)
+      if (raw[side.name] is Map)
+        side: {
+          for (final slot in PadSlot.values)
+            if ((raw[side.name] as Map)[slot.name] != null)
+              slot: PadTweak.fromJson((raw[side.name] as Map)[slot.name]),
+        },
+  };
 }
 
 int _intIn(Object? value, num min, num max, int fallback) =>
