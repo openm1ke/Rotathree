@@ -16,8 +16,6 @@ WEB_OUTPUT = ROOT / 'webapp/public/music'
 FADE_SECONDS = 2
 TARGET_LUFS = -23
 TRACKS = [
-    ('music/Deep Focus.m4a', 'deep-focus'),
-    ('music/Deep Focus(1).m4a', 'deep-focus-1'),
     ('music/downloaded/ambient_relaxing_loop.ogg', 'ambient-relaxing-loop'),
     ('music/downloaded/project_utopia_loop.ogg', 'project-utopia-loop'),
     ('music/downloaded/chill_loopable.mp3', 'chill-loopable'),
