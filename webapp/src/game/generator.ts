@@ -36,9 +36,15 @@ export class PieceGenerator {
     const isMono = rolled.every((color) => color === rolled[0]);
     if (isMono && this.random() >= this.config.monoPieceKeepChance) {
       // Single-colour sticks pop themselves on landing, so they are made
-      // rarer than a fair roll would give: repaint one square.
-      const other = ((rolled[0] + 1 + this.pick(palette - 1)) % palette) as BlockColor;
-      rolled[this.pick(rolled.length)] = other;
+      // rarer than a fair roll would give: repaint one square. The draws and
+      // the list of other colours follow the Flutter engine exactly, so one
+      // seed gives one stick on both platforms.
+      const square = this.pick(rolled.length);
+      const others: BlockColor[] = [];
+      for (let colour = 0; colour < palette; colour++) {
+        if (colour !== rolled[0]) others.push(colour as BlockColor);
+      }
+      rolled[square] = others[this.pick(others.length)];
     }
     return makePiece(rolled);
   }
