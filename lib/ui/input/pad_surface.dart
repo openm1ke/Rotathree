@@ -1,4 +1,5 @@
 import '../i18n/strings.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../data/settings.dart';
@@ -7,7 +8,7 @@ import 'dpad.dart';
 import 'game_action.dart';
 import 'pad_placement.dart';
 
-/// Shared game/editor geometry, in the safe area below the field.
+/// Shared game/editor geometry. The game reclaims empty space above the pads.
 class PadSurface extends StatefulWidget {
   const PadSurface({super.key, required this.settings, required this.onDown, required this.onUp, this.onEdit});
   final Settings settings;
@@ -31,13 +32,17 @@ class _PadSurfaceState extends State<PadSurface> {
         final height = padAreaHeight(media.size.height - media.padding.vertical, widget.settings.padPositions, width);
         final area = Size(width, height);
         final geometry = padGeometry(area, widget.settings.padPositions);
+        final freeTop = preview ? 0.0 : geometry.values.map((rect) => rect.top).reduce(math.min);
         final surface = SizedBox(
           width: width,
-          height: height,
+          height: height - freeTop,
           child: Stack(
             children: [
               for (final side in PadSide.values)
-                Positioned.fromRect(rect: geometry[side]!, child: _pad(side, geometry[side]!, area, preview)),
+                Positioned.fromRect(
+                  rect: geometry[side]!.shift(Offset(0, -freeTop)),
+                  child: _pad(side, geometry[side]!, area, preview),
+                ),
             ],
           ),
         );

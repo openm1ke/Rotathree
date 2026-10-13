@@ -119,7 +119,8 @@ class _CalloutView extends StatelessWidget {
   }
 }
 
-/// Readouts outside the field leave every pixel available to the fitted camera.
+/// A single row between the two header buttons. Labels remain available to
+/// screen readers and long values shrink within their own space.
 class GameReadout extends StatelessWidget {
   const GameReadout({super.key, required this.hud, required this.options, this.callout});
   final HudState hud;
@@ -129,42 +130,81 @@ class GameReadout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Opacity(
     opacity: options.opacity,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    child: SizedBox(
+      height: 44,
+      child: Row(
         children: [
-          if (options.score) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: LText(formatPoints(hud.score), style: Type.display(20))),
-                const SizedBox(width: 12),
-                if (hud.level > 0)
-                  LText('Уровень ${hud.level} / ${campaignLevels.length}', style: Type.body(11, color: Palette.accent)),
-                if (hud.speed > 0)
-                  LText('Скорость ${hud.speed}', style: Type.body(11, color: Palette.accent)),
-              ],
-            ),
-            // A reserved bonus row avoids both overlap and camera jumps when points arrive.
-            SizedBox(
-              height: 20,
-              child: callout == null ? null : ClipRect(child: Align(
-                alignment: Alignment.topLeft,
-                child: IgnorePointer(child: _CalloutView(callout: callout!, base: 10)),
-              )),
-            ),
-          ],
-          if (options.stats)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: LText(
-                '${formatClock(hud.seconds)} · Фигуры ${hud.pieces}',
-                style: Type.body(11, color: Palette.textDim),
+          if (options.score)
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Semantics(
+                        label: context.tr(formatPoints(hud.score)),
+                        excludeSemantics: true,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: LText(formatNumber(hud.score), style: Type.display(20)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (callout != null)
+                    Positioned(
+                      left: 0, right: 0, bottom: 0,
+                      child: ClipRect(child: IgnorePointer(child: _CalloutView(callout: callout!, base: 6))),
+                    ),
+                ],
               ),
-            ),
+            )
+          else
+            const Spacer(),
+          if (options.score && hud.level > 0)
+            _ReadoutStat(icon: Icons.layers_outlined, value: '${hud.level}/${campaignLevels.length}',
+              label: 'Уровень ${hud.level} / ${campaignLevels.length}', accent: true),
+          if (options.score && hud.speed > 0)
+            _ReadoutStat(icon: Icons.speed_rounded, value: '${hud.speed}', label: 'Скорость ${hud.speed}', accent: true),
+          if (options.stats) ...[
+            _ReadoutStat(icon: Icons.schedule_rounded, value: formatClock(hud.seconds), label: 'Время'),
+            _ReadoutStat(icon: Icons.view_module_outlined, value: formatNumber(hud.pieces), label: 'Фигуры'),
+          ],
         ],
       ),
     ),
   );
+}
+
+class _ReadoutStat extends StatelessWidget {
+  const _ReadoutStat({required this.icon, required this.value, required this.label, this.accent = false});
+  final IconData icon;
+  final String value, label;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final caption = context.tr(label);
+    final color = accent ? Palette.accent : Palette.textDim;
+    return Flexible(
+      child: Padding(
+        padding: const EdgeInsets.only(left: 6),
+        child: Tooltip(
+          message: caption,
+          child: Semantics(
+            label: accent ? caption : '$caption: $value',
+            excludeSemantics: true,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 12, color: color),
+                const SizedBox(width: 3),
+                LText(value, style: Type.body(11, color: color)),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

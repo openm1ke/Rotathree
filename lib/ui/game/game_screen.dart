@@ -637,7 +637,7 @@ class GameScreenState extends State<GameScreen>
       devicePixelRatio: _pixelRatio,
       angle: _fx.viewAngle,
       sides: _engine.sides,
-      focusSingleGlass: widget.tutorial,
+      focusSingleGlass: true,
       showNextPiece: widget.settings.hud.nextPiece && !widget.tutorial,
     ).zoneAt(details.localPosition);
     final slot = switch (zone) {
@@ -796,15 +796,33 @@ class GameScreenState extends State<GameScreen>
                           ] else ...[
                             GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
                           ],
-                          const Spacer(),
+                          if (widget.tutorial)
+                            const Spacer()
+                          else
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                child: ValueListenableBuilder<HudState>(
+                                  valueListenable: _hud,
+                                  builder: (context, hud, _) => GameReadout(hud: hud, options: settings.hud, callout: _callout),
+                                ),
+                              ),
+                            ),
                           GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
                         ],
                       ),
                     ),
-                    if (!widget.tutorial)
-                      ValueListenableBuilder<HudState>(
-                        valueListenable: _hud,
-                        builder: (context, hud, _) => GameReadout(hud: hud, options: settings.hud, callout: _callout),
+                    if (_isCampaign && !widget.tutorial)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                        child: ValueListenableBuilder<HudState>(
+                          valueListenable: _hud,
+                          builder: (context, hud, _) => CampaignProgress(
+                            level: hud.level, into: hud.into, target: hud.target, compact: true,
+                            animated: _status == _Status.playing && !widget.blocked && _appActive &&
+                                !_reduceMotion && settings.effects.fieldBackground,
+                          ),
+                        ),
                       ),
                     Expanded(
                       child: LayoutBuilder(
@@ -827,18 +845,6 @@ class GameScreenState extends State<GameScreen>
                         },
                       ),
                     ),
-                    if (_isCampaign && !widget.tutorial)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                        child: ValueListenableBuilder<HudState>(
-                          valueListenable: _hud,
-                          builder: (context, hud, _) => CampaignProgress(
-                            level: hud.level, into: hud.into, target: hud.target,
-                            animated: _status == _Status.playing && !widget.blocked && _appActive &&
-                                !_reduceMotion && settings.effects.fieldBackground,
-                          ),
-                        ),
-                      ),
                     if (widget.tutorial)
                       ConstrainedBox(
                         constraints: BoxConstraints(maxHeight: math.min(constraints.maxHeight * 0.3, 190)),
@@ -891,7 +897,7 @@ class GameScreenState extends State<GameScreen>
                   engine: _engine,
                   fx: _fx,
                   assets: _assets,
-                  focusSingleGlass: widget.tutorial,
+                  focusSingleGlass: true,
                   showNextPiece: widget.settings.hud.nextPiece && !widget.tutorial,
                   nextPieceOpacity: widget.settings.hud.nextPieceOpacity,
                   devicePixelRatio: _pixelRatio,

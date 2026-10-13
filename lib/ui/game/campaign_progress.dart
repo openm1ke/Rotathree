@@ -8,31 +8,47 @@ import '../style.dart';
 
 /// A compact score goal. Pulses only when points arrive, not while idle.
 class CampaignProgress extends StatefulWidget {
-  const CampaignProgress({super.key, required this.level, required this.into, required this.target, required this.animated});
+  const CampaignProgress({
+    super.key,
+    required this.level,
+    required this.into,
+    required this.target,
+    required this.animated,
+    this.compact = false,
+  });
 
   final int level, into, target;
   final bool animated;
+  final bool compact;
 
   @override
   State<CampaignProgress> createState() => _CampaignProgressState();
 }
 
-class _CampaignProgressState extends State<CampaignProgress> with SingleTickerProviderStateMixin {
+class _CampaignProgressState extends State<CampaignProgress>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(vsync: this, value: 1, duration: const Duration(milliseconds: 650));
+    _pulse = AnimationController(
+      vsync: this,
+      value: 1,
+      duration: const Duration(milliseconds: 650),
+    );
   }
 
   @override
   void didUpdateWidget(CampaignProgress oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.level != oldWidget.level || !widget.animated || MediaQuery.disableAnimationsOf(context)) {
+    if (widget.level != oldWidget.level ||
+        !widget.animated ||
+        MediaQuery.disableAnimationsOf(context)) {
       _pulse.stop();
       _pulse.value = 1;
-    } else if (widget.level == oldWidget.level && widget.into > oldWidget.into) {
+    } else if (widget.level == oldWidget.level &&
+        widget.into > oldWidget.into) {
       _pulse.forward(from: 0);
     }
   }
@@ -53,56 +69,102 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
     return RepaintBoundary(
       child: Semantics(
         label: context.tr('Прогресс уровня ${widget.level}'),
-        value: context.tr('${formatNumber(earned)} / ${formatNumber(widget.target)}. Ещё ${formatNumber(remaining)}.'),
+        value: context.tr(
+          '${formatNumber(earned)} / ${formatNumber(widget.target)}. Ещё ${formatNumber(remaining)}.',
+        ),
         child: ExcludeSemantics(
-          child: AnimatedBuilder(
-            animation: _pulse,
-            builder: (context, child) {
-              final wave = animate ? math.sin(_pulse.value * math.pi).abs() : 0.0;
-              return DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Palette.panelStrong,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Palette.accent.withValues(alpha: .3 + wave * .4)),
+          child: Row(
+            children: [
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: _pulse,
+                  builder: (context, child) {
+                    final wave = animate
+                        ? math.sin(_pulse.value * math.pi).abs()
+                        : 0.0;
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Palette.panelStrong,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Palette.accent.withValues(
+                            alpha: .3 + wave * .4,
+                          ),
+                        ),
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: SizedBox(
+                      height: widget.compact ? 4 : 16,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: TweenAnimationBuilder<double>(
+                              key: ValueKey(widget.level),
+                              tween: Tween(begin: fraction, end: fraction),
+                              duration: animate
+                                  ? const Duration(milliseconds: 320)
+                                  : Duration.zero,
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, child) =>
+                                  FractionallySizedBox(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: value,
+                                    child: child,
+                                  ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.all(
+                                    Radius.circular(999),
+                                  ),
+                                  color: Palette.accent.withValues(alpha: .4),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (!widget.compact)
+                            Positioned.fill(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: LText(
+                                      '${formatNumber(earned)} / ${formatNumber(widget.target)}',
+                                      style: Type.display(
+                                        12,
+                                        shadows: const [
+                                          Shadow(
+                                            color: Palette.bg,
+                                            blurRadius: 3,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                child: child,
-              );
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: SizedBox(
-                height: 16,
-                child: Stack(children: [
-                  Positioned.fill(
-                    child: TweenAnimationBuilder<double>(
-                      key: ValueKey(widget.level),
-                      tween: Tween(begin: fraction, end: fraction),
-                      duration: animate ? const Duration(milliseconds: 320) : Duration.zero,
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, child) => FractionallySizedBox(
-                        alignment: Alignment.centerLeft, widthFactor: value, child: child,
-                      ),
-                      child: DecoratedBox(decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.all(Radius.circular(999)),
-                        color: Palette.accent.withValues(alpha: .4),
-                      )),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: FittedBox(fit: BoxFit.scaleDown, child: LText(
-                          '${formatNumber(earned)} / ${formatNumber(widget.target)}',
-                          style: Type.display(12, shadows: const [Shadow(color: Palette.bg, blurRadius: 3)]),
-                        )),
-                      ),
-                    ),
-                  ),
-                ]),
               ),
-            ),
+              if (widget.compact) ...[
+                const SizedBox(width: 8),
+                LText(
+                  '${formatNumber(earned)} / ${formatNumber(widget.target)}',
+                  style: Type.display(10),
+                ),
+              ],
+            ],
           ),
         ),
       ),

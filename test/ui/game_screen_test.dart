@@ -9,6 +9,7 @@ import 'package:rotathree/ui/data/settings.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
 import 'package:rotathree/ui/game/campaign_progress.dart';
 import 'package:rotathree/ui/input/dpad.dart';
+import 'package:rotathree/ui/input/pad_placement.dart';
 import 'package:rotathree/ui/data/run_save.dart';
 import 'package:rotathree/ui/data/stats.dart';
 import 'package:rotathree/ui/input/game_action.dart';
@@ -73,7 +74,7 @@ Future<void> pumpFrames(WidgetTester tester, int frames) async {
 }
 
 void main() {
-  testWidgets('campaign goal uses level points and fits below the field on a small phone', (tester) async {
+  testWidgets('campaign goal uses level points in a thin header above the field on a small phone', (tester) async {
     final state = await pumpGame(tester, session: const CampaignSession(0), size: const Size(320, 568),
       settings: Settings.defaults().copyWith(hud: const HudOptions(score: false, stats: false)));
     state.engine.state.score = 600;
@@ -86,7 +87,9 @@ void main() {
     expect(find.text('Цель'), findsNothing);
     final bar = tester.getRect(find.byType(CampaignProgress));
     final field = tester.getRect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is FieldPainter));
-    expect(bar.top, greaterThanOrEqualTo(field.bottom));
+    expect(bar.bottom, lessThanOrEqualTo(field.top));
+    expect(bar.height, lessThanOrEqualTo(14));
+    expect(field.width, 320);
     expect(bar.left, greaterThanOrEqualTo(0));
     expect(bar.right, lessThanOrEqualTo(320));
     expect(tester.takeException(), isNull);
@@ -94,6 +97,38 @@ void main() {
     await tester.pump();
     expect(tester.widget<CampaignProgress>(find.byType(CampaignProgress)).animated, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('small phone reclaims free pad space without overlapping controls or moving the header', (tester) async {
+    tester.view.padding = const FakeViewPadding(top: 24, bottom: 34);
+    addTearDown(tester.view.resetPadding);
+    final defaults = Settings.defaults();
+    await pumpGame(tester, session: const CampaignSession(0), size: const Size(320, 568));
+    final fieldFinder = find.byWidgetPredicate((w) => w is CustomPaint && w.painter is FieldPainter);
+    final field = tester.getRect(fieldFinder);
+    final pause = tester.getRect(find.byTooltip('Пауза'));
+    final settingsButton = tester.getRect(find.byTooltip('Настройки'));
+    final score = tester.getRect(find.text('0').first);
+    expect(pause.center.dy, settingsButton.center.dy);
+    expect((pause.center.dy - score.center.dy).abs(), lessThan(2));
+    expect(pause.width, greaterThanOrEqualTo(44));
+    expect(field.width, greaterThan(290));
+    for (var i = 0; i < 2; i++) {
+      expect(field.bottom, lessThanOrEqualTo(tester.getRect(find.byType(DPad).at(i)).top));
+    }
+    final bottomPad = tester.getRect(find.byType(DPad).first);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpGame(tester, session: const CampaignSession(0), size: const Size(320, 568),
+      settings: defaults.copyWith(padPositions: PadPositions(
+        left: defaults.padPositions.left.copyWith(y: 0), right: defaults.padPositions.right)));
+    final smallerField = tester.getRect(fieldFinder);
+    expect(smallerField.width, lessThan(field.width - 20));
+    expect(tester.getRect(find.byType(DPad).first).top, lessThan(bottomPad.top));
+    expect(tester.getRect(find.byTooltip('Пауза')), pause);
+    for (var i = 0; i < 2; i++) {
+      expect(smallerField.bottom, lessThanOrEqualTo(tester.getRect(find.byType(DPad).at(i)).top));
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('custom games and training have no campaign goal', (tester) async {
@@ -158,7 +193,7 @@ void main() {
 
   testWidgets('finishing a level announces it, then the next glass comes in', (tester) async {
     final state = await pumpGame(tester, session: const CampaignSession(0));
-    expect(find.text('Уровень 1 / 15'), findsOneWidget);
+    expect(find.byTooltip('Уровень 1 / 15'), findsOneWidget);
 
     state.engine.state.score = campaignLevels[0].target;
     await pumpFrames(tester, 2);
@@ -167,7 +202,7 @@ void main() {
     expect(state.engine.sides.length, 1);
 
     await pumpFrames(tester, 60);
-    expect(find.text('Уровень 2 / 15'), findsOneWidget);
+    expect(find.byTooltip('Уровень 2 / 15'), findsOneWidget);
     expect(find.text('НОВЫЙ СТАКАН'), findsOneWidget);
     // The second glass grows first and gets its first piece when it is built.
     expect(state.engine.sides.length, 2);
@@ -228,7 +263,7 @@ void main() {
     expect(resumed.engine.sides.length, 1);
     await tester.tap(find.text('Продолжить'));
     await pumpFrames(tester, 60);
-    expect(find.text('Уровень 2 / 15'), findsOneWidget);
+    expect(find.byTooltip('Уровень 2 / 15'), findsOneWidget);
     expect(resumed.engine.sides.length, 2);
   });
 
