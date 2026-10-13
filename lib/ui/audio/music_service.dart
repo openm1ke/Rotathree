@@ -8,6 +8,14 @@ import '../data/settings.dart';
 /// The playback assets have equal loudness and two-second fades baked into
 /// both ends. One player runs them in order, without overlapping their volume.
 class MusicService {
+  /// On iOS the music mixes with audio that is already playing (a podcast or
+  /// another app) instead of stopping it. Android keeps the default audio
+  /// focus, so a phone call still takes over the sound.
+  static final _audioContext = AudioContext(
+    iOS: AudioContextIOS(options: const {AVAudioSessionOptions.mixWithOthers}),
+    android: const AudioContextAndroid(),
+  );
+
   static const tracks = <String>[
     'music/playback/ambient-relaxing-loop.m4a',
     'music/playback/project-utopia-loop.m4a',
@@ -66,6 +74,7 @@ class MusicService {
     if (_player == null) {
       final player = AudioPlayer();
       _player = player;
+      await player.setAudioContext(_audioContext);
       _completeSubscription = player.onPlayerComplete.listen((_) {
         if (_disposed) return;
         _track = (_track + 1) % tracks.length;
