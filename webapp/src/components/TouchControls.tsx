@@ -2,7 +2,7 @@ import { useI18n } from '../i18n/context';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { Settings } from '../services/storage';
 import { movePad, padAreaHeight, padGeometry, type PadPositions, type PadSide } from '../input/padPlacement';
-import type { PadAction } from '../input/pads';
+import type { PadAction, PadSlot } from '../input/pads';
 import { DPad } from './DPad';
 
 export function TouchControls({
@@ -11,12 +11,15 @@ export function TouchControls({
   onDown,
   onUp,
   onEdit,
+  highlight,
 }: {
   settings: Settings;
   disabled?: boolean;
   onDown: (action: PadAction) => void;
   onUp: (action: PadAction) => void;
   onEdit?: (positions: PadPositions) => void;
+  /** The pad and button to outline while the layout is being edited. */
+  highlight?: { side: PadSide; slot: PadSlot };
 }) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
@@ -133,7 +136,11 @@ export function TouchControls({
                   label={label}
                   layout={settings.pads[side]}
                   disabled={disabled}
-                  showLabels={settings.hud.keyHints || !!onEdit}
+                  // The preview shows what the player will see, captions included.
+                  showLabels={settings.hud.keyHints}
+                  shape={settings.padShape}
+                  tweaks={settings.padButtons[side]}
+                  highlight={highlight?.side === side ? highlight.slot : undefined}
                   onDown={onDown}
                   onUp={onUp}
                 />

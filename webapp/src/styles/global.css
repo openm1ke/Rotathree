@@ -1646,21 +1646,20 @@ input:focus-visible {
   padding: 6px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
     max(8px, env(safe-area-inset-left));
 }
+/* Every button is placed by its own rectangle, given in per cent of the pad. */
 .dpad {
-  display: grid;
-  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  position: relative;
   width: clamp(136px, 36vw, 150px);
   height: clamp(136px, 36vw, 150px);
   flex-shrink: 0;
-  gap: 2px;
 }
 .dpad__button {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
+  box-sizing: border-box;
   padding: 2px 0;
   border: 1px solid var(--line-strong);
   border-radius: 9px;
@@ -1668,21 +1667,6 @@ input:focus-visible {
   color: var(--text);
   touch-action: none;
   user-select: none;
-}
-.dpad__button--up {
-  grid-area: 1 / 2;
-}
-.dpad__button--left {
-  grid-area: 2 / 1;
-}
-.dpad__button--center {
-  grid-area: 2 / 2;
-}
-.dpad__button--right {
-  grid-area: 2 / 3;
-}
-.dpad__button--down {
-  grid-area: 3 / 2;
 }
 .dpad__button.is-pressed {
   background: var(--accent);
@@ -1693,12 +1677,66 @@ input:focus-visible {
   cursor: default;
 }
 .dpad__icon {
+  position: relative;
   font: 22px/1 sans-serif;
 }
 .dpad__button small {
+  position: relative;
   font-size: 9px;
   line-height: 1.1;
   margin-top: 2px;
+}
+/* The outline of the chosen button in the editor. */
+.dpad__button.is-edited {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Shapes. Square is the rounded key drawn above. */
+.dpad--round .dpad__button {
+  border-radius: 50%;
+}
+.dpad--triangle .dpad__button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.dpad--triangle .dpad__button--up,
+.dpad--triangle .dpad__button--center {
+  padding-top: 16%;
+}
+.dpad--triangle .dpad__button--down {
+  padding-bottom: 16%;
+}
+.dpad--triangle .dpad__button--left {
+  padding-left: 16%;
+}
+.dpad--triangle .dpad__button--right {
+  padding-right: 16%;
+}
+.dpad__shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.dpad__shape polygon {
+  fill: var(--panel-strong);
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.dpad__button.is-pressed .dpad__shape polygon {
+  fill: var(--accent);
+}
+.dpad--triangle .dpad__button.is-edited {
+  outline: none;
+}
+.dpad--triangle .dpad__button.is-edited .dpad__shape polygon {
+  stroke: var(--accent);
+  stroke-width: 2.2;
 }
 .pad-select {
   max-width: 65%;

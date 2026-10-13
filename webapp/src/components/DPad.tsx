@@ -2,7 +2,8 @@ import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS } from '../input/bindings';
-import { PAD_SLOTS, type PadAction, type PadLayout } from '../input/pads';
+import { PAD_SLOTS, type PadAction, type PadLayout, type PadSlot } from '../input/pads';
+import { TRIANGLE_POINTS, buttonRects, type PadShape, type PadTweaks } from '../input/padShape';
 
 const ICONS: Record<PadAction, string> = {
   none: '',
@@ -38,6 +39,9 @@ export function DPad({
   label,
   disabled = false,
   showLabels = true,
+  shape = 'square',
+  tweaks = {},
+  highlight,
   onDown,
   onUp,
 }: {
@@ -45,6 +49,10 @@ export function DPad({
   label: string;
   disabled?: boolean;
   showLabels?: boolean;
+  shape?: PadShape;
+  tweaks?: PadTweaks;
+  /** The button to outline while the layout is being edited. */
+  highlight?: PadSlot;
   onDown: (action: PadAction) => void;
   onUp: (action: PadAction) => void;
 }) {
@@ -72,15 +80,23 @@ export function DPad({
     callbacks.current.onUp(action);
     setPressed([...held.current.values()]);
   };
+  const rects = buttonRects(tweaks);
   return (
-    <div className="dpad" role="group" aria-label={t(label)}>
+    <div className={`dpad dpad--${shape}`} role="group" aria-label={t(label)}>
       {PAD_SLOTS.map((slot) => {
         const action = layout[slot];
+        const rect = rects[slot];
         return (
           <button
             key={slot}
             type="button"
-            className={`dpad__button dpad__button--${slot} ${pressed.includes(action) ? 'is-pressed' : ''}`}
+            className={`dpad__button dpad__button--${slot} ${pressed.includes(action) ? 'is-pressed' : ''} ${highlight === slot ? 'is-edited' : ''}`}
+            style={{
+              left: `${rect.x * 100}%`,
+              top: `${rect.y * 100}%`,
+              width: `${rect.size * 100}%`,
+              height: `${rect.size * 100}%`,
+            }}
             disabled={disabled || action === 'none'}
             aria-label={t(ACTIONS.find((a) => a.id === action)?.hint ?? 'Не назначено')}
             onPointerDown={(event) => {
@@ -101,6 +117,11 @@ export function DPad({
               }
             }}
           >
+            {shape === 'triangle' && (
+              <svg className="dpad__shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <polygon points={TRIANGLE_POINTS[slot]} />
+              </svg>
+            )}
             <span aria-hidden="true" className="dpad__icon">
               {ICONS[action]}
             </span>
