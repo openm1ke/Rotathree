@@ -30,6 +30,52 @@ class GameIconButton extends StatelessWidget {
   );
 }
 
+/// The heading of every page and of the tutorial: a small arrow back, the mode
+/// in capitals above its title, and actions on the right.
+class ScreenHeading extends StatelessWidget {
+  const ScreenHeading({
+    super.key,
+    required this.kicker,
+    required this.title,
+    this.onBack,
+    this.actions = const [],
+  });
+
+  final String kicker;
+  final String title;
+  final VoidCallback? onBack;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Row(
+        children: [
+          if (onBack != null)
+            IconButton(
+              tooltip: context.tr('Назад'),
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Palette.text),
+            ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Translated first, then set in capitals.
+                LText(context.tr(kicker).toUpperCase(), translate: false, style: Type.label(11, color: Palette.accent)),
+                LText(title, style: Type.display(28)),
+              ],
+            ),
+          ),
+          ...actions,
+        ],
+      ),
+    );
+  }
+}
+
 /// A page of the app: a heading with a way back, the content and a footer.
 class ScreenFrame extends StatelessWidget {
   const ScreenFrame({
@@ -57,30 +103,7 @@ class ScreenFrame extends StatelessWidget {
     return SafeArea(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Row(
-              children: [
-                if (onBack != null)
-                  IconButton(
-                    tooltip: context.tr('Назад'),
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Palette.text),
-                  ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      LText(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
-                      LText(title, style: Type.display(28)),
-                    ],
-                  ),
-                ),
-                ...actions,
-              ],
-            ),
-          ),
+          ScreenHeading(kicker: kicker, title: title, onBack: onBack, actions: actions),
           Expanded(
             child: body ?? ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

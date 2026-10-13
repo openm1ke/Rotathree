@@ -159,7 +159,7 @@ void main() {
     state.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(find.text('Пауза'), findsNothing);
-    await tester.tap(find.text('Назад'));
+    await tester.tap(find.byTooltip('Назад'));
     expect(exits, 1);
     expect(completions, 0);
   });

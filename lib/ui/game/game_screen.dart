@@ -777,28 +777,22 @@ class GameScreenState extends State<GameScreen>
               builder: (context, constraints) {
                 return Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          if (widget.tutorial) ...[
-                            OutlinedButton.icon(
-                              onPressed: handleBack,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Palette.textDim,
-                                side: const BorderSide(color: Palette.lineStrong),
-                                minimumSize: const Size(0, 44),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                              label: const LText('Назад'),
-                            ),
-                          ] else ...[
+                    if (widget.tutorial)
+                      // The same heading as the menus: a small arrow, the mode, the title.
+                      ScreenHeading(
+                        kicker: 'Режим',
+                        title: 'Обучение',
+                        onBack: handleBack,
+                        actions: [
+                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                        ],
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          children: [
                             GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
-                          ],
-                          if (widget.tutorial)
-                            const Spacer()
-                          else
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -808,10 +802,10 @@ class GameScreenState extends State<GameScreen>
                                 ),
                               ),
                             ),
-                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
-                        ],
+                            GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                          ],
+                        ),
                       ),
-                    ),
                     if (_isCampaign && !widget.tutorial)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
