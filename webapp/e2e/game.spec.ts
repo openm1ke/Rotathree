@@ -475,7 +475,7 @@ test('manual language applies immediately, persists and preserves a frozen game'
   await expectEnglish(page);
   expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(snapshot);
-  await page.getByRole('button', { name: '← Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.getByText('Level 1 complete', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await page.getByRole('button', { name: 'Main menu', exact: true }).click();
@@ -509,7 +509,7 @@ test.describe('automatic English locale', () => {
         await expect(page.getByRole('button', { name: 'My palette 1', exact: true })).toBeVisible();
         await expectEnglish(page);
       }
-      await page.getByRole('button', { name: '← Back', exact: true }).click();
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
     }
   });
   test('phone tutorial translates instructions and accessible D-pad actions', async ({ page }) => {
