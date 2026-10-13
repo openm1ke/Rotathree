@@ -3,7 +3,8 @@ import { T } from '../i18n/Text';
 import { LanguagePicker } from '../i18n/LanguagePicker';
 import { LicensesTab } from './LicensesTab';
 import { TouchControls } from './TouchControls';
-import { DEFAULT_POSITIONS } from '../input/padPlacement';
+import { DEFAULT_POSITIONS, type PadSide } from '../input/padPlacement';
+import { DEFAULT_BUTTONS, DEFAULT_TWEAK, PAD_SHAPES, SHAPE_LABELS, type PadShape, type PadTweak } from '../input/padShape';
 import { useEffect, useRef, useState } from 'react';
 import { COLOUR_NAMES } from '../render/theme';
 import {
@@ -23,7 +24,7 @@ import { defaultSettings, type Palettes, type Settings, type ExplosionStyle } fr
 import { Button, Chip, Choice, Screen, Slider, Toggle } from './ui';
 import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
-import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS } from '../input/pads';
+import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS, type PadSlot } from '../input/pads';
 
 type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound' | 'licenses';
 
@@ -60,6 +61,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   const panelRef = useRef<HTMLDivElement>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const [tab, setTab] = useState<Tab>('controls');
+  /** The button the controls tab is editing, outlined in the preview. */
+  const [editSide, setEditSide] = useState<PadSide>('left');
+  const [editSlot, setEditSlot] = useState<PadSlot>('up');
   /** The key slot waiting for its new key. */
   const [capture, setCapture] = useState<{ action: Action; slot: number } | null>(null);
   useScreenKeys(rootRef, active && capture === null, onBack);
@@ -101,6 +105,12 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   }, [capture, settings, onChange, touch]);
 
   const defaults = defaultSettings();
+  const tweak: PadTweak = settings.padButtons[editSide][editSlot] ?? DEFAULT_TWEAK;
+  const setTweak = (next: PadTweak) =>
+    onChange({
+      ...settings,
+      padButtons: { ...settings.padButtons, [editSide]: { ...settings.padButtons[editSide], [editSlot]: next } },
+    });
   let body: React.ReactNode;
   switch (tab) {
     case 'licenses':
@@ -129,6 +139,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                   onDown={() => {}}
                   onUp={() => {}}
                   onEdit={(padPositions) => onChange({ ...settings, padPositions })}
+                  highlight={{ side: editSide, slot: editSlot }}
                 />
                 {(['left', 'right'] as const).map((side) => (
                   <Slider
@@ -147,6 +158,88 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                     }
                   />
                 ))}
+              </section>
+              <section className="group">
+                <h3><T>Вид кнопок</T></h3>
+                <p className="hint"><T>
+                  Форма и подписи одинаковы у обеих крестовин. Размер и сдвиг задаются для каждой кнопки отдельно: выбранная
+                  кнопка подсвечивается в поле.
+                </T></p>
+                <div className="chips chips--spaced">
+                  {PAD_SHAPES.map((shape: PadShape) => (
+                    <Chip
+                      key={shape}
+                      active={settings.padShape === shape}
+                      onClick={() => onChange({ ...settings, padShape: shape })}
+                    >
+                      {SHAPE_LABELS[shape]}
+                    </Chip>
+                  ))}
+                </div>
+                <Toggle
+                  label="Подписи кнопок"
+                  value={settings.hud.keyHints}
+                  on="показывать"
+                  off="скрыть"
+                  onChange={(keyHints) => onChange({ ...settings, hud: { ...settings.hud, keyHints } })}
+                />
+                <div className="chips chips--spaced">
+                  {(['left', 'right'] as const).map((side) => (
+                    <Chip key={side} active={editSide === side} onClick={() => setEditSide(side)}>
+                      {side === 'left' ? 'Левая' : 'Правая'}
+                    </Chip>
+                  ))}
+                </div>
+                <div className="chips chips--spaced">
+                  {PAD_SLOTS.map((slot) => (
+                    <Chip key={slot} active={editSlot === slot} onClick={() => setEditSlot(slot)}>
+                      {SLOT_LABELS[slot]}
+                    </Chip>
+                  ))}
+                </div>
+                <Slider
+                  label="Размер кнопки"
+                  value={Math.round(tweak.scale * 100)}
+                  min={50}
+                  max={150}
+                  step={5}
+                  unit="%"
+                  onChange={(percent) => setTweak({ ...tweak, scale: percent / 100 })}
+                />
+                <Slider
+                  label="Сдвиг по горизонтали"
+                  value={Math.round(tweak.dx * 100)}
+                  min={-25}
+                  max={25}
+                  step={1}
+                  unit="%"
+                  onChange={(percent) => setTweak({ ...tweak, dx: percent / 100 })}
+                />
+                <Slider
+                  label="Сдвиг по вертикали"
+                  value={Math.round(tweak.dy * 100)}
+                  min={-25}
+                  max={25}
+                  step={1}
+                  unit="%"
+                  onChange={(percent) => setTweak({ ...tweak, dy: percent / 100 })}
+                />
+                <div className="form__start">
+                  <Button ghost onClick={() => setTweak(DEFAULT_TWEAK)}><T>Вернуть эту кнопку</T></Button>
+                  <Button
+                    ghost
+                    onClick={() =>
+                      onChange({
+                        ...settings,
+                        pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
+                        padPositions: structuredClone(DEFAULT_POSITIONS),
+                        padShape: 'square',
+                        padButtons: structuredClone(DEFAULT_BUTTONS),
+                        hud: { ...settings.hud, keyHints: true },
+                      })
+                    }
+                  ><T>Сбросить кнопки</T></Button>
+                </div>
               </section>
               {(['left', 'right'] as const).map((side) => (
                 <section className="group" key={side}>
@@ -248,6 +341,9 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                     ? {
                         pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
                         padPositions: structuredClone(DEFAULT_POSITIONS),
+                        padShape: 'square',
+                        padButtons: structuredClone(DEFAULT_BUTTONS),
+                        hud: { ...settings.hud, keyHints: true },
                       }
                     : { bindings: cloneBindings(defaultBindings) }),
                   handling: { ...defaultHandling },
@@ -331,13 +427,6 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               step={5}
               unit="%"
               onChange={(percent) => onChange({ ...settings, hud: { ...settings.hud, nextPieceOpacity: percent / 100 } })}
-            />}
-            {touch && <Toggle
-              label="Подписи экранных кнопок"
-              value={settings.hud.keyHints}
-              on="показывать"
-              off="скрыть"
-              onChange={(keyHints) => onChange({ ...settings, hud: { ...settings.hud, keyHints } })}
             />}
             <Toggle
               label="Очки и уровень"

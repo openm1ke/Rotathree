@@ -159,7 +159,7 @@ void main() {
     state.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(find.text('Пауза'), findsNothing);
-    await tester.tap(find.text('Назад'));
+    await tester.tap(find.byTooltip('Назад'));
     expect(exits, 1);
     expect(completions, 0);
   });
@@ -193,7 +193,7 @@ void main() {
 
   testWidgets('finishing a level announces it, then the next glass comes in', (tester) async {
     final state = await pumpGame(tester, session: const CampaignSession(0));
-    expect(find.byTooltip('Уровень 1 / 15'), findsOneWidget);
+    expect(find.byTooltip('Уровень 1 / 16'), findsOneWidget);
 
     state.engine.state.score = campaignLevels[0].target;
     await pumpFrames(tester, 2);
@@ -202,7 +202,7 @@ void main() {
     expect(state.engine.sides.length, 1);
 
     await pumpFrames(tester, 60);
-    expect(find.byTooltip('Уровень 2 / 15'), findsOneWidget);
+    expect(find.byTooltip('Уровень 2 / 16'), findsOneWidget);
     expect(find.text('НОВЫЙ СТАКАН'), findsOneWidget);
     // The second glass grows first and gets its first piece when it is built.
     expect(state.engine.sides.length, 2);
@@ -212,14 +212,14 @@ void main() {
   });
 
   testWidgets('a new stage starts again with one glass and more colours', (tester) async {
-    final state = await pumpGame(tester, session: const CampaignSession(2));
-    state.engine.state.score = campaignLevels[2].target;
+    final state = await pumpGame(tester, session: const CampaignSession(3));
+    state.engine.state.score = campaignLevels[3].target;
     await pumpFrames(tester, 2);
-    expect(find.text('УРОВЕНЬ 3 ПРОЙДЕН'), findsOneWidget);
+    expect(find.text('УРОВЕНЬ 4 ПРОЙДЕН'), findsOneWidget);
 
     await pumpFrames(tester, 60);
     expect(find.text('НОВЫЙ ЭТАП'), findsOneWidget);
-    expect(state.engine.config.numberOfColors, campaignLevels[3].colours);
+    expect(state.engine.config.numberOfColors, campaignLevels[4].colours);
     expect(state.engine.sides.length, 1);
   });
 
@@ -263,7 +263,7 @@ void main() {
     expect(resumed.engine.sides.length, 1);
     await tester.tap(find.text('Продолжить'));
     await pumpFrames(tester, 60);
-    expect(find.byTooltip('Уровень 2 / 15'), findsOneWidget);
+    expect(find.byTooltip('Уровень 2 / 16'), findsOneWidget);
     expect(resumed.engine.sides.length, 2);
   });
 

@@ -174,7 +174,7 @@ test('tutorial can be completed using only the keyboard with gated, repeat-safe 
   await expect(page.locator('.tutorial__next')).toBeEnabled();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
-  await expect(page.getByText('Уровень 1 / 15', { exact: true })).toBeVisible();
+  await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
 });
 
@@ -228,7 +228,7 @@ test('tutorial shortcuts respect settings and custom Enter bindings, Backspace s
   await expect(page.getByRole('heading', { name: 'Поверните фигуру' })).toBeVisible();
   await page.keyboard.press('Backspace');
   await expect(page.locator('.tutorial')).toHaveCount(0);
-  await expect(page.getByText('Уровень 1 / 15', { exact: true })).toBeVisible();
+  await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
 });
 
@@ -380,7 +380,7 @@ test('settings freeze campaign banners and ending a run records statistics', asy
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.sides.length)).toBe(
     1,
   );
-  await page.getByRole('button', { name: '← Назад', exact: true }).click();
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await page.getByRole('button', { name: 'Завершить партию' }).click();
   await expect
@@ -475,7 +475,7 @@ test('manual language applies immediately, persists and preserves a frozen game'
   await expectEnglish(page);
   expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.snapshot())).toEqual(snapshot);
-  await page.getByRole('button', { name: '← Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.getByText('Level 1 complete', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await page.getByRole('button', { name: 'Main menu', exact: true }).click();
@@ -509,7 +509,7 @@ test.describe('automatic English locale', () => {
         await expect(page.getByRole('button', { name: 'My palette 1', exact: true })).toBeVisible();
         await expectEnglish(page);
       }
-      await page.getByRole('button', { name: '← Back', exact: true }).click();
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
     }
   });
   test('phone tutorial translates instructions and accessible D-pad actions', async ({ page }) => {

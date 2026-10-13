@@ -19,14 +19,15 @@ class CampaignLevel {
   final double inactiveStep;
 }
 
-/// Fifteen levels in four stages, one stage per number of colours. Each stage
-/// starts again with one glass and adds glasses one by one. The points were
-/// chosen from simulated bot games (tool/campaign_sim.dart): a level takes a
-/// decent player about 30 seconds at the start, about three minutes at the
-/// end. The last three levels step the falling up by about ten per cent.
+/// Sixteen levels in four stages, one stage per number of colours. Each stage
+/// starts again with one glass and adds glasses one by one up to four. The
+/// points were chosen from simulated bot games (tool/campaign_sim.dart): a
+/// level takes a decent player about 30 seconds at the start, about three
+/// minutes at the end. The last three levels step the falling up by about ten
+/// per cent.
 ///
 /// Stages, from the top:
-///   3 colours — 1, 2, 3 glasses
+///   3 colours — 1, 2, 3, 4 glasses
 ///   4 colours — 1, 2, 3, 4 glasses
 ///   5 colours — 1, 2, 3, 4 glasses
 ///   6 colours — 1, 2, 3, 4 glasses (the last level of the campaign)
@@ -34,6 +35,7 @@ const campaignLevels = <CampaignLevel>[
   CampaignLevel(colours: 3, glasses: 1, target: 1200, activeStep: 1, inactiveStep: 3),
   CampaignLevel(colours: 3, glasses: 2, target: 1800, activeStep: 1, inactiveStep: 3),
   CampaignLevel(colours: 3, glasses: 3, target: 2400, activeStep: 1, inactiveStep: 3),
+  CampaignLevel(colours: 3, glasses: 4, target: 2500, activeStep: 1, inactiveStep: 3),
   CampaignLevel(colours: 4, glasses: 1, target: 2600, activeStep: 1, inactiveStep: 3),
   CampaignLevel(colours: 4, glasses: 2, target: 2800, activeStep: 1, inactiveStep: 3),
   CampaignLevel(colours: 4, glasses: 3, target: 3200, activeStep: 1, inactiveStep: 3),

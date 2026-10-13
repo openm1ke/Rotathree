@@ -25,5 +25,11 @@ export function LicensesTab() {
         {VK_BUILD && <article className="license-card"><strong>VK Bridge</strong><p>MIT</p><a href="./licenses/VK-Bridge-MIT.txt" target="_blank" rel="noopener noreferrer">MIT ↗</a></article>}
       </div>
     </section>
+    <section className="group">
+      <h3><T>Автор</T></h3>
+      <div className="license-list">
+        <article className="license-card"><strong>Mikhail Shmyrev</strong><p><a href="mailto:muxaujish@yandex.ru">muxaujish@yandex.ru</a></p></article>
+      </div>
+    </section>
   </>;
 }

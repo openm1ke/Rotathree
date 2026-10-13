@@ -12,10 +12,10 @@ import 'helpers.dart';
 
 void main() {
   group('the campaign', () {
-    test('fifteen levels in stages of 3, 4, 5 and 6 colours, with more glasses', () {
-      expect(campaignLevels.length, 15);
+    test('sixteen levels in stages of 3, 4, 5 and 6 colours, with more glasses', () {
+      expect(campaignLevels.length, 16);
       expect(campaignLevels.map((level) => level.colours).toSet(), {3, 4, 5, 6});
-      expect(campaignLast, 14);
+      expect(campaignLast, 15);
       for (var i = 1; i < campaignLevels.length; i++) {
         expect(campaignLevels[i].target, greaterThan(campaignLevels[i - 1].target));
         expect(campaignLevels[i].colours, greaterThanOrEqualTo(campaignLevels[i - 1].colours));
@@ -29,9 +29,10 @@ void main() {
         for (var i = 0; i < campaignLevels.length; i++)
           if (startsStage(i)) i,
       ];
-      expect(starts, [0, 3, 7, 11]);
-      expect(campaignLevels[3].glasses, 1);
-      expect(campaignLevels[7].glasses, 1);
+      expect(starts, [0, 4, 8, 12]);
+      expect(campaignLevels[4].glasses, 1);
+      expect(campaignLevels[8].glasses, 1);
+      expect(campaignLevels[12].glasses, 1);
     });
 
     test('the last three levels step the falling up', () {
@@ -39,11 +40,11 @@ void main() {
         for (var i = 0; i < campaignLevels.length; i++)
           if (campaignLevels[i].activeStep < 1) i,
       ];
-      expect(faster, [12, 13, 14]);
+      expect(faster, [13, 14, 15]);
     });
 
     test('a level asks for its own glasses, colours and speeds', () {
-      final config = levelConfig(campaignLevels[13]);
+      final config = levelConfig(campaignLevels[14]);
       expect(config.glassCount, 3);
       expect(config.numberOfColors, 6);
       expect(config.activeStepSeconds, 0.92);

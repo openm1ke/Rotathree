@@ -30,6 +30,52 @@ class GameIconButton extends StatelessWidget {
   );
 }
 
+/// The heading of every page and of the tutorial: a small arrow back, the mode
+/// in capitals above its title, and actions on the right.
+class ScreenHeading extends StatelessWidget {
+  const ScreenHeading({
+    super.key,
+    required this.kicker,
+    required this.title,
+    this.onBack,
+    this.actions = const [],
+  });
+
+  final String kicker;
+  final String title;
+  final VoidCallback? onBack;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Row(
+        children: [
+          if (onBack != null)
+            IconButton(
+              tooltip: context.tr('Назад'),
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Palette.text),
+            ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Translated first, then set in capitals.
+                LText(context.tr(kicker).toUpperCase(), translate: false, style: Type.label(11, color: Palette.accent)),
+                LText(title, style: Type.display(28)),
+              ],
+            ),
+          ),
+          ...actions,
+        ],
+      ),
+    );
+  }
+}
+
 /// A page of the app: a heading with a way back, the content and a footer.
 class ScreenFrame extends StatelessWidget {
   const ScreenFrame({
@@ -57,30 +103,7 @@ class ScreenFrame extends StatelessWidget {
     return SafeArea(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Row(
-              children: [
-                if (onBack != null)
-                  IconButton(
-                    tooltip: context.tr('Назад'),
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Palette.text),
-                  ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      LText(kicker.toUpperCase(), style: Type.label(11, color: Palette.accent)),
-                      LText(title, style: Type.display(28)),
-                    ],
-                  ),
-                ),
-                ...actions,
-              ],
-            ),
-          ),
+          ScreenHeading(kicker: kicker, title: title, onBack: onBack, actions: actions),
           Expanded(
             child: body ?? ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -221,6 +244,8 @@ class OptionChip extends StatelessWidget {
                 LText(
                   label,
                   translate: translate,
+                  maxLines: 1,
+                  softWrap: false,
                   style: numeric
                       ? Type.number(17, color: selected ? Palette.accent : Palette.text)
                       : Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
@@ -304,7 +329,7 @@ class OptionGroup<T> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LText(label, style: Type.body(14, weight: FontWeight.w800)),
+          _SettingLabel(label),
           if (note != null)
             LText(
               note!,
@@ -370,9 +395,8 @@ class SliderRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
-              ),
+              Expanded(child: _SettingLabel(label)),
+              const SizedBox(width: 10),
               LText(
                 '$text${unit.isEmpty ? '' : ' $unit'}${note == null ? '' : ' · $note'}',
                 style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
@@ -438,9 +462,8 @@ class SwitchRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Expanded(
-            child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
-          ),
+          Expanded(child: _SettingLabel(label)),
+          const SizedBox(width: 10),
           LText(
             value ? on : off,
             style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700),
@@ -456,6 +479,19 @@ class SwitchRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The name of a setting, kept on one line: a long name shrinks to fit.
+class _SettingLabel extends StatelessWidget {
+  const _SettingLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: LText(text, maxLines: 1, softWrap: false, style: Type.body(14, weight: FontWeight.w800)),
+      );
 }
 
 /// A key drawn like a keycap.

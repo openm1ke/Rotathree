@@ -25,7 +25,7 @@ import { Hud } from './Hud';
 import { CampaignProgress } from './CampaignProgress';
 import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
-import { Button, GameIconButton, Overlay } from './ui';
+import { BackButton, Button, GameIconButton, Overlay } from './ui';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
 import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 
@@ -837,7 +837,7 @@ export function GameScreen(props: Props) {
   );
   const tutorialHeader = (
     <header className="touch-hud tutorial-hud">
-      <button type="button" className="back" onClick={props.onExit}><T>← Назад</T></button>
+      <BackButton onClick={props.onExit} navigable={false} />
       <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
     </header>
   );

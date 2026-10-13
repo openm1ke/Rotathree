@@ -7,6 +7,7 @@ import { DEFAULT_CUSTOM, sanitizeCustom, type CustomSetup, type ModeId } from '.
 import { sanitizeRunSave, sanitizeSavedRuns, type RunSave, type SavedRuns } from './runSave';
 import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
 import { DEFAULT_POSITIONS, sanitizePositions, type PadPositions } from '../input/padPlacement';
+import { DEFAULT_BUTTONS, sanitizeButtons, sanitizeShape, type PadButtons, type PadShape } from '../input/padShape';
 import { ACTIONS } from '../input/bindings';
 import { getPlatformStorage } from '../platform/storageBackend';
 
@@ -67,6 +68,10 @@ export interface Settings {
   hud: HudOptions;
   pads: { left: PadLayout; right: PadLayout };
   padPositions: PadPositions;
+  /** The outline of every pad button. */
+  padShape: PadShape;
+  /** Size and place of single buttons, by pad. */
+  padButtons: PadButtons;
   audio: AudioOptions;
 }
 
@@ -95,6 +100,8 @@ export const defaultSettings = (): Settings => ({
   hud: { nextPiece: true, nextPieceOpacity: 1, keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
   padPositions: structuredClone(DEFAULT_POSITIONS),
+  padShape: 'square',
+  padButtons: structuredClone(DEFAULT_BUTTONS),
   audio: { music: true, musicVolume: 0.1 },
 });
 
@@ -151,6 +158,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     language: languageChoice(stored.language),
     bindings: sanitizeBindings(stored.bindings),
     padPositions: sanitizePositions(stored.padPositions),
+    padShape: sanitizeShape(stored.padShape),
+    padButtons: sanitizeButtons(stored.padButtons),
     pads: { left: pad(pads.left, DEFAULT_PADS.left), right: pad(pads.right, DEFAULT_PADS.right) },
     handling: {
       dasMs: numberIn(handling.dasMs, 0, 400, base.handling.dasMs),

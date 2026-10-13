@@ -10,7 +10,7 @@ import { useTouchControls } from '../input/touch';
 export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
 
 const ITEMS: readonly { id: MenuTarget; title: string; caption: string }[] = [
-  { id: 'campaign', title: 'Кампания', caption: '15 уровней' },
+  { id: 'campaign', title: 'Кампания', caption: '16 уровней' },
   { id: 'custom', title: 'Кастом', caption: 'Ваши правила' },
   { id: 'statistics', title: 'Статистика', caption: 'Результаты и рекорды' },
   { id: 'settings', title: 'Настройки', caption: 'Управление и оформление' },

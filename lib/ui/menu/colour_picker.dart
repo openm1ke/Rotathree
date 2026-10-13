@@ -142,7 +142,12 @@ class ColourSwatch extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    LText(name, style: Type.body(13, weight: FontWeight.w800)),
+                    // A colour name stays on one line; a long one shrinks to fit.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: LText(name, style: Type.body(13, weight: FontWeight.w800), maxLines: 1, softWrap: false),
+                    ),
                     LText(colourToHex(colour).toUpperCase(), style: Type.body(11, color: Palette.textDim)),
                   ],
                 ),

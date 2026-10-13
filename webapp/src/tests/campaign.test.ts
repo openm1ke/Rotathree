@@ -6,10 +6,10 @@ import { GLASS_ORDER } from '../game/config';
 import { BOTTOM, LEFT, RIGHT, TOP } from '../game/side';
 
 describe('the campaign', () => {
-  it('has fifteen levels: each stage adds colours and starts again from one glass', () => {
-    expect(CAMPAIGN).toHaveLength(15);
-    expect(CAMPAIGN.map((level) => level.colours)).toEqual([3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6]);
-    expect(CAMPAIGN.map((level) => level.glasses)).toEqual([1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
+  it('has sixteen levels: each stage adds colours and starts again from one glass', () => {
+    expect(CAMPAIGN).toHaveLength(16);
+    expect(CAMPAIGN.map((level) => level.colours)).toEqual([3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6]);
+    expect(CAMPAIGN.map((level) => level.glasses)).toEqual([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
     expect(CAMPAIGN.filter((_, i) => startsStage(i)).map((level) => level.glasses)).toEqual([1, 1, 1, 1]);
   });
 
@@ -23,15 +23,15 @@ describe('the campaign', () => {
   it('targets never go down, and the falling only speeds up at the end', () => {
     const targets = CAMPAIGN.map((level) => level.target);
     expect(targets.every((target, i) => i === 0 || target >= targets[i - 1])).toBe(true);
-    expect(CAMPAIGN.slice(0, 12).every((level) => level.activeStep === 1 && level.inactiveStep === 3)).toBe(true);
-    expect(CAMPAIGN.slice(12).every((level) => level.activeStep < 1 && level.inactiveStep < 3)).toBe(true);
+    expect(CAMPAIGN.slice(0, 13).every((level) => level.activeStep === 1 && level.inactiveStep === 3)).toBe(true);
+    expect(CAMPAIGN.slice(13).every((level) => level.activeStep < 1 && level.inactiveStep < 3)).toBe(true);
     // Small enough that a first level is short; big enough for a real finish.
     expect(CAMPAIGN[0].target).toBeLessThan(2000);
     expect(CAMPAIGN[CAMPAIGN_LAST].target).toBeGreaterThan(5000);
   });
 
   it('plans a session from its level', () => {
-    const plan = planFor({ mode: 'campaign', level: 4 });
+    const plan = planFor({ mode: 'campaign', level: 5 });
     expect(plan.config.glassCount).toBe(2);
     expect(plan.config.numberOfColors).toBe(4);
     expect(plan.ramp).toBeNull();
