@@ -54,3 +54,7 @@ app.*.map.json
 *.keystore
 *.p12
 *.pfx
+
+# AI-generated evaluation tracks (Suno Basic, non-commercial): never commit or ship
+**/deep-focus*.m4a
+**/Deep Focus*.m4a
