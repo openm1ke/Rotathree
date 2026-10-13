@@ -380,7 +380,7 @@ test('settings freeze campaign banners and ending a run records statistics', asy
   expect(await page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.sides.length)).toBe(
     1,
   );
-  await page.getByRole('button', { name: '← Назад', exact: true }).click();
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
   await page.getByRole('button', { name: 'Пауза', exact: true }).click();
   await page.getByRole('button', { name: 'Завершить партию' }).click();
   await expect

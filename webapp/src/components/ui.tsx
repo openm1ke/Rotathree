@@ -3,6 +3,17 @@ import { T } from '../i18n/Text';
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
+/** The way back of every page: a small chevron, the same on every screen. The
+ * label stays translated for keyboard users and screen readers. */
+export function BackButton({ onClick, navigable = true }: { onClick: () => void; navigable?: boolean }) {
+  const { t } = useI18n();
+  return <button type="button" className="back" aria-label={t('Назад')} title={t('Назад')} data-nav={navigable || undefined} onClick={onClick}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
+  </button>;
+}
+
 /** Compact game actions retain translated labels for keyboard and screen readers. */
 export function GameIconButton({ icon, label, onClick }: {
   icon: 'pause' | 'settings'; label: string; onClick: () => void;
@@ -120,9 +131,7 @@ export function Screen({
   return (
     <main className={`screen ${className}`} ref={rootRef as RefObject<HTMLElement>}>
       <header className="screen__head">
-        <button type="button" className="back" data-nav onClick={onBack}><T>
-          ← Назад
-        </T></button>
+        <BackButton onClick={onBack} />
         <div className="screen__title">
           {kicker && <span className="kicker"><T>{kicker}</T></span>}
           <h1><T>{title}</T></h1>

@@ -578,19 +578,30 @@ input:focus-visible {
 }
 
 .back {
-  padding: 9px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
   background: transparent;
   color: var(--text-dim);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+}
+
+.back svg {
+  width: 26px;
+  height: 26px;
 }
 
 .back:hover {
   color: #fff;
-  border-color: var(--line-strong);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .screen__title h1 {
@@ -1638,7 +1649,6 @@ input:focus-visible {
   gap: 12px;
   flex-shrink: 0;
 }
-.tutorial-hud .back { min-height: 44px; }
 .touch-controls {
   display: flex;
   justify-content: space-between;
@@ -1961,13 +1971,6 @@ select:focus-visible {
 @media (max-width: 600px) {
   .screen--campaign .screen__head {
     gap: 12px;
-  }
-
-  .screen--campaign .back {
-    flex: none;
-    min-height: 44px;
-    padding-inline: 10px;
-    white-space: nowrap;
   }
 
   .home__side {
