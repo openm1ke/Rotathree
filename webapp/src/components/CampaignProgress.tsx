@@ -26,7 +26,7 @@ export function CampaignProgress({ level, into, target, animated }: Props) {
     aria-valuetext={t(`${formatScore(earned)} / ${formatScore(target)}. Ещё ${formatScore(remaining)}.`)}
     data-animated={animated}
   >
-    <div className="campaign-progress__fill" style={{ transform: `scaleX(${fraction})` }} />
+    <div className="campaign-progress__fill" style={{ width: `${fraction * 100}%` }} />
     {earned > 0 && <div className="campaign-progress__pulse" key={`${level}:${earned}`} />}
     <div className="campaign-progress__text" aria-hidden="true">
       <strong><T>{formatScore(earned)} / {formatScore(target)}</T></strong>

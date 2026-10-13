@@ -8,7 +8,7 @@ import { planFor, type Session } from '../game/session';
 import { MODE_NAMES, type RunPlan } from '../game/modes';
 import type { Side } from '../game/side';
 import { KeyboardController } from '../input/keyboard';
-import { keyLabel, type Action } from '../input/bindings';
+import { ACTIONS, type Action } from '../input/bindings';
 import { PadController, type PadAction } from '../input/pads';
 import { useTouchControls } from '../input/touch';
 import { makePiece } from '../game/piece';
@@ -146,8 +146,17 @@ export function GameScreen(props: Props) {
     let dirty = true;
     const measure = () => {
       const style = getComputedStyle(frame);
-      const width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      let width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       const height = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const layout = frame.closest<HTMLElement>('.tutorial-layout');
+      if (layout && getComputedStyle(layout).getPropertyValue('--tutorial-wide').trim() === '1') {
+        const panel = layout.querySelector<HTMLElement>('.tutorial')!;
+        const gap = parseFloat(getComputedStyle(layout).columnGap);
+        const aspect = parseFloat(style.getPropertyValue('--tutorial-aspect'));
+        // The square canvas has empty sides around a single tall glass. Fit its
+        // visible portion beside the lesson, without shrinking the glass itself.
+        width = (layout.clientWidth - panel.offsetWidth - gap) / aspect;
+      }
       const next = Math.floor(Math.max(0, Math.min(width, height)));
       setSize(next);
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PIXELS / Math.max(1, next));
@@ -158,6 +167,8 @@ export function GameScreen(props: Props) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
+    const tutorialLayout = frame.closest('.tutorial-layout');
+    if (tutorialLayout) observer.observe(tutorialLayout);
 
     let current: Status = props.restore && !props.resumeImmediately ? 'paused' : 'playing';
     setStatus(current);
@@ -460,7 +471,6 @@ export function GameScreen(props: Props) {
           engine.board.paintCenter(['. Y . . . . . . . .', 'B . . . . . . . . .', 'R R . . . . . . . .']);
           engine.incoming.put(0, makePiece([0, 1, 2]), { column: 2 });
         } else if (lesson === 4) engine.addGlass();
-        if (!live.current.blocked) canvas.focus({ preventScroll: true });
       },
       activeGlass: (slot: number) => {
         if (current !== 'playing' || live.current.blocked || !allowsTutorial('glassRight') || banner?.blocking) return;
@@ -525,6 +535,24 @@ export function GameScreen(props: Props) {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || live.current.blocked || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      // Tab belongs to interface navigation, including with an older Tab binding.
+      // Keep a running game's focus on its menu buttons, rather than letting it
+      // leave the page and trigger the window-blur pause.
+      if (event.code === 'Tab') {
+        if (current === 'playing' && !tutorial && !target?.closest('[role="dialog"], input, select, textarea, [contenteditable]')) {
+          const buttons = [...frame.closest('.game')!.querySelectorAll<HTMLButtonElement>('.hud__buttons button:not(:disabled)')];
+          if (buttons.length > 0) {
+            event.preventDefault();
+            const index = buttons.findIndex((button) => button === document.activeElement);
+            const next = index < 0
+              ? event.shiftKey ? buttons.length - 1 : 0
+              : (index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+            buttons[next].focus({ preventScroll: true });
+          }
+        }
+        return;
+      }
       if (current === 'paused') {
         if (live.current.settings.bindings.pause.includes(event.code)) {
           event.preventDefault();
@@ -533,7 +561,6 @@ export function GameScreen(props: Props) {
         return;
       }
       if (current !== 'playing') return;
-      const target = event.target as HTMLElement | null;
       if (target?.closest('input, select, textarea, [contenteditable], [role="dialog"]')) return;
       if (tutorial && ['Enter', 'NumpadEnter', 'Backspace'].includes(event.code)) {
         // Focused header/practice/skip buttons retain their normal Enter action.
@@ -545,6 +572,13 @@ export function GameScreen(props: Props) {
           // A custom Enter binding can still perform the lesson's required action.
           keyboard.keyDown(event.code, false);
         } else actions.current.nextLesson();
+        return;
+      }
+      // Space remains a game control while the lesson's Next button has focus.
+      // Prevent the browser from treating it as another click on Next.
+      if (tutorial && event.code === 'Space' && target?.closest('.tutorial__next')) {
+        event.preventDefault();
+        keyboard.keyDown(event.code, event.repeat);
         return;
       }
       if (target?.closest('button') && ['Space', 'Enter', 'NumpadEnter'].includes(event.code)) return;
@@ -755,70 +789,78 @@ export function GameScreen(props: Props) {
     ? (['left', 'right'] as const).flatMap((side) => {
         const slots = PAD_SLOTS.filter((slot) => lessonActions.includes(settings.pads[side][slot] as Action));
         const symbols = { up: '↑', left: '←', right: '→', down: '↓', center: '●' };
-        return slots.length ? [`${side === 'left' ? 'Левая' : 'Правая'}: ${slots.map((slot) => symbols[slot]).join(' ')}`] : [];
+        return slots.length
+          ? [{ label: side === 'left' ? 'Левая' : 'Правая', keys: slots.map((slot) => symbols[slot]) }]
+          : [];
       })
-    : lessonActions.flatMap((action) => settings.bindings[action].map(keyLabel));
+    : lessonActions.flatMap((action) => settings.bindings[action].length
+      ? [{ label: ACTIONS.find(({ id }) => id === action)!.label, keys: settings.bindings[action] }]
+      : []);
   const missingControl = lessonActions.length > 0 && tutorialControls.length === 0;
+  const field = (
+    <div className="game__frame" ref={frameRef}>
+      <div
+        className="stage"
+        style={{
+          width: size,
+          height: size,
+          fontSize: Math.max(9, size / 58),
+          ['--hud-opacity' as string]: settings.hud.opacity,
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          className="stage__canvas"
+          tabIndex={-1}
+          aria-label={t("Игровое поле")}
+          style={{ width: size, height: size }}
+          onClick={onCanvasClick}
+        />
+
+        {banner && <LevelBanner banner={banner} />}
+      </div>
+    </div>
+  );
+  const lessonPanel = tutorial && (
+    <TutorialPanel
+      step={tutorialStep}
+      performed={performed}
+      keyboard={!touch}
+      active={!blocked && status === 'playing'}
+      controls={tutorialControls}
+      onPractice={missingControl ? () => actions.current.practice(lessonActions[0]) : undefined}
+      onNext={() => actions.current.nextLesson()}
+      onSkip={() => props.onTutorialDone?.()}
+    />
+  );
+  const tutorialHeader = (
+    <header className="touch-hud tutorial-hud">
+      <button type="button" className="back" onClick={props.onExit}><T>← Назад</T></button>
+      <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
+    </header>
+  );
 
   return (
     <main
       className={`game ${touch ? 'game--touch' : ''} ${tutorial ? 'game--tutorial' : ''}`}
-      style={{ ['--field-size' as string]: size > 0 ? `${size}px` : '100%' }}
+      style={{
+        ['--field-size' as string]: size > 0 ? `${size}px` : '100%',
+        ['--tutorial-aspect' as string]: tutorialStep < 4 ? 0.56 : 1,
+      }}
       data-frozen={status === 'paused' || blocked}
     >
-      {tutorial && (
-        <header className="touch-hud tutorial-hud">
-          <button type="button" className="chip" onClick={props.onExit}><T>← Назад</T></button>
-          <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
-        </header>
-      )}
       {!tutorial && <header className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
         <Hud hud={hud} callout={callout} options={settings.hud}
           onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
       </header>}
       {campaign && !tutorial && !touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
-      <div className="game__frame" ref={frameRef}>
-        <div
-          className="stage"
-          style={{
-            width: size,
-            height: size,
-            fontSize: Math.max(9, size / 58),
-            ['--hud-opacity' as string]: settings.hud.opacity,
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            className="stage__canvas"
-            tabIndex={0}
-            aria-label={t("Игровое поле")}
-            style={{ width: size, height: size }}
-            onClick={onCanvasClick}
-          />
-
-          {banner && <LevelBanner banner={banner} />}
-        </div>
-      </div>
-
+      {tutorial ? <div className="tutorial-layout">
+        <div className="tutorial-play">{tutorialHeader}{field}</div>
+        {lessonPanel}
+      </div> : field}
       {campaign && !tutorial && touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
-
-      {tutorial && (
-        <TutorialPanel
-          step={tutorialStep}
-          performed={performed}
-          keyboard={!touch}
-          controls={
-            missingControl
-              ? 'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.'
-              : tutorialControls.join(' · ')
-          }
-          onPractice={missingControl ? () => actions.current.practice(lessonActions[0]) : undefined}
-          onNext={() => actions.current.nextLesson()}
-          onSkip={() => props.onTutorialDone?.()}
-        />
-      )}
       {touch && (
         <div className="touch-controls">
           <TouchControls
