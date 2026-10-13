@@ -140,21 +140,32 @@ test('tutorial can be completed using only the keyboard with gated, repeat-safe 
   await expect(page.getByRole('heading', { name: 'Одна фигура — три клетки' })).toBeVisible();
   await expect(page.locator('.tutorial__action kbd')).toHaveText(['Backspace', 'Enter']);
   await expect(page.locator('.tutorial__next')).toHaveClass(/is-ready/);
+  await expect(page.locator('.tutorial__next')).toBeFocused();
+  const panel = await page.locator('.tutorial').boundingBox();
+  const field = await page.locator('.game__frame').boundingBox();
+  const header = await page.locator('.tutorial-hud').boundingBox();
+  expect(field!.x - panel!.x - panel!.width).toBeCloseTo(24, 0);
+  expect(header!.x).toBeCloseTo(field!.x, 0);
+  expect(header!.width).toBeCloseTo(field!.width, 0);
   await page.keyboard.down('Enter');
   await page.keyboard.down('Enter');
   await page.keyboard.up('Enter');
   await expect(page.getByRole('button', { name: 'Дальше', exact: true })).toBeDisabled();
   await expect(page.locator('.tutorial__next')).not.toHaveClass(/is-ready/);
+  await expect(page.locator('.tutorial__next')).toBeFocused();
+  await expect(page.locator('.tutorial__controls kbd')).toHaveText(['A', 'D']);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
   await page.keyboard.press('KeyD');
   await expect(page.locator('.tutorial__next')).toBeEnabled();
+  await expect(page.locator('.tutorial__next')).toBeFocused();
   await page.keyboard.press('Enter');
   await page.keyboard.press('KeyW');
   await expect(page.locator('.tutorial__next')).toBeEnabled();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Space');
   await expect(page.locator('.tutorial__next')).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Соберите три в ряд' })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase))
@@ -204,12 +215,13 @@ test('tutorial shortcuts respect settings and custom Enter bindings, Backspace s
   await startCampaign(page, false);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
+  await expect(page.locator('.tutorial__controls kbd')).toContainText(['A', 'Enter']);
   await page.getByRole('button', { name: 'Настройки', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible();
   await page.keyboard.press('Backspace');
   await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
-  await page.getByLabel('Игровое поле').focus();
+  await expect(page.locator('.tutorial__next')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: '✓ Дальше', exact: true })).toBeEnabled();
   await page.keyboard.press('Enter');
@@ -279,6 +291,54 @@ test('web forms are centered and settings tabs scroll and swipe without wrapping
   expect(await page.locator('.tabs').evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+for (const legacyTabPause of [false, true]) {
+  test(`game Tab cycles menu buttons without pausing${legacyTabPause ? ' with an older Tab pause binding' : ''}`, async ({ page }) => {
+    if (legacyTabPause) await page.addInitScript(() => localStorage.setItem('rotathree.settings.v2', JSON.stringify({
+      bindings: { pause: ['Tab'] },
+    })));
+    await startCampaign(page);
+    const pause = page.getByRole('button', { name: 'Пауза', exact: true });
+    const settings = page.getByRole('button', { name: 'Настройки', exact: true });
+    const field = page.getByLabel('Игровое поле');
+    await expect(field).toHaveAttribute('tabindex', '-1');
+    await field.focus();
+    expect(await field.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('none');
+    await page.keyboard.press('Shift+Tab');
+    await expect(settings).toBeFocused();
+    for (let i = 0; i < 5; i++) {
+      await page.keyboard.press('Tab');
+      await expect(pause).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(settings).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(pause).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(settings).toBeFocused();
+    }
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(field).not.toBeFocused();
+    const seconds = () => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.state.elapsedSeconds);
+    const before = await seconds();
+    await expect.poll(seconds).toBeGreaterThan(before);
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Пауза', exact: true })).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('dialog', { name: 'Пауза', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+    await page.keyboard.press('Tab');
+    await expect(settings).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(settings).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(pause).toBeFocused();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+}
 
 test('pause traps focus, Space activates Continue, saved transition resumes after reload', async ({ page }) => {
   await startCampaign(page);

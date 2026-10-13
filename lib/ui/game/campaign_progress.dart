@@ -62,16 +62,16 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
               return DecoratedBox(
                 decoration: BoxDecoration(
                   color: Palette.panelStrong,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: Palette.accent.withValues(alpha: .3 + wave * .4)),
                 ),
                 child: child,
               );
             },
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(999),
               child: SizedBox(
-                height: 22,
+                height: 16,
                 child: Stack(children: [
                   Positioned.fill(
                     child: TweenAnimationBuilder<double>(
@@ -82,7 +82,10 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
                       builder: (context, value, child) => FractionallySizedBox(
                         alignment: Alignment.centerLeft, widthFactor: value, child: child,
                       ),
-                      child: DecoratedBox(decoration: BoxDecoration(color: Palette.accent.withValues(alpha: .4))),
+                      child: DecoratedBox(decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.all(Radius.circular(999)),
+                        color: Palette.accent.withValues(alpha: .4),
+                      )),
                     ),
                   ),
                   Positioned.fill(
@@ -91,7 +94,8 @@ class _CampaignProgressState extends State<CampaignProgress> with SingleTickerPr
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: FittedBox(fit: BoxFit.scaleDown, child: LText(
-                          '${formatNumber(earned)} / ${formatNumber(widget.target)}', style: Type.display(12),
+                          '${formatNumber(earned)} / ${formatNumber(widget.target)}',
+                          style: Type.display(12, shadows: const [Shadow(color: Palette.bg, blurRadius: 3)]),
                         )),
                       ),
                     ),

@@ -529,6 +529,9 @@ class GameScreenState extends State<GameScreen>
   }
 
   void _tutorialNext() {
+    if (widget.blocked || (_tutorialStep > 0 && _tutorialStep < tutorialLessons.length - 1 && !_tutorialPerformed)) {
+      return;
+    }
     if (_tutorialStep == tutorialLessons.length - 1) {
       widget.onTutorialDone?.call();
       return;
@@ -741,14 +744,14 @@ class GameScreenState extends State<GameScreen>
     4 => [GameAction.glassLeft, GameAction.glassRight, GameAction.glassOpposite],
     _ => [],
   };
-  List<String> get _tutorialControls {
+  List<TutorialControl> get _tutorialControls {
     const symbols = ['↑', '←', '→', '↓', '●'];
-    final hints = <String>[];
+    final hints = <TutorialControl>[];
     for (final right in [false, true]) {
       final layout = right ? widget.settings.rightPad : widget.settings.leftPad;
       final slots = PadSlot.values.where((slot) => _lessonActions.contains(layout[slot]));
       if (slots.isNotEmpty) {
-        hints.add('${right ? 'Правая' : 'Левая'}: ${slots.map((slot) => symbols[slot.index]).join(' ')}');
+        hints.add((label: right ? 'Правая' : 'Левая', keys: slots.map((slot) => symbols[slot.index]).toList()));
       }
     }
     return hints;
@@ -779,8 +782,14 @@ class GameScreenState extends State<GameScreen>
                       child: Row(
                         children: [
                           if (widget.tutorial) ...[
-                            TextButton.icon(
+                            OutlinedButton.icon(
                               onPressed: handleBack,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Palette.textDim,
+                                side: const BorderSide(color: Palette.lineStrong),
+                                minimumSize: const Size(0, 44),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
                               icon: const Icon(Icons.arrow_back_rounded, size: 18),
                               label: const LText('Назад'),
                             ),
@@ -836,9 +845,7 @@ class GameScreenState extends State<GameScreen>
                         child: TutorialPanel(
                           step: _tutorialStep,
                           performed: _tutorialPerformed,
-                          controls: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
-                              ? 'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.'
-                              : _tutorialControls.join(' · '),
+                          controls: _tutorialControls,
                           onPractice: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
                               ? () {
                                   _pads.down(_lessonActions.first);

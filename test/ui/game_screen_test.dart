@@ -310,7 +310,8 @@ void main() {
     await tester.tapAt(padButton(tester, 0, .5, 5 / 6));
     await tester.pump();
     expect(find.text('✓ Дальше'), findsOneWidget);
-    expect(find.textContaining('Левая: ↓'), findsOneWidget);
+    expect(find.descendant(of: find.byType(TutorialPanel), matching: find.text('Левая')), findsOneWidget);
+    expect(tester.widget<TutorialPanel>(find.byType(TutorialPanel)).controls.first.keys, ['↓']);
   });
 
   testWidgets('phone tutorial requires each action and resolves a real match', (tester) async {

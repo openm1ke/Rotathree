@@ -40,7 +40,7 @@ python3 tool/check_android_aot.py build/app/outputs/bundle/playRelease/app-play-
 
 Без локальных файлов можно передать `ROTATHREE_PLAY_KEYSTORE`, `ROTATHREE_PLAY_STORE_PASSWORD`, `ROTATHREE_PLAY_KEY_ALIAS`, `ROTATHREE_PLAY_KEY_PASSWORD`; для RuStore аналогичные `ROTATHREE_RUSTORE_*`. Общие `ROTATHREE_*` остаются резервным способом конфигурации. Без параметров подписи release завершается отказом; debug не требует магазинных ключей.
 
-Текущий подписанный APK — `build/releases/stores/RotaThree-rustore-0.1.0+5.apk`. Рядом `checks.json` с SHA-256 файла, сертификатом и результатами проверки AOT. Проверены подпись, идентификатор, номер сборки и наличие только пяти музыкальных файлов CC0; это сборка для дальнейшей подготовки публикации, а не подтверждение готовности карточек магазинов. AAB Google Play собирается отдельно командой выше.
+Текущий подписанный APK — `build/releases/stores/RotaThree-rustore-0.1.0+6.apk`. Рядом `checks.json` с SHA-256 файла, сертификатом и результатами проверки AOT. Проверены подпись, идентификатор, номер сборки и наличие только пяти музыкальных файлов CC0; это сборка для дальнейшей подготовки публикации, а не подтверждение готовности карточек магазинов. AAB Google Play собирается отдельно командой выше.
 
 ## Авторы и лицензии
 

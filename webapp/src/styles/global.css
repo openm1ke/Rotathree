@@ -1347,6 +1347,7 @@ input:focus-visible {
 .stage__canvas {
   display: block;
 }
+.stage__canvas:focus { outline: none; box-shadow: none; }
 
 @keyframes stage-in {
   from {
@@ -1627,10 +1628,13 @@ input:focus-visible {
 .game-icon:hover { background: var(--bg-raised); border-color: var(--accent); }
 .game-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .tutorial-hud {
-  width: min(1100px, 100%);
+  width: min(calc(100% - 24px), max(320px, var(--field-size)));
   align-self: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
 }
+.tutorial-hud .back { min-height: 44px; }
 .touch-controls {
   display: flex;
   justify-content: space-between;
@@ -1706,20 +1710,40 @@ select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+.tutorial-layout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.tutorial-play {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
 .tutorial {
+  display: flex;
+  flex-direction: column;
   width: min(620px, calc(100% - 16px));
+  max-height: min(190px, 30dvh);
   align-self: center;
   flex-shrink: 0;
   margin: 4px 8px;
   padding: 8px 10px 6px;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: 18px;
   background: var(--panel-strong);
 }
+.tutorial > div:first-child { min-height: 0; overflow-y: auto; }
 .tutorial h2 {
-  font-size: 14px;
-  line-height: 1.15;
-  margin: 0;
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.2;
+  margin: 4px 0;
 }
 .tutorial__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tutorial__heading .kicker { flex-shrink: 0; font-size: 10px; }
@@ -1728,15 +1752,26 @@ select:focus-visible {
   line-height: 1.35;
   margin: 4px 0;
 }
-.tutorial p.tutorial__controls {
-  color: var(--accent);
-  font-size: 11px;
+.tutorial__controls { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.tutorial__control { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--accent); }
+.tutorial .keys { flex-wrap: wrap; }
+.tutorial .keycap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1;
 }
 .tutorial__actions {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   margin-top: 4px;
+  flex-shrink: 0;
 }
 .tutorial__actions .button {
   min-height: 44px;
@@ -1749,7 +1784,14 @@ select:focus-visible {
   box-shadow: 0 0 18px rgba(255, 42, 134, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 .tutorial__next { transition: box-shadow 180ms ease; }
-.tutorial__next:disabled { box-shadow: none; }
+.tutorial__next[aria-disabled='true'] {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--text-dim);
+  box-shadow: none;
+  cursor: default;
+}
+.tutorial__next[aria-disabled='true']:focus-visible { outline-color: var(--line-strong); }
 .game--touch .level-banner {
   max-width: 92%;
 }
@@ -1761,18 +1803,6 @@ select:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
-}
-.tutorial {
-  display: flex;
-  flex-direction: column;
-  max-height: min(190px, 30dvh);
-}
-.tutorial > div:first-child {
-  min-height: 0;
-  overflow-y: auto;
-}
-.tutorial__actions {
-  flex-shrink: 0;
 }
 .game[data-frozen='true'] .banner,
 .game[data-frozen='true'] .banner * {
@@ -1802,6 +1832,59 @@ select:focus-visible {
   height: auto;
   min-height: 0;
   padding: 0;
+}
+
+@media (min-width: 960px) and (min-height: 560px) {
+  .game--tutorial:not(.game--touch) .tutorial-hud { width: 100%; padding: 16px 0; }
+  .game--tutorial:not(.game--touch) .tutorial-layout {
+    --tutorial-wide: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    width: min(1520px, calc(100% - 64px));
+    margin-inline: auto;
+    padding-bottom: 24px;
+  }
+  .game--tutorial:not(.game--touch) .tutorial-play {
+    flex: 0 1 calc(var(--field-size) * var(--tutorial-aspect));
+    height: 100%;
+  }
+  .game--tutorial:not(.game--touch) .game__frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .game--tutorial:not(.game--touch) .stage { flex-shrink: 0; }
+  .game--tutorial:not(.game--touch) .tutorial {
+    order: -1;
+    width: clamp(360px, 32vw, 520px);
+    max-height: 100%;
+    margin: 0;
+    padding: clamp(24px, 2vw, 36px);
+    border-radius: 24px;
+  }
+  .game--tutorial:not(.game--touch) .tutorial h2 {
+    font-size: clamp(28px, 2.1vw, 38px);
+    line-height: 1.1;
+    text-transform: uppercase;
+    margin: 16px 0;
+  }
+  .game--tutorial:not(.game--touch) .tutorial p {
+    font-size: clamp(18px, 1.35vw, 24px);
+    line-height: 1.5;
+    margin: 12px 0;
+  }
+  .game--tutorial:not(.game--touch) .tutorial__heading .kicker { font-size: 13px; }
+  .game--tutorial:not(.game--touch) .tutorial__controls { flex-direction: column; gap: 12px; margin-top: 24px; }
+  .game--tutorial:not(.game--touch) .tutorial__control { justify-content: space-between; gap: 12px; font-size: 16px; }
+  .game--tutorial:not(.game--touch) .tutorial .keycap { min-width: 40px; min-height: 40px; font-size: 17px; padding: 7px 10px; }
+  .game--tutorial:not(.game--touch) .tutorial__actions { margin-top: 28px; gap: 12px; }
+  .game--tutorial:not(.game--touch) .tutorial__actions .button { min-height: 52px; padding: 12px 16px; font-size: 17px; }
+  .game--tutorial:not(.game--touch) .tutorial__action { gap: 8px; }
+  .game--tutorial:not(.game--touch) .tutorial__action > .keycap { min-height: 28px; min-width: 28px; font-size: 12px; padding: 5px 8px; color: var(--text-dim); }
 }
 
 .game__readout {
@@ -1918,24 +2001,24 @@ select:focus-visible {
   animation-play-state: paused;
 }
 
-/* A slim, solid score goal shares the width of the field. */
+/* A slim, rounded score goal shares the width of the field. */
 .campaign-progress {
   position: relative;
   flex: none;
   align-self: center;
   width: min(calc(100% - 24px), max(320px, var(--field-size)));
-  height: 22px;
+  height: 16px;
   margin: 0 0 8px;
   border: 1px solid rgb(120 205 255 / .3);
-  border-radius: 4px;
+  border-radius: 999px;
   overflow: hidden;
   background: var(--panel-strong);
 }
 .campaign-progress__fill, .campaign-progress__pulse { position: absolute; inset: 0; pointer-events: none; }
-.campaign-progress__fill { transform-origin: left center; background: rgb(120 205 255 / .4); transition: transform 320ms ease-out; }
-.campaign-progress__pulse { opacity: 0; border: 1px solid var(--accent); border-radius: 3px; animation: goal-pulse 650ms ease-out; }
+.campaign-progress__fill { border-radius: inherit; background: rgb(120 205 255 / .4); transition: width 320ms ease-out; }
+.campaign-progress__pulse { opacity: 0; border: 1px solid var(--accent); border-radius: inherit; animation: goal-pulse 650ms ease-out; }
 .campaign-progress__text { position: relative; height: 100%; display: flex; align-items: center; justify-content: flex-end; padding: 0 8px; }
-.campaign-progress__text strong { font-size: 12px; font-style: italic; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 2px var(--bg); }
+.campaign-progress__text strong { font-size: 12px; line-height: 1; font-style: italic; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 3px var(--bg), 0 0 1px var(--bg); }
 .campaign-progress[data-animated="false"] .campaign-progress__fill { transition: none; }
 .campaign-progress[data-animated="false"] .campaign-progress__pulse { animation: none; }
 .game--touch .campaign-progress { margin: 4px 0 8px; }
