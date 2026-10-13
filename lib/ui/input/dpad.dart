@@ -207,15 +207,19 @@ class _PadButton extends StatelessWidget {
                     if (showLabel && slot != PadSlot.center)
                       Padding(
                         padding: EdgeInsets.only(top: size * 0.02),
-                        child: LText(
-                          padActionCaption(action),
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          softWrap: false,
-                          style: Type.label(
-                            9,
-                            color: pressed ? Colors.white : Palette.textDim,
-                          ).copyWith(letterSpacing: 0.3),
+                        // The caption shrinks to the button instead of being cut off.
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: LText(
+                            padActionCaption(action),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            softWrap: false,
+                            style: Type.label(
+                              9,
+                              color: pressed ? Colors.white : Palette.textDim,
+                            ).copyWith(letterSpacing: 0.3),
+                          ),
                         ),
                       ),
                   ],

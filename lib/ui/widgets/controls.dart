@@ -221,6 +221,8 @@ class OptionChip extends StatelessWidget {
                 LText(
                   label,
                   translate: translate,
+                  maxLines: 1,
+                  softWrap: false,
                   style: numeric
                       ? Type.number(17, color: selected ? Palette.accent : Palette.text)
                       : Type.body(13, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text),
@@ -304,7 +306,7 @@ class OptionGroup<T> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LText(label, style: Type.body(14, weight: FontWeight.w800)),
+          _SettingLabel(label),
           if (note != null)
             LText(
               note!,
@@ -370,9 +372,8 @@ class SliderRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
-              ),
+              Expanded(child: _SettingLabel(label)),
+              const SizedBox(width: 10),
               LText(
                 '$text${unit.isEmpty ? '' : ' $unit'}${note == null ? '' : ' · $note'}',
                 style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
@@ -438,9 +439,8 @@ class SwitchRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Expanded(
-            child: LText(label, style: Type.body(14, weight: FontWeight.w800)),
-          ),
+          Expanded(child: _SettingLabel(label)),
+          const SizedBox(width: 10),
           LText(
             value ? on : off,
             style: Type.body(12, color: Palette.textDim, weight: FontWeight.w700),
@@ -456,6 +456,19 @@ class SwitchRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The name of a setting, kept on one line: a long name shrinks to fit.
+class _SettingLabel extends StatelessWidget {
+  const _SettingLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: LText(text, maxLines: 1, softWrap: false, style: Type.body(14, weight: FontWeight.w800)),
+      );
 }
 
 /// A key drawn like a keycap.

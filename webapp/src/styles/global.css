@@ -1199,6 +1199,10 @@ input:focus-visible {
 
 .swatch__name {
   font-weight: 700;
+  /* A colour name stays on one line, even in a narrow card. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .swatch code {

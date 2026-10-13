@@ -232,7 +232,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       child: Row(
         children: [
           Expanded(
-            child: LText('$pad · ${slot.label}', style: Type.body(13, weight: FontWeight.w700)),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: LText('$pad · ${slot.label}', maxLines: 1, softWrap: false, style: Type.body(13, weight: FontWeight.w700)),
+            ),
           ),
           DropdownButton<GameAction>(
             value: layout[slot]!,
