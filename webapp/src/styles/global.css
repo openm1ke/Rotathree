@@ -1826,8 +1826,8 @@ select:focus-visible {
 /* The editor and running game share one bounded control surface. */
 .touch-controls { display: block; }
 .pad-surface { width: 100%; position: relative; flex-shrink: 0; }
-.pad-surface__space { position: absolute; left: 0; top: 0; transform-origin: top left; }
-.pad-surface__pad { position: absolute; }
+.pad-surface__space { position: absolute; left: 0; top: 0; transform-origin: top left; pointer-events: none; }
+.pad-surface__pad { position: absolute; pointer-events: auto; }
 .pad-surface__pad > div, .pad-surface__pad .dpad { width: 100%; height: 100%; }
 .pad-surface--editor { border: 1px dashed var(--accent); border-radius: 8px; background: var(--bg); overflow: hidden; }
 .pad-surface--editor .pad-surface__pad { cursor: grab; touch-action: none; }
@@ -2029,6 +2029,7 @@ select:focus-visible {
   background: var(--panel-strong);
 }
 .campaign-progress__fill, .campaign-progress__pulse { position: absolute; inset: 0; pointer-events: none; }
+.campaign-progress__track { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
 .campaign-progress__fill { border-radius: inherit; background: rgb(120 205 255 / .4); transition: width 320ms ease-out; }
 .campaign-progress__pulse { opacity: 0; border: 1px solid var(--accent); border-radius: inherit; animation: goal-pulse 650ms ease-out; }
 .campaign-progress__text { position: relative; height: 100%; display: flex; align-items: center; justify-content: flex-end; padding: 0 8px; }
@@ -2036,6 +2037,21 @@ select:focus-visible {
 .campaign-progress[data-animated="false"] .campaign-progress__fill { transition: none; }
 .campaign-progress[data-animated="false"] .campaign-progress__pulse { animation: none; }
 .game--touch .campaign-progress { margin: 4px 0 8px; }
+
+/* A phone keeps its readout in one 44px row; the score goal is a thin line. */
+.game--touch .game__readout { width: calc(100% - 16px); min-height: 44px; gap: 6px; padding: 0; }
+.game--touch .hud__buttons { margin: 0; }
+.hud__mobile-readout { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 44px; }
+.hud__mobile-score { flex: 1; min-width: 0; position: relative; }
+.hud__mobile-score strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; font-style: italic; font-weight: 900; }
+.hud__mobile-score .hud__gain { position: absolute; top: 100%; left: 0; font-size: 9px; line-height: 1; }
+.hud__compact-stat { display: inline-flex; align-items: center; gap: 3px; min-width: 0; white-space: nowrap; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.hud__compact-stat svg { width: 12px; height: 12px; flex: none; }
+.hud__compact-stat--accent { color: var(--accent); }
+.game--touch .campaign-progress--compact { display: flex; align-items: center; gap: 8px; height: 14px; margin: 0 0 4px; background: transparent; border: 0; overflow: visible; }
+.campaign-progress--compact .campaign-progress__track { position: relative; inset: auto; flex: 1; height: 4px; background: var(--panel-strong); box-shadow: 0 0 0 1px rgb(120 205 255 / .3); }
+.campaign-progress--compact .campaign-progress__text { padding: 0; height: auto; flex: none; }
+.campaign-progress--compact .campaign-progress__text strong { font-size: 10px; }
 @keyframes goal-pulse { 0%, 100% { opacity: 0; } 30% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .campaign-progress__fill { transition: none; }

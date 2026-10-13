@@ -85,6 +85,7 @@ export function GameScreen(props: Props) {
   const { t } = useI18n();
   const { session, settings, blocked, tutorial = false } = props;
   const touch = useTouchControls();
+  const touchMode = useRef(touch);
   const runId = useRef(props.restore?.id ?? newId());
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -115,6 +116,7 @@ export function GameScreen(props: Props) {
   const live = useRef(props);
   useEffect(() => {
     live.current = props;
+    touchMode.current = touch;
   });
 
   useEffect(() => {
@@ -688,7 +690,7 @@ export function GameScreen(props: Props) {
       const effectsRunning = current !== 'paused' && !frozen;
       still = !engineRunning && (!effectsRunning || fx.settled) ? still + 1 : 0;
       if (still <= 2 || dirty || drawnPalette !== paletteRevision()) {
-        renderer.draw(engine, fx, reduceMotion.matches, tutorial, s.hud.nextPiece && !tutorial, s.hud.nextPieceOpacity);
+        renderer.draw(engine, fx, reduceMotion.matches, tutorial || touchMode.current, s.hud.nextPiece && !tutorial, s.hud.nextPieceOpacity);
         dirty = false;
         drawnPalette = paletteRevision();
       }
@@ -851,16 +853,14 @@ export function GameScreen(props: Props) {
     >
       {!tutorial && <header className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
         <Hud hud={hud} callout={callout} options={settings.hud}
-          onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
+          compact={touch} onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
       </header>}
-      {campaign && !tutorial && !touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
+      {campaign && !tutorial && <CampaignProgress compact={touch} level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
       {tutorial ? <div className="tutorial-layout">
         <div className="tutorial-play">{tutorialHeader}{field}</div>
         {lessonPanel}
       </div> : field}
-      {campaign && !tutorial && touch && <CampaignProgress level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
-          animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
       {touch && (
         <div className="touch-controls">
           <TouchControls

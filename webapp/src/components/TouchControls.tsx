@@ -45,6 +45,9 @@ export function TouchControls({
   const height = padAreaHeight(bounds.viewport, settings.padPositions, width);
   const scale = onEdit ? bounds.width / width : 1;
   const geometry = padGeometry(width, height, settings.padPositions);
+  // Keep the editor's full drag area, but give unused space above the actual
+  // game buttons to the field. Their positions relative to the bottom stay put.
+  const freeTop = onEdit ? 0 : Math.min(geometry.left.y, geometry.right.y);
   const drag = useRef<{
     pointer: number;
     side: PadSide;
@@ -69,8 +72,8 @@ export function TouchControls({
     );
   };
   return (
-    <div className={`pad-surface ${onEdit ? 'pad-surface--editor' : ''}`} ref={root} style={{ height: height * scale }}>
-      <div className="pad-surface__space" style={{ width, height, transform: `scale(${scale})` }}>
+    <div className={`pad-surface ${onEdit ? 'pad-surface--editor' : ''}`} ref={root} style={{ height: (height - freeTop) * scale }}>
+      <div className="pad-surface__space" style={{ width, height, top: -freeTop * scale, transform: `scale(${scale})` }}>
         {(['left', 'right'] as const).map((side) => {
           const r = geometry[side],
             label = side === 'left' ? 'Левая крестовина' : 'Правая крестовина';

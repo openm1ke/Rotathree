@@ -54,7 +54,7 @@ class FieldViewport {
           rect(preview.left, preview.top, preview.right, preview.bottom, angle + side.index * math.pi / 2);
         }
       }
-      // Early lessons can fill the canvas with their only glass. As the
+      // Single-glass phone views can fill the canvas. As the
       // second arm grows, interpolate back to the fixed board center.
       if (focusSingleGlass && visible.length == 1) return result;
       final pad = math.max(0, visible.length - 1) * 0.25;

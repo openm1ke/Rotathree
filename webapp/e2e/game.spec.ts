@@ -403,6 +403,39 @@ test('unavailable storage warns the player while the app remains usable', async 
   await expect(page.getByRole('heading', { name: 'Одна фигура — три клетки' })).toBeVisible();
 });
 
+test('small phone shares the header row and uses free space above the configured pads', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 510 });
+  await startCampaign(page);
+  const field = page.getByLabel('Игровое поле');
+  const bar = page.getByRole('progressbar');
+  await expect.poll(async () => (await field.boundingBox())!.width).toBeGreaterThan(285);
+  const original = (await field.boundingBox())!;
+  const header = (await page.locator('.game__readout').boundingBox())!;
+  const progress = (await bar.boundingBox())!;
+  expect(header.height).toBe(44);
+  expect(progress.height).toBeLessThanOrEqual(14);
+  expect(progress.y + progress.height).toBeLessThanOrEqual(original.y);
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName,
+    { x: original.x + original.width / 2, y: original.y + original.height - 4 })).toBe('CANVAS');
+  for (const pad of await page.locator('.dpad').all()) {
+    expect((await pad.boundingBox())!.y).toBeGreaterThanOrEqual(original.y + original.height);
+  }
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await page.getByRole('tab', { name: 'Управление', exact: true }).click();
+  // Move the left pad upwards in the same preview used on a real phone.
+  const previewPad = page.locator('.pad-surface--editor [data-pad="left"]');
+  await previewPad.focus();
+  for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => (await field.boundingBox())!.width).toBeLessThan(original.width - 10);
+  const smaller = (await field.boundingBox())!;
+  for (const pad of await page.locator('.game .dpad').all()) {
+    expect((await pad.boundingBox())!.y).toBeGreaterThanOrEqual(smaller.y + smaller.height);
+  }
+  expect((await page.locator('.game__readout').boundingBox())!).toEqual(header);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('controls follow viewport changes and remain visible in a mobile landscape browser', async ({ page, browser }) => {
   await startCampaign(page);
   await expect(page.locator('.dpad')).toHaveCount(0);
