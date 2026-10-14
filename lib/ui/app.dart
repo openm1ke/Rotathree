@@ -13,6 +13,7 @@ import 'data/store.dart';
 import 'data/run_save.dart';
 import 'audio/music_service.dart';
 import 'game/game_screen.dart';
+import 'layout.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
 import 'menu/main_menu.dart';
@@ -400,7 +401,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             Positioned.fill(
               child: Column(
                 children: [
-                  Expanded(child: body),
+                  // The game lays out its own column, so its dialogs still cover the whole window.
+                  Expanded(child: _screen == _Screen.play ? body : MenuWidth(child: body)),
                   if (!_stored)
                     SafeArea(
                       top: false,

@@ -26,6 +26,7 @@ import '../format.dart';
 import '../input/pad_surface.dart';
 import '../input/game_action.dart';
 import '../input/pad_controller.dart';
+import '../layout.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import 'hud.dart';
@@ -841,7 +842,9 @@ class GameScreenState extends State<GameScreen>
                     ),
                     if (widget.tutorial)
                       ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: math.min(constraints.maxHeight * 0.3, 190)),
+                        constraints: BoxConstraints(
+                          maxHeight: math.min(constraints.maxHeight * 0.3, 190 * tabletScale(MediaQuery.sizeOf(context))),
+                        ),
                         child: TutorialPanel(
                           step: _tutorialStep,
                           performed: _tutorialPerformed,
@@ -928,7 +931,7 @@ class GameScreenState extends State<GameScreen>
         Positioned.fill(
           child: SafeArea(
             child: Center(
-              child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: card),
+              child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: TabletScale(child: card)),
             ),
           ),
         ),

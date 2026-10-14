@@ -1,6 +1,7 @@
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
+import '../layout.dart';
 import '../style.dart';
 
 /// One choice of an [OptionGroup].
@@ -547,14 +548,16 @@ class DialogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // On a tablet the card is wider and its padding and corners grow with the text.
+    final s = tabletScale(MediaQuery.sizeOf(context));
     return Container(
-      constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      constraints: BoxConstraints(maxWidth: 420 * s),
+      padding: EdgeInsets.fromLTRB(20, 18, 20, 20) * s,
       decoration: BoxDecoration(
         color: Palette.panelStrong,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(18 * s),
         border: Border.all(color: Palette.lineStrong),
-        boxShadow: const [BoxShadow(color: Color(0x88000000), blurRadius: 40)],
+        boxShadow: [BoxShadow(color: const Color(0x88000000), blurRadius: 40 * s)],
       ),
       child: SingleChildScrollView(
         child: Column(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../game/config/campaign.dart';
 import '../data/progress.dart';
 import '../format.dart';
+import '../layout.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 
@@ -25,20 +26,23 @@ class CampaignScreen extends StatelessWidget {
   final VoidCallback onInsane, onBack;
 
   @override
-  Widget build(BuildContext context) => ScreenFrame(
-    kicker: 'Режим',
-    title: 'Кампания',
-    onBack: onBack,
-    footer: 'Уровни открываются по очереди · пройденные можно повторить',
-    children: [
-      Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 712),
-          child: Column(
+  Widget build(BuildContext context) {
+    final tablet = isTablet(MediaQuery.sizeOf(context));
+    return TabletScale(
+      child: ScreenFrame(
+        kicker: 'Режим',
+        title: 'Кампания',
+        onBack: onBack,
+        footer: 'Уровни открываются по очереди · пройденные можно повторить',
+        children: [
+          // One child, so the whole page is built and scrolled as one.
+          Column(
             children: [
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final columns = math.max(1, ((constraints.maxWidth + 10) / 138).floor());
+                  // A tablet shows four tiles across, each taller than it is wide,
+                  // so the levels fill the screen instead of huddling at the top.
+                  final columns = tablet ? 4 : math.max(1, ((constraints.maxWidth + 10) / 138).floor());
                   final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
                   return Wrap(
                     alignment: WrapAlignment.center,
@@ -48,10 +52,12 @@ class CampaignScreen extends StatelessWidget {
                       for (var index = 0; index < campaignLevels.length; index++)
                         SizedBox(
                           width: width,
+                          height: tablet ? math.max(width * 1.15, tallTileHeight) : null,
                           child: _LevelTile(
                             index: index,
                             best: progress.best[index],
                             colours: colours,
+                            tall: tablet,
                             status: index < progress.unlocked || (index == campaignLast && progress.completed)
                                 ? _LevelStatus.done
                                 : index == progress.unlocked
@@ -77,11 +83,14 @@ class CampaignScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
+        ],
       ),
-    ],
-  );
+    );
+  }
 }
+
+/// The least a tablet tile is tall: its text at the tablet scale needs this much.
+const tallTileHeight = 240.0;
 
 enum _LevelStatus { done, open, locked }
 
@@ -92,14 +101,19 @@ class _LevelTile extends StatelessWidget {
     required this.best,
     required this.colours,
     required this.onTap,
+    this.tall = false,
   });
   final int index, best;
   final List<Color> colours;
   final _LevelStatus status;
   final VoidCallback onTap;
 
+  /// On a tablet the tile is stretched to its height and its contents spread out.
+  final bool tall;
+
   @override
   Widget build(BuildContext context) {
+    final s = tabletScale(MediaQuery.sizeOf(context));
     final level = campaignLevels[index];
     final locked = status == _LevelStatus.locked;
     final step = level.activeStep.toString().replaceAll(RegExp(r'\.0$'), '').replaceAll('.', ',');
@@ -126,15 +140,16 @@ class _LevelTile extends StatelessWidget {
           child: Material(
             color: Palette.panel,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4 * s),
               side: BorderSide(color: status == _LevelStatus.open ? Palette.accent : Palette.line),
             ),
             child: InkWell(
               onTap: locked ? null : onTap,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4 * s),
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(12 * s),
                 child: Column(
+                  mainAxisAlignment: tall ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -146,7 +161,7 @@ class _LevelTile extends StatelessWidget {
                               : status == _LevelStatus.done
                               ? Icons.check_rounded
                               : Icons.arrow_forward_rounded,
-                          size: 16,
+                          size: 16 * s,
                           color: status == _LevelStatus.open
                               ? Palette.accent
                               : status == _LevelStatus.done
@@ -161,10 +176,10 @@ class _LevelTile extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         for (var slot = 0; slot < level.colours; slot++) ...[
-                          if (slot > 0) const SizedBox(width: 4),
+                          if (slot > 0) SizedBox(width: 4 * s),
                           Container(
-                            width: 10,
-                            height: 10,
+                            width: 10 * s,
+                            height: 10 * s,
                             decoration: BoxDecoration(
                               color: colours[slot],
                               border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
