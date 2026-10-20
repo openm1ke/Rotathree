@@ -18,9 +18,15 @@ import { setPlatformLocale } from './runtime';
  *  8. obey the pause and audio events ........... watchPauseAndAudio
  *  9. `game_ready` once the game can be played .. reportGameReady (main.tsx)
  * 10. an interstitial at a natural pause ........ showInterstitial (GameScreen)
+ *
+ * The recommended lifecycle messages and the analytics events go through
+ * sendPlatformMessage and sendAnalytics (telemetry.ts).
  */
 
 type EventName = 'PAUSE_STATE_CHANGED' | 'AUDIO_STATE_CHANGED' | 'INTERSTITIAL_STATE_CHANGED';
+
+/** A flat record, as Bridge's analytics takes it. */
+export type AnalyticsData = Record<string, string | number | boolean>;
 
 export interface PlaygamaBridge {
   initialize(): Promise<void>;
@@ -28,7 +34,7 @@ export interface PlaygamaBridge {
   platform: {
     language: string;
     isAudioEnabled: boolean;
-    sendMessage(message: string): unknown;
+    sendMessage(message: string, data?: Record<string, string>): unknown;
     on(event: string, callback: (value: boolean) => void): void;
   };
   storage: {
@@ -37,8 +43,13 @@ export interface PlaygamaBridge {
   };
   advertisement: {
     isInterstitialSupported: boolean;
+    interstitialState?: string;
     showInterstitial(placement?: string): unknown;
     on(event: string, callback: (state: string) => void): void;
+  };
+  /** Bridge 2.3.0 and newer. */
+  analytics?: {
+    send(name: string, data?: AnalyticsData): unknown;
   };
 }
 
@@ -152,7 +163,7 @@ function watchPauseAndAudio(bridge: PlaygamaBridge): void {
     pausedByAd = isPaused && adShowing;
     update();
   });
-  bridge.advertisement.on(bridge.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, (state) => {
+  const onInterstitial = (state: string | undefined) => {
     clearTimeout(loadingTimer);
     const showing = state === 'loading' || state === 'opened';
     if (state === 'loading') {
@@ -169,7 +180,11 @@ function watchPauseAndAudio(bridge: PlaygamaBridge): void {
       if (pausedByAd) paused = pausedByAd = false;
     }
     update();
-  });
+  };
+  bridge.advertisement.on(bridge.EVENT_NAME.INTERSTITIAL_STATE_CHANGED, onInterstitial);
+  // Some hosts open an ad together with the game, and Bridge reports only the
+  // changes that follow: an ad already up stops the game from the start.
+  onInterstitial(bridge.advertisement.interstitialState);
   bridge.platform.on(bridge.EVENT_NAME.AUDIO_STATE_CHANGED, (isEnabled) => setPlatformMuted(!isEnabled));
   setPlatformMuted(!bridge.platform.isAudioEnabled);
 }
@@ -181,6 +196,28 @@ export function reportGameReady(): void {
   if (gameReadySent || !ready) return;
   gameReadySent = true;
   ready.platform.sendMessage('game_ready');
+}
+
+/** A lifecycle message for the host (level_started, level_paused and the
+ * like); Bridge also records it in Playgama's analytics. */
+export function sendPlatformMessage(message: string, data?: Record<string, string>): void {
+  if (!ready) return;
+  try {
+    ready.platform.sendMessage(message, data);
+  } catch (error) {
+    warn(`sendMessage ${message}`, error);
+  }
+}
+
+/** An event only the game knows about, for Playgama's analytics. */
+export function sendAnalytics(name: string, data?: AnalyticsData): void {
+  const analytics = ready?.analytics;
+  if (!analytics) return;
+  try {
+    analytics.send(name, data);
+  } catch (error) {
+    warn(`analytics ${name}`, error);
+  }
 }
 
 /** An interstitial at a natural pause. Bridge keeps the minimum gap between

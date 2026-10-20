@@ -1,8 +1,13 @@
 import { configDefaults, defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 
 const BRIDGE = 'https://bridge.playgama.com/v2/stable/playgama-bridge.js';
+
+/** The version and build of pubspec.yaml, the same as the archive's name:
+ * telemetry tells builds apart by it. */
+const BUILD_VERSION =
+  /^version:\s*(\S+)/m.exec(readFileSync(new URL('../pubspec.yaml', import.meta.url), 'utf8'))?.[1] ?? 'dev';
 
 /** The Playgama archive is played inside catalogue frames that forbid links
  * out of the game and anything that belongs to the site. */
@@ -57,6 +62,7 @@ export default defineConfig(({ mode }) => {
       },
     }],
     build: { outDir },
+    define: { __BUILD_VERSION__: JSON.stringify(BUILD_VERSION) },
     server: { port: 5183, strictPort: true },
     test: {
       environment: 'jsdom',

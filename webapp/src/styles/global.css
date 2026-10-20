@@ -1719,9 +1719,11 @@ input:focus-visible {
 }
 .dpad__button small {
   position: relative;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.1;
   margin-top: 2px;
+  /* One line: a word too wide for its button is condensed (DPad.tsx). */
+  white-space: nowrap;
 }
 /* The outline of the chosen button in the editor. */
 .dpad__button.is-edited {

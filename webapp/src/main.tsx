@@ -9,6 +9,7 @@ import App from './App';
 import './styles/global.css';
 import { PLAYGAMA_BUILD } from './platform/target';
 import { reportGameReady, startPlaygama } from './platform/playgama';
+import { watchErrors } from './platform/telemetry';
 import { STORAGE_KEYS } from './services/storage';
 
 const mount = () => createRoot(document.getElementById('root')!).render(
@@ -18,6 +19,7 @@ const mount = () => createRoot(document.getElementById('root')!).render(
 );
 
 if (PLAYGAMA_BUILD) {
+  watchErrors();
   // Bridge first, then the saves it holds, then the game: the app reads them
   // synchronously as it mounts. `game_ready` goes out once the first frame has
   // been painted, not merely scheduled.

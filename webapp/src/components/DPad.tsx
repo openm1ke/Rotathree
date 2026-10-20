@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ACTIONS } from '../input/bindings';
 import { PAD_SLOTS, type PadAction, type PadLayout, type PadSlot } from '../input/pads';
 import { TRIANGLE_POINTS, buttonRects, type PadShape, type PadTweaks } from '../input/padShape';
@@ -34,6 +34,26 @@ const CAPTIONS: Record<PadAction, string> = {
   restart: 'Заново',
 };
 
+/** Captions are drawn at 11 px (global.css) to stay readable on a phone
+ * (Playgama's game checklist, item 28). A word wider than its button is
+ * condensed to fit, and only a word that would need more than that drops to
+ * 10 px. */
+const SMALL_CAPTION_PX = 10;
+const MOST_CONDENSED = 0.8;
+
+function fitCaption(caption: HTMLElement): void {
+  caption.style.fontSize = '';
+  caption.style.transform = '';
+  const room = caption.parentElement!.clientWidth - 4;
+  let width = caption.getBoundingClientRect().width;
+  if (width <= room) return;
+  if (room / width < MOST_CONDENSED) {
+    caption.style.fontSize = `${SMALL_CAPTION_PX}px`;
+    width = caption.getBoundingClientRect().width;
+  }
+  caption.style.transform = `scaleX(${Math.max(MOST_CONDENSED, room / width).toFixed(3)})`;
+}
+
 export function DPad({
   layout,
   label,
@@ -57,6 +77,7 @@ export function DPad({
   onUp: (action: PadAction) => void;
 }) {
   const { t } = useI18n();
+  const root = useRef<HTMLDivElement>(null);
   const held = useRef(new Map<number, PadAction>());
   const callbacks = useRef({ onDown, onUp });
   callbacks.current = { onDown, onUp };
@@ -80,9 +101,26 @@ export function DPad({
     callbacks.current.onUp(action);
     setPressed([...held.current.values()]);
   };
+  useLayoutEffect(() => {
+    const pad = root.current;
+    if (!pad || !showLabels) return;
+    let live = true;
+    const fit = () => {
+      if (live) pad.querySelectorAll<HTMLElement>('.dpad__button small').forEach(fitCaption);
+    };
+    fit();
+    // The font may arrive after the first layout, and the pad follows the window.
+    void document.fonts?.ready.then(fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(pad);
+    return () => {
+      live = false;
+      observer.disconnect();
+    };
+  }, [layout, showLabels, shape, tweaks, t]);
   const rects = buttonRects(tweaks);
   return (
-    <div className={`dpad dpad--${shape}`} role="group" aria-label={t(label)}>
+    <div ref={root} className={`dpad dpad--${shape}`} role="group" aria-label={t(label)}>
       {PAD_SLOTS.map((slot) => {
         const action = layout[slot];
         const rect = rects[slot];

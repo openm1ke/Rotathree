@@ -30,6 +30,15 @@ import { formatColours, formatDuration, formatNumber, formatPoints } from './for
 import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 import { PLAYGAMA_BUILD } from '../platform/target';
 import { showInterstitial } from '../platform/playgama';
+import { PlayerHands } from '../platform/hands';
+import {
+  PerformanceSampler,
+  reportAbandoned,
+  reportLevel,
+  reportPerformance,
+  reportTutorial,
+  type Place,
+} from '../platform/telemetry';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
 
@@ -79,6 +88,14 @@ const SLOT_NAMES = ['Верхний', 'Правый', 'Нижний', 'Левы�
  * meant for the last drop must not pick the next step, nor bring up the ad
  * that follows it (Playgama's game checklist, item 13). */
 const RESULT_ARM_MS = 700;
+
+/** Between campaign levels (Playgama build) an interstitial is asked for
+ * while the banner holds the game, once the player's keys and fingers have
+ * been still for this long: it must not open under a press. A player who
+ * never lets go before play resumes gets no ad this time. */
+const LEVEL_AD_STILL_MS = 700;
+/** Play must not be about to resume under the ad. */
+const LEVEL_AD_MIN_LEFT_SECONDS = 0.5;
 
 const paletteColours = (palettes: Palettes): string[] =>
   (palettes.sets.find((set) => set.id === palettes.active) ?? palettes.sets[0]).colours;
@@ -183,12 +200,24 @@ export function GameScreen(props: Props) {
     setStatus(current);
     live.current.onPauseChanged?.(current === 'paused');
     const setRunStatus = (next: Status) => {
+      const before = current;
       current = next;
       setStatus(next);
       live.current.onPauseChanged?.(next === 'paused');
+      if (next === 'playing' && before !== 'playing') startOrResume();
+      else if (next === 'paused' && before === 'playing' && !tutorial) reportLevel('level_paused', place());
     };
 
     let campaignLevel = campaign ? session.level : -1;
+    /** The run as the platform hears of it (platform/telemetry.ts). */
+    const place = (): Place => (campaign ? { world: 'campaign', level: campaignLevel + 1 } : { world: session.mode });
+    let levelStarted = false;
+    const startOrResume = () => {
+      if (tutorial) return;
+      reportLevel(levelStarted ? 'level_resumed' : 'level_started', place());
+      levelStarted = true;
+    };
+    if (current === 'playing') startOrResume();
     let levelBase = props.restore?.levelBase ?? 0;
     let carry: RunTotals = props.restore?.carry ?? NO_TOTALS;
     let completing = false;
@@ -209,6 +238,11 @@ export function GameScreen(props: Props) {
     } | null = null;
     let shown = EMPTY_HUD;
     let progressNow = live.current.progress;
+    /** When the break after a finished campaign level began, while an ad may
+     * still be shown in it; null otherwise. */
+    let adBreak: number | null = null;
+    const hands = new PlayerHands();
+    const unwatchHands = PLAYGAMA_BUILD && !tutorial ? hands.watch() : () => {};
 
     const totals = (): RunTotals => ({
       score: carry.score + engine.state.score,
@@ -240,6 +274,7 @@ export function GameScreen(props: Props) {
 
     const recordRun = (completed: boolean, interrupted = false) => {
       if (tutorial) return;
+      if (interrupted) reportAbandoned(place());
       const t = totals();
       const record: RunRecord = {
         id: runId.current,
@@ -261,6 +296,7 @@ export function GameScreen(props: Props) {
 
     const gameOver = (side: Side) => {
       finished = true;
+      reportLevel('level_failed', place());
       setOverSlot(slotOfSide(engine.activeSide, side));
       recordRun(false);
       setRunStatus('over');
@@ -276,6 +312,7 @@ export function GameScreen(props: Props) {
      * and announce it. The game stands still while the banner shows. */
     const completeLevel = () => {
       completing = true;
+      reportLevel('level_completed', place());
       const index = campaignLevel;
       const levelScore = engine.state.score - levelBase;
       const best = progressNow.best.map((value, i) => (i === index ? Math.max(value, levelScore) : value));
@@ -291,6 +328,7 @@ export function GameScreen(props: Props) {
         return;
       }
       pendingLevel = next;
+      if (PLAYGAMA_BUILD && !tutorial) adBreak = performance.now();
       const to = CAMPAIGN[next];
       showBanner(
         {
@@ -314,6 +352,7 @@ export function GameScreen(props: Props) {
       const to = CAMPAIGN[next];
       campaignLevel = next;
       setLevel(next);
+      reportLevel('level_started', place());
       if (startsStage(next)) {
         swapEngine(newEngine({ config: levelConfig(to), ramp: null }));
         levelBase = 0;
@@ -412,6 +451,7 @@ export function GameScreen(props: Props) {
 
     const togglePause = () => {
       if (tutorial) {
+        reportTutorial('tutorial_left', lesson);
         live.current.onExit();
         return;
       }
@@ -464,11 +504,13 @@ export function GameScreen(props: Props) {
       nextLesson: () => {
         if (current !== 'playing' || live.current.blocked || (lesson > 0 && lesson < TUTORIAL_LESSONS.length - 1 && !lessonPerformed)) return;
         if (lesson === TUTORIAL_LESSONS.length - 1) {
+          reportTutorial('tutorial_completed', lesson);
           live.current.onTutorialDone?.();
           return;
         }
         keyboard.releaseAll();
         pads.releaseAll();
+        reportTutorial('tutorial_step', lesson);
         lesson++;
         lessonPerformed = false;
         setTutorialStep(lesson);
@@ -576,7 +618,10 @@ export function GameScreen(props: Props) {
         if (event.code !== 'Backspace' && target?.closest('button:not(.tutorial__next)')) return;
         event.preventDefault();
         if (event.repeat) return;
-        if (event.code === 'Backspace') live.current.onTutorialDone?.();
+        if (event.code === 'Backspace') {
+          reportTutorial('tutorial_skipped', lesson);
+          live.current.onTutorialDone?.();
+        }
         else if (lesson > 0 && lesson < TUTORIAL_LESSONS.length - 1 && !lessonPerformed) {
           // A custom Enter binding can still perform the lesson's required action.
           keyboard.keyDown(event.code, false);
@@ -597,6 +642,7 @@ export function GameScreen(props: Props) {
     const onBlur = () => {
       keyboard.releaseAll();
       pads.releaseAll();
+      hands.clear();
       if (!tutorial && current === 'playing') setRunStatus('paused');
       checkpoint();
     };
@@ -608,7 +654,14 @@ export function GameScreen(props: Props) {
       if (document.hidden) onBlur();
     };
     document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onBlur);
+    const sampler = new PerformanceSampler();
+    /** Whether the last frame was visible, running play. */
+    let sampling = false;
+    const onPageHide = () => {
+      onBlur();
+      reportPerformance(sampler.flush(performance.now()));
+    };
+    window.addEventListener('pagehide', onPageHide);
     checkpoint();
 
     let raf = 0;
@@ -632,6 +685,9 @@ export function GameScreen(props: Props) {
         if (!wasFrozen) checkpoint();
       }
       wasFrozen = frozen;
+      const visiblePlay = current === 'playing' && !frozen;
+      if (visiblePlay && sampling) reportPerformance(sampler.frame(frameMs, now));
+      sampling = visiblePlay;
       fx.screenShake = s.effects.screenShake && !reduceMotion.matches;
       // The explicit game setting controls glass navigation; the system
       // preference still reduces decorative motion and screen shake.
@@ -659,6 +715,22 @@ export function GameScreen(props: Props) {
           banner = null;
           setBanner(null);
           done.then?.();
+        }
+      }
+
+      // The break after a level lasts while banners hold the game: the level
+      // banner, and the new stage's one when a stage ends.
+      if (adBreak !== null) {
+        if (!banner?.blocking) adBreak = null;
+        else if (
+          current === 'playing' &&
+          !frozen &&
+          banner.left >= LEVEL_AD_MIN_LEFT_SECONDS &&
+          now - adBreak >= LEVEL_AD_STILL_MS &&
+          hands.stillFor(LEVEL_AD_STILL_MS, now)
+        ) {
+          adBreak = null;
+          showInterstitial('level_completed');
         }
       }
 
@@ -760,8 +832,10 @@ export function GameScreen(props: Props) {
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       unsubscribeVisibility();
+      unwatchHands();
       document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onBlur);
+      window.removeEventListener('pagehide', onPageHide);
+      reportPerformance(sampler.flush(performance.now()));
       keyboard.releaseAll();
       pads.releaseAll();
       rendererRef.current = null;
@@ -846,12 +920,18 @@ export function GameScreen(props: Props) {
       controls={tutorialControls}
       onPractice={missingControl ? () => actions.current.practice(lessonActions[0]) : undefined}
       onNext={() => actions.current.nextLesson()}
-      onSkip={() => props.onTutorialDone?.()}
+      onSkip={() => {
+        reportTutorial('tutorial_skipped', tutorialStep);
+        props.onTutorialDone?.();
+      }}
     />
   );
   const tutorialHeader = (
     <header className="touch-hud tutorial-hud">
-      <BackButton onClick={props.onExit} navigable={false} />
+      <BackButton onClick={() => {
+        reportTutorial('tutorial_left', tutorialStep);
+        props.onExit();
+      }} navigable={false} />
       <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
     </header>
   );
