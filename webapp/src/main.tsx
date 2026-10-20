@@ -7,9 +7,24 @@ import '@fontsource/exo-2/800-italic.css';
 import '@fontsource/exo-2/900-italic.css';
 import App from './App';
 import './styles/global.css';
+import { PLAYGAMA_BUILD } from './platform/target';
+import { reportGameReady, startPlaygama } from './platform/playgama';
+import { STORAGE_KEYS } from './services/storage';
 
-createRoot(document.getElementById('root')!).render(
+const mount = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,
 );
+
+if (PLAYGAMA_BUILD) {
+  // Bridge first, then the saves it holds, then the game: the app reads them
+  // synchronously as it mounts. `game_ready` goes out once the first frame has
+  // been painted, not merely scheduled.
+  void startPlaygama(Object.values(STORAGE_KEYS)).then(() => {
+    mount();
+    requestAnimationFrame(() => requestAnimationFrame(reportGameReady));
+  });
+} else {
+  mount();
+}

@@ -1,5 +1,6 @@
 import type { LanguageChoice } from './catalog';
 import { T } from './Text';
+import { PLAYGAMA_BUILD } from '../platform/target';
 
 function Flag({ language }: { language: 'ru' | 'en' }) {
   return <svg viewBox="0 0 32 24" width="32" height="24" aria-hidden="true" className="language-flag">
@@ -33,6 +34,6 @@ export function LanguagePicker({ value, onChange }: { value: LanguageChoice; onC
         <span>{choice === 'auto' ? <T>Авто</T> : choice === 'ru' ? 'Русский' : 'English'}</span>
       </button>)}
     </div>
-    <p className="hint"><T>Авто — по языку браузера</T></p>
+    <p className="hint"><T>{PLAYGAMA_BUILD ? 'Авто — по языку платформы' : 'Авто — по языку браузера'}</T></p>
   </section>;
 }

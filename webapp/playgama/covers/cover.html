@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- Playgama covers: rendered by tool/playgama-covers.mjs at 800x800,
+     1080x1920 and 1920x1080. The logo, the cross of four glasses and the
+     drifting blocks follow the game's own menu and field. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face {
+    font-family: 'Exo 2';
+    font-style: italic;
+    font-weight: 900;
+    src: url('../../node_modules/@fontsource/exo-2/files/exo-2-latin-900-italic.woff2') format('woff2');
+  }
+  :root {
+    --bg: #07070c;
+    --text: #eceff9;
+    --red: #ff145e; --blue: #1689ff; --yellow: #ffc400; --green: #00d982; --violet: #ab50fa;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(60vmax 60vmax at 12% 8%, rgba(120, 60, 220, 0.30), transparent 60%),
+      radial-gradient(55vmax 55vmax at 92% 96%, rgba(30, 120, 220, 0.28), transparent 60%),
+      var(--bg);
+    font-family: 'Exo 2', sans-serif;
+    color: var(--text);
+  }
+  .grid {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 4vmin 4vmin;
+  }
+  .drift { position: fixed; inset: 0; }
+  .drift i { position: absolute; border-radius: 18%; opacity: 0.22; transform: rotate(var(--r)); }
+  .stage {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4vmin;
+  }
+  .logo {
+    margin: 0;
+    font-weight: 900;
+    font-style: italic;
+    line-height: 0.9;
+    letter-spacing: -0.03em;
+    text-shadow: 0 0 0.4em rgba(120, 205, 255, 0.35);
+    white-space: nowrap;
+  }
+  .logo span:nth-child(1) { color: var(--red); }
+  .logo span:nth-child(2) { color: var(--blue); }
+  .logo span:nth-child(3) { color: var(--yellow); }
+  .logo span:nth-child(4) { color: var(--green); }
+  .logo span:nth-child(5) { color: var(--violet); }
+  svg { display: block; filter: drop-shadow(0 0 3vmin rgba(120, 205, 255, 0.18)); }
+
+  .portrait .logo { font-size: 15vw; order: 0; }
+  .portrait svg { height: 56vh; order: 1; }
+  .landscape .stage { gap: 3vh; }
+  .landscape .logo { font-size: 9.5vw; }
+  .landscape svg { height: 62vh; }
+  .square .stage { gap: 3vmin; }
+  .square .logo { font-size: 14.5vw; }
+  .square svg { height: 66vh; }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<div class="drift" id="drift"></div>
+<main class="stage">
+  <h1 class="logo">ROTA<span>T</span><span>H</span><span>R</span><span>E</span><span>E</span></h1>
+  <svg id="cross" viewBox="0 0 1000 1000" aria-hidden="true"></svg>
+</main>
+<script>
+  const layout = new URLSearchParams(location.search).get('layout') || 'landscape';
+  document.body.className = layout;
+
+  const C = { r: '#ff145e', b: '#1689ff', y: '#ffc400', g: '#00d982', v: '#ab50fa' };
+  const DRIFT = [
+    [5, 12, 6, 'r', -12], [16, 68, 4, 'b', 18], [27, 30, 3, 'y', 8], [70, 14, 5, 'v', -20],
+    [84, 40, 3.5, 'g', 14], [90, 76, 6, 'r', 24], [8, 86, 4.5, 'v', 10], [58, 88, 3, 'b', -8],
+    [40, 6, 2.6, 'g', 30], [78, 58, 2.4, 'y', -16], [22, 50, 2.2, 'r', 6], [62, 34, 2.2, 'b', 20],
+  ];
+  const drift = document.getElementById('drift');
+  for (const [x, y, size, colour, turn] of DRIFT) {
+    const block = document.createElement('i');
+    Object.assign(block.style, { left: `${x}%`, top: `${y}%`, width: `${size}vmin`, height: `${size}vmin`, background: C[colour] });
+    block.style.setProperty('--r', `${turn}deg`);
+    drift.append(block);
+  }
+
+  // The cross: the active glass upright in the middle, its three neighbours
+  // waiting around it, as on the game field. 50-unit cells.
+  const svg = document.getElementById('cross');
+  const NS = 'http://www.w3.org/2000/svg';
+  const add = (name, attrs) => {
+    const node = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    svg.append(node);
+    return node;
+  };
+  const defs = add('defs', {});
+  defs.innerHTML = `
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="rgba(150,190,255,0.20)"/><stop offset="1" stop-color="rgba(120,205,255,0.06)"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="rgba(255,255,255,0.55)"/><stop offset="0.5" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  const arm = (x, y, w, h, active) => {
+    add('rect', { x, y, width: w, height: h, fill: active ? 'url(#glass)' : 'rgba(255,255,255,0.035)', stroke: active ? 'rgba(235,245,255,0.95)' : 'rgba(255,255,255,0.16)', 'stroke-width': active ? 6 : 3, filter: active ? 'url(#glow)' : '' });
+    for (let gx = x + 50; gx < x + w; gx += 50) add('line', { x1: gx, y1: y, x2: gx, y2: y + h, stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 2 });
+    for (let gy = y + 50; gy < y + h; gy += 50) add('line', { x1: x, y1: gy, x2: x + w, y2: gy, stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 2 });
+  };
+  const block = (col, row, colour, outline = false) => {
+    const x = col * 50 + 4, y = row * 50 + 4;
+    add('rect', { x, y, width: 42, height: 42, rx: 9, fill: C[colour] });
+    add('rect', { x: x + 3, y: y + 3, width: 36, height: 18, rx: 6, fill: 'url(#shine)' });
+    if (outline) add('rect', { x: x - 3, y: y - 3, width: 48, height: 48, rx: 11, fill: 'none', stroke: '#fff', 'stroke-width': 4 });
+  };
+
+  arm(150, 450, 250, 250, false);          // left
+  arm(600, 450, 250, 250, false);          // right
+  arm(400, 700, 200, 250, false);          // bottom
+  arm(400, 50, 200, 650, true);            // active, in front
+
+  // The falling stick, outlined as in the game.
+  block(8, 4, 'r', true); block(9, 4, 'b', true); block(10, 4, 'r', true);
+  // Settled blocks in the active glass.
+  for (const [c, r, k] of [[8, 13, 'y'], [9, 13, 'y'], [10, 13, 'b'], [8, 12, 'b'], [9, 12, 'r'], [10, 12, 'g'], [9, 11, 'g'], [10, 11, 'g'], [8, 11, 'v']]) block(c, r, k);
+  // The waiting glasses hold their own stacks.
+  for (const [c, r, k] of [[4, 12, 'r'], [4, 11, 'y'], [4, 10, 'b'], [5, 12, 'g'], [3, 12, 'v']]) block(c, r, k);
+  for (const [c, r, k] of [[14, 12, 'y'], [14, 11, 'r'], [15, 12, 'b'], [13, 12, 'g'], [13, 11, 'v'], [15, 11, 'y']]) block(c, r, k);
+  for (const [c, r, k] of [[8, 17, 'b'], [9, 17, 'v'], [10, 17, 'y'], [9, 16, 'r']]) block(c, r, k);
+</script>
+</body>
+</html>

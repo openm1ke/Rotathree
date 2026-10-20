@@ -60,6 +60,10 @@ Flutter показывает авторов Flutter, shared_preferences, audiopl
 
 Текст лежит в `webapp/public/privacy/index.html` и публикуется через GitHub Pages: https://openm1ke.github.io/Rotathree/privacy/. В версию для VK страница не попадает. Имя разработчика (Mikhail Shmyrev) и e-mail для связи (muxaujish@yandex.ru) внесены в русскую и английскую версии.
 
+## Playgama
+
+Веб-версия собирается отдельно: `npm run release:playgama` в `webapp/` (Bridge для сохранений, языка, паузы и рекламы, без внешних ссылок), обложки — `node tool/playgama-covers.mjs`. Архив и обложки — в `build/releases/playgama/`. Подробности, тексты формы и порядок загрузки через MCP — в `playgama-listing.md`.
+
 ## Анкеты магазинов
 
 Ответы соответствуют коду: сбора и передачи данных нет, рекламы, покупок и аккаунтов нет.

@@ -9,6 +9,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "dev:playgama": "vite --mode playgama",
+    "build:playgama": "tsc -b && vite build --mode playgama",
+    "release:playgama": "bash tool/build-playgama.sh",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",

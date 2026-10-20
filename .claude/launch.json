@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "webapp"],
       "port": 5183
+    },
+    {
+      "name": "rotathree-playgama",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "webapp", "vite", "preview", "webapp", "--mode", "playgama", "--outDir", "dist-playgama", "--port", "5184", "--strictPort"],
+      "port": 5184
     }
   ]
 }

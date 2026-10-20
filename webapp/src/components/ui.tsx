@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
-import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 /** The way back of every page: a small chevron, the same on every screen. The
@@ -29,21 +29,35 @@ export function GameIconButton({ icon, label, onClick }: {
   </button>;
 }
 
-/** A layer over the whole window, not just the field it was opened from. */
+const FOCUSABLE = 'button:not(:disabled), input, select, [tabindex="0"]';
+
+/** A layer over the whole window, not just the field it was opened from.
+ *
+ * `armAfterMs` is for a layer that opens by itself, under keys and fingers
+ * still busy with the game: for that long it presses nothing, and only then
+ * does its first button take the focus. A press that began before that never
+ * counts, so a key held through the opening, its auto-repeat or a finger
+ * lifted afterwards cannot choose for the player. */
 export function Overlay({
   children,
   onDismiss,
   label = 'Меню игры',
   className = '',
+  armAfterMs = 0,
 }: {
   children: ReactNode;
   onDismiss?: () => void;
   label?: string;
   className?: string;
+  armAfterMs?: number;
 }) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(document.activeElement as HTMLElement | null);
+  const armed = useRef(armAfterMs <= 0);
+  const [ready, setReady] = useState(armAfterMs <= 0);
+  /** Whether the pointer now pressing went down after arming. */
+  const freshPointer = useRef(false);
   useEffect(() => {
     const dialog = root.current!;
     const previous = returnFocus.current;
@@ -54,8 +68,10 @@ export function Overlay({
     background.forEach((node) => {
       node.inert = true;
     });
+    // Until it is armed the layer holds the focus itself: Enter and Space
+    // find no button to press.
     if (!dialog.contains(document.activeElement))
-      (dialog.querySelector<HTMLElement>('button:not(:disabled), input, select, [tabindex="0"]') ?? dialog).focus();
+      ((armed.current && dialog.querySelector<HTMLElement>(FOCUSABLE)) || dialog).focus();
     return () => {
       background.forEach((node, i) => {
         node.inert = original[i];
@@ -63,6 +79,35 @@ export function Overlay({
       if (previous?.isConnected && !previous.closest('[inert]')) previous.focus();
     };
   }, []);
+  useEffect(() => {
+    if (armAfterMs <= 0) return;
+    const dialog = root.current!;
+    // Enter and Space press the focused button. They count only from a key
+    // that went down after arming; otherwise its repeats and its release
+    // (Space presses on release) do nothing.
+    const fresh = new Set<string>();
+    const presses = (event: KeyboardEvent) => event.key === 'Enter' || event.key === ' ';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!presses(event)) return;
+      if (armed.current && !event.repeat) fresh.add(event.code);
+      else if (!fresh.has(event.code)) event.preventDefault();
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (presses(event) && !fresh.delete(event.code)) event.preventDefault();
+    };
+    const timer = setTimeout(() => {
+      armed.current = true;
+      setReady(true);
+      if (document.activeElement === dialog) dialog.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    }, armAfterMs);
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
+  }, [armAfterMs]);
   return createPortal(
     <div
       ref={root}
@@ -71,6 +116,17 @@ export function Overlay({
       aria-modal="true"
       aria-label={t(label)}
       tabIndex={-1}
+      data-armed={armAfterMs > 0 ? ready : undefined}
+      onPointerDownCapture={() => {
+        freshPointer.current = armed.current;
+      }}
+      onClickCapture={(event) => {
+        // Once armed, a click counts from a pointer that went down since, or
+        // from the keyboard: a click with no pointer behind it (detail 0).
+        if (armAfterMs <= 0 || (armed.current && (event.detail === 0 || freshPointer.current))) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
       onKeyDown={(event) => {
         if (event.defaultPrevented) return;
         if (event.key === 'Escape' && onDismiss) {

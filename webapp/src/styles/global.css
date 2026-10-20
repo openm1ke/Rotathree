@@ -29,6 +29,15 @@ input {
   color: inherit;
 }
 
+/* Wherever something still scrolls, the bar keeps to the dark theme: thin,
+   in the colour of the lines, on no track of its own. */
+html { scrollbar-color: var(--line-strong) transparent; }
+* { scrollbar-width: thin; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--line-strong); }
+
 button {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -305,13 +314,20 @@ input:focus-visible {
 
 /* ------------------------------------------------------------------ home */
 
+/* The menu is sized by the height as well as the width, so that all of it,
+   "Continue" and the campaign card included, fits a short window or the frame
+   a game portal gives it. svh is the height that is always visible. */
 .home {
+  --navitem-title: min(clamp(30px, 5vw, 64px), max(20px, 5.2svh));
   position: relative;
   height: 100%;
-  padding: 5vh 6vw 3vh;
+  padding: 5svh 6vw 3svh;
   overflow-x: hidden;
   overflow-y: auto;
 }
+
+/* Touch screens also carry the campaign card under the list. */
+.home--touch { --navitem-title: min(clamp(30px, 5vw, 64px), max(20px, 4.2svh)); }
 
 .home__content {
   position: relative;
@@ -322,7 +338,7 @@ input:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
-  gap: 28px 40px;
+  gap: clamp(12px, 3svh, 28px) 40px;
 }
 
 .home__drift {
@@ -349,7 +365,7 @@ input:focus-visible {
 
 .logo {
   margin: 0;
-  font-size: clamp(40px, 8vw, 100px);
+  font-size: clamp(40px, min(8vw, 12svh), 100px);
   font-weight: 900;
   font-style: italic;
   line-height: 0.9;
@@ -382,7 +398,7 @@ input:focus-visible {
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  padding: 10px 18px 10px 10px;
+  padding: clamp(4px, 1.2svh, 10px) 18px clamp(4px, 1.2svh, 10px) 10px;
   border: 0;
   border-radius: 14px;
   background: transparent;
@@ -452,7 +468,7 @@ input:focus-visible {
 .license-card p { margin: 8px 0; color: var(--text-dim); font-size: 13px; overflow-wrap: anywhere; }
 .license-card a { color: var(--accent); font-size: 12px; }
 .navitem__title {
-  font-size: clamp(30px, min(5vw, 7vh), 64px);
+  font-size: var(--navitem-title);
   font-weight: 900;
   font-style: italic;
   line-height: 0.98;
@@ -520,6 +536,8 @@ input:focus-visible {
   height: 100%;
   background: linear-gradient(90deg, #12b886, var(--accent));
 }
+
+.home__side .card { padding-block: clamp(10px, 2svh, 16px); }
 
 .home__foot {
   grid-column: 1 / -1;
@@ -1259,7 +1277,7 @@ input:focus-visible {
 @media (max-width: 600px) {
   .screen--settings .settings-panel { padding-right: 12px; margin-right: -12px; }
   .navitem__heading { gap: 10px; }
-  .navitem__heading:has(.navitem__badge) .navitem__title { font-size: clamp(24px, 7.5vw, 30px); }
+  .navitem__heading:has(.navitem__badge) .navitem__title { font-size: min(clamp(24px, 7.5vw, 30px), var(--navitem-title)); }
 }
 
 .dialog {
@@ -1305,6 +1323,13 @@ input:focus-visible {
   gap: 10px;
   margin-top: 22px;
 }
+
+/* A result screen presses nothing for its first moment (Overlay's
+   armAfterMs): its buttons light up once they will answer. The layer holds
+   the focus meanwhile and draws no ring of its own. */
+.overlay:focus-visible { outline: none; }
+.overlay[data-armed] .dialog__actions { transition: opacity 180ms ease-out; }
+.overlay[data-armed='false'] .dialog__actions { opacity: 0.5; }
 
 .stats {
   margin: 16px 0 0;
@@ -1516,14 +1541,16 @@ input:focus-visible {
 /* The menus on a narrow screen: the side column moves under the list. */
 @media (max-width: 760px) {
   .home {
-    padding: 4vh 6vw 3vh;
+    padding: 4svh 6vw 3svh;
   }
 
+  /* A row for each block there is (the card or the keys, never both), so
+     that no empty row adds a gap. */
   .home__content {
     max-width: 640px;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto;
-    gap: 20px;
+    grid-template-rows: none;
+    gap: clamp(12px, 3svh, 20px);
   }
 
   .home__side {
@@ -1993,6 +2020,29 @@ select:focus-visible {
   }
 }
 
+/* A short screen on its side (a phone turned over, a low window): a smaller
+   logo, and the list in two columns. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .home {
+    --navitem-title: min(clamp(20px, 7svh, 36px), 5vw);
+    padding-block: 3svh;
+  }
+  .home__content { gap: clamp(8px, 3svh, 16px) 24px; }
+  .logo { font-size: clamp(32px, min(7vw, 11svh), 64px); }
+  .home__nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+    max-width: 760px;
+  }
+  /* The badge of a finished campaign goes under the title where a column is
+     too narrow for both; the campaign card is gone by then. */
+  .navitem__heading { flex-wrap: wrap; gap: 4px 10px; }
+  .home__side { width: 100%; max-width: 760px; margin-inline: auto; }
+  .home__side .card { gap: 4px; }
+  .home__side .card strong { font-size: 20px; }
+}
+
 /* Flags remain recognizable on systems without color emoji fonts. */
 .language-options {
   max-width: 480px;
@@ -2093,3 +2143,37 @@ select:focus-visible {
 .card--campaign-shortcut:hover, .card--campaign-shortcut:focus-visible { border-color: var(--accent); background: rgb(120 205 255 / .08); }
 .card--campaign-shortcut strong { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .card--campaign-shortcut strong > span:last-child { color: var(--accent); font-size: 24px; }
+
+/* Playgama build: the language globe on the main menu, and no long-press
+   callout over the field (see src/platform). */
+.language-switch {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 110ms, transform 110ms var(--ease-snap);
+}
+.language-switch:hover { border-color: var(--line-strong); }
+.language-switch:active { transform: scale(0.95); }
+.language-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.language-switch svg { color: var(--accent); flex: none; }
+
+[data-platform='playgama'] body { -webkit-touch-callout: none; }
+/* Where the logo spans the width, it starts below the language switch: on a
+   narrow screen, unless the screen lies on its side and the logo is small. */
+@media (max-width: 760px) and (orientation: portrait), (max-width: 760px) and (min-height: 541px) {
+  [data-platform='playgama'] .home { padding-top: calc(max(12px, env(safe-area-inset-top)) + 52px); }
+}

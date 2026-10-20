@@ -27,6 +27,9 @@ import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { BackButton, Button, GameIconButton, Overlay } from './ui';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
+import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
+import { PLAYGAMA_BUILD } from '../platform/target';
+import { showInterstitial } from '../platform/playgama';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
 
@@ -71,6 +74,11 @@ const MAX_CANVAS_PIXELS = 4096;
 const quality = new AdaptiveQuality();
 
 const SLOT_NAMES = ['Верхний', 'Правый', 'Нижний', 'Левый'] as const;
+
+/** How long a result screen ignores presses once it opens. The key or tap
+ * meant for the last drop must not pick the next step, nor bring up the ad
+ * that follows it (Playgama's game checklist, item 13). */
+const RESULT_ARM_MS = 700;
 
 const paletteColours = (palettes: Palettes): string[] =>
   (palettes.sets.find((set) => set.id === palettes.active) ?? palettes.sets[0]).colours;
@@ -595,6 +603,7 @@ export function GameScreen(props: Props) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
+    const unsubscribeVisibility = subscribeVisibility((hidden) => { if (hidden) onBlur(); });
     const onVisibility = () => {
       if (document.hidden) onBlur();
     };
@@ -615,7 +624,7 @@ export function GameScreen(props: Props) {
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
       last = now;
       const s = live.current.settings;
-      const frozen = live.current.blocked || document.hidden;
+      const frozen = live.current.blocked || document.hidden || isPlatformHidden();
       const holding = frozen || (banner?.blocking ?? false);
       if (frozen) {
         keyboard.releaseAll();
@@ -750,6 +759,7 @@ export function GameScreen(props: Props) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      unsubscribeVisibility();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onBlur);
       keyboard.releaseAll();
@@ -773,6 +783,13 @@ export function GameScreen(props: Props) {
   const campaign = session.mode === 'campaign';
   const retryLabel = campaign ? 'Повторить уровень' : 'Заново';
   const mode = tutorial ? 'Обучение' : MODE_NAMES[session.mode];
+  /** Leaving a finished run is the natural pause for Playgama's interstitial:
+   * it follows the player's own tap on the result screen instead of opening
+   * under fingers still on the controls. */
+  const afterRun = (go: () => void) => () => {
+    if (PLAYGAMA_BUILD) showInterstitial('game_over');
+    go();
+  };
   const playingLevel = campaign ? CAMPAIGN[level] : undefined;
   const lessonActions: Action[] =
     tutorialStep === 1
@@ -904,7 +921,7 @@ export function GameScreen(props: Props) {
       )}
 
       {status === 'over' && result && !blocked && (
-        <Overlay>
+        <Overlay armAfterMs={RESULT_ARM_MS}>
           <div className="dialog dialog--narrow">
             <span className="kicker"><T>{mode}</T></span>
             <h2 className="dialog__title dialog__title--danger"><T>Игра окончена</T></h2>
@@ -914,14 +931,14 @@ export function GameScreen(props: Props) {
             </T></p>
             <Stats record={result} campaign={campaign} />
             <div className="dialog__actions">
-              <Button primary autoFocus onClick={() => actions.current.retry()}><T>
+              <Button primary onClick={afterRun(() => actions.current.retry())}><T>
                 {retryLabel}
               </T></Button>
               {session.mode === 'custom' && !tutorial && (
-                <Button onClick={() => actions.current.leave(props.onCustomise)}><T>Изменить режим</T></Button>
+                <Button onClick={afterRun(() => actions.current.leave(props.onCustomise))}><T>Изменить режим</T></Button>
               )}
-              {campaign && <Button onClick={props.onLevels}><T>К уровням</T></Button>}
-              <Button ghost onClick={props.onExit}><T>
+              {campaign && <Button onClick={afterRun(props.onLevels)}><T>К уровням</T></Button>}
+              <Button ghost onClick={afterRun(props.onExit)}><T>
                 В меню
               </T></Button>
             </div>
@@ -930,18 +947,18 @@ export function GameScreen(props: Props) {
       )}
 
       {status === 'done' && result && !blocked && (
-        <Overlay>
+        <Overlay armAfterMs={RESULT_ARM_MS}>
           <div className="dialog dialog--narrow">
             <span className="kicker"><T>Кампания</T></span>
             <h2 className="dialog__title"><T>Кампания пройдена</T></h2>
             <p className="dialog__note"><T>Все {CAMPAIGN_LAST + 1} уровней позади. Кошмар открыт.</T></p>
             <Stats record={result} campaign />
             <div className="dialog__actions">
-              <Button primary autoFocus onClick={props.onInsane}><T>
+              <Button primary onClick={afterRun(props.onInsane)}><T>
                 Кошмар
               </T></Button>
-              <Button onClick={props.onLevels}><T>К уровням</T></Button>
-              <Button ghost onClick={props.onExit}><T>
+              <Button onClick={afterRun(props.onLevels)}><T>К уровням</T></Button>
+              <Button ghost onClick={afterRun(props.onExit)}><T>
                 В меню
               </T></Button>
             </div>

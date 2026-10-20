@@ -372,6 +372,47 @@ test('pause traps focus, Space activates Continue, saved transition resumes afte
     .toBe(2);
 });
 
+test('the result screen ignores a key held and a tap begun before it could answer', async ({ page }) => {
+  await startCampaign(page);
+  const pause = page.getByRole('button', { name: 'Пауза', exact: true });
+  const over = page.getByRole('dialog').filter({ hasText: 'Игра окончена' });
+  const retry = over.getByRole('button', { name: 'Повторить уровень', exact: true });
+  const fillGlass = () =>
+    page.evaluate(() => (window as unknown as { __rotathree: { endGame(side: number): void } }).__rotathree.endGame(0));
+
+  // The drop key goes down, the glass fills on that press, and the key stays
+  // held: its auto-repeat runs on past the moment the buttons wake up.
+  await expect(pause).toBeVisible();
+  await page.keyboard.down('Space');
+  await fillGlass();
+  await expect(retry).toBeVisible();
+  await expect(retry).not.toBeFocused();
+  for (let i = 0; i < 25; i++) {
+    await page.waitForTimeout(33);
+    await page.keyboard.down('Space');
+  }
+  await expect(retry).toBeFocused();
+  await page.keyboard.up('Space');
+  await page.waitForTimeout(100);
+  await expect(over).toBeVisible();
+  // A deliberate press starts the level again.
+  await page.keyboard.press('Space');
+  await expect(over).toHaveCount(0);
+
+  // A finger that was already down when the screen opened.
+  await expect(pause).toBeVisible();
+  await fillGlass();
+  const box = (await retry.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect(over).toHaveAttribute('data-armed', 'true');
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  await expect(over).toBeVisible();
+  await retry.click();
+  await expect(over).toHaveCount(0);
+});
+
 test('settings freeze campaign banners and ending a run records statistics', async ({ page }) => {
   await startCampaign(page);
   await finishLevel(page);

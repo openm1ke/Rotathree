@@ -1,5 +1,11 @@
 import music from '../../../assets/credits/music.json';
 import { T } from '../i18n/Text';
+import { PLAYGAMA_BUILD } from '../platform/target';
+
+/** Catalogues such as Playgama forbid links out of the game, so their build
+ * names the licences as plain text; the licence files still ship in
+ * `licenses/` inside the archive. */
+const LINKS = !PLAYGAMA_BUILD;
 
 export function LicensesTab() {
   return <>
@@ -10,24 +16,29 @@ export function LicensesTab() {
         {music.map((track) => <article className="license-card" key={track.id}>
           <strong>{track.title}</strong>
           <p>{track.author ?? <T>Автор уточняется</T>} · {track.license ?? <T>Условия использования уточняются</T>}</p>
-          {track.source && <a href={track.source} target="_blank" rel="noopener noreferrer"><T>Источник</T> ↗</a>}
+          {LINKS && track.source && <a href={track.source} target="_blank" rel="noopener noreferrer"><T>Источник</T> ↗</a>}
         </article>)}
       </div>
       <p className="hint"><T>Громкость треков выровнена, добавлены затухания в начале и конце.</T></p>
-      <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 ↗</a>
+      {LINKS && <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 ↗</a>}
     </section>
     <section className="group">
       <h3><T>Библиотеки и шрифт</T></h3>
       <div className="license-list">
-        <article className="license-card"><strong>React / React DOM</strong><p>Meta Platforms, Inc. and affiliates · MIT</p><a href="./licenses/React-MIT.txt" target="_blank" rel="noopener noreferrer">React — MIT ↗</a>{' · '}<a href="./licenses/ReactDOM-MIT.txt" target="_blank" rel="noopener noreferrer">React DOM — MIT ↗</a></article>
-        <article className="license-card"><strong>Exo 2</strong><p>The Exo 2 Project Authors · SIL OFL 1.1</p><a href="./licenses/Exo2-OFL.txt" target="_blank" rel="noopener noreferrer">SIL OFL 1.1 ↗</a></article>
+        {LINKS ? <>
+          <article className="license-card"><strong>React / React DOM</strong><p>Meta Platforms, Inc. and affiliates · MIT</p><a href="./licenses/React-MIT.txt" target="_blank" rel="noopener noreferrer">React — MIT ↗</a>{' · '}<a href="./licenses/ReactDOM-MIT.txt" target="_blank" rel="noopener noreferrer">React DOM — MIT ↗</a></article>
+          <article className="license-card"><strong>Exo 2</strong><p>The Exo 2 Project Authors · SIL OFL 1.1</p><a href="./licenses/Exo2-OFL.txt" target="_blank" rel="noopener noreferrer">SIL OFL 1.1 ↗</a></article>
+        </> : <>
+          <article className="license-card"><strong>React / React DOM</strong><p>Meta Platforms, Inc. and affiliates · MIT</p></article>
+          <article className="license-card"><strong>Exo 2</strong><p>The Exo 2 Project Authors · SIL OFL 1.1</p></article>
+        </>}
       </div>
     </section>
-    <section className="group">
+    {LINKS && <section className="group">
       <h3><T>Автор</T></h3>
       <div className="license-list">
         <article className="license-card"><strong>Mikhail Shmyrev</strong><p><a href="mailto:muxaujish@yandex.ru">muxaujish@yandex.ru</a></p></article>
       </div>
-    </section>
+    </section>}
   </>;
 }

@@ -33,6 +33,12 @@ import {
 } from './services/storage';
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
 import { MusicPlayer } from './services/music';
+import { isPlatformHidden, isPlatformMuted, subscribeMute, subscribeVisibility } from './platform/lifecycle';
+import { PLAYGAMA_BUILD } from './platform/target';
+import { LanguageSwitch } from './platform/LanguageSwitch';
+
+/** The page is hidden, or the platform has covered or muted the game. */
+const silent = () => document.hidden || isPlatformHidden() || isPlatformMuted();
 
 const routeOf = (target: MenuTarget): Route => ({ name: target }) as Route;
 
@@ -57,7 +63,7 @@ export default function App() {
     musicPaused.current = paused;
     setGamePaused(paused);
     music.current?.setPaused(paused);
-    if (document.hidden) music.current?.stop();
+    if (silent()) music.current?.stop();
   }, []);
   const i18n = useLanguage(settings.language);
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
@@ -115,12 +121,15 @@ export default function App() {
     const player = new MusicPlayer();
     music.current = player;
     player.setPaused(musicPaused.current);
-    const unlock = () => { if (!document.hidden) player.ensurePlaying(); };
+    const unlock = () => { if (!silent()) player.ensurePlaying(); };
     const onVisibility = () => {
-      if (document.hidden) player.stop();
+      if (silent()) player.stop();
       else player.ensurePlaying();
     };
     const onPageHide = () => player.stop();
+    const unsubscribeVisibility = subscribeVisibility(onVisibility);
+    const unsubscribeMute = subscribeMute(onVisibility);
+    if (silent()) player.stop();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener('pointerdown', unlock);
@@ -132,13 +141,15 @@ export default function App() {
       window.removeEventListener('keydown', unlock);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onPageHide);
+      unsubscribeVisibility();
+      unsubscribeMute();
       player.dispose();
       music.current = null;
     };
   }, []);
   useEffect(() => {
     music.current?.setSettings(settings.audio);
-    if (document.hidden) music.current?.stop();
+    if (silent()) music.current?.stop();
   }, [settings.audio]);
 
   useEffect(() => {
@@ -343,6 +354,12 @@ export default function App() {
       </div>
 
       <div className="app__content">{screen}</div>
+      {PLAYGAMA_BUILD && route.name === 'home' && (
+        <LanguageSwitch
+          language={i18n.language}
+          onChange={(language) => setSettings((current) => ({ ...current, language }))}
+        />
+      )}
       {!stored && (
         <div className="storage-notice" role="status">
           <span><T>Не удалось сохранить данные. Они пока доступны только в этой вкладке.</T></span>

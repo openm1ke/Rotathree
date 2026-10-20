@@ -6,3 +6,5 @@ dist-ssr
 
 test-results/
 playwright-report/
+dist-vk
+dist-playgama

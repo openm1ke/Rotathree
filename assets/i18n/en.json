@@ -304,6 +304,7 @@
   "{side} стакан заполнился до конца рукава. Уровень не пройден: начнём его заново или выберем другой.": "The {side} glass is full. Level incomplete: retry it or choose another.",
   "Авто — по языку устройства": "Auto uses device language",
   "Авто — по языку браузера": "Auto uses browser language",
+  "Авто — по языку платформы": "Auto uses platform language",
   "Дополнительные стаканы": "Extra glasses",
   "Длина рукава": "Arm length",
   "в клетках": "in cells",
