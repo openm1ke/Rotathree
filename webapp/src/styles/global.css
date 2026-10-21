@@ -1485,6 +1485,29 @@ input:focus-visible {
   animation: pop 420ms var(--ease-back) both;
 }
 
+/* A banner waiting for the player comes in and stays. */
+.banner--held {
+  animation: banner-veil-in 320ms ease-out both;
+}
+
+.banner--held .banner__card {
+  animation: banner-card-in 320ms var(--ease-snap) both;
+}
+
+.banner--held .banner__sub {
+  color: var(--text);
+}
+
+@keyframes banner-veil-in {
+  from { background: rgba(7, 7, 12, 0); }
+  to { background: rgba(7, 7, 12, 0.34); }
+}
+
+@keyframes banner-card-in {
+  from { opacity: 0; transform: scaleY(0.2); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
 @keyframes banner-veil {
   0% {
     background: rgba(7, 7, 12, 0);

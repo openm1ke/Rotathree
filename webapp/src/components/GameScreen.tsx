@@ -98,6 +98,24 @@ const RESULT_ARM_MS = 700;
 const LEVEL_AD_STILL_MS = 700;
 /** Play must not be about to resume under the ad. */
 const LEVEL_AD_MIN_LEFT_SECONDS = 0.5;
+/** The ad only freezes the break, without the pause menu; after it, the
+ * break's banner shows again for at least this long before play goes on. */
+const LEVEL_AD_RESUME_SECONDS = 1.2;
+/** A shorter cover was an ad that did not come (loading, then failed): the
+ * banner simply goes on. */
+const LEVEL_AD_SHOWN_MS = 400;
+/** Closing the ad with a click can leave the keyboard on the platform's page. */
+const LEVEL_AD_FOCUS_PROMPT = 'Щёлкните по игре, чтобы продолжить';
+
+/** A banner on screen, as the game loop keeps it. */
+interface ShownBanner {
+  data: Omit<BannerData, 'id' | 'seconds'>;
+  left: number;
+  blocking: boolean;
+  then: (() => void) | null;
+  /** Waits for the player instead of counting down. */
+  held: boolean;
+}
 
 const paletteColours = (palettes: Palettes): string[] =>
   (palettes.sets.find((set) => set.id === palettes.active) ?? palettes.sets[0]).colours;
@@ -232,17 +250,19 @@ export function GameScreen(props: Props) {
     let tutorialMatch = false;
     let calloutId = 0;
     let bannerId = 0;
-    let banner: {
-      data: Omit<BannerData, 'id' | 'seconds'>;
-      left: number;
-      blocking: boolean;
-      then: (() => void) | null;
-    } | null = null;
+    let banner: ShownBanner | null = null;
     let shown = EMPTY_HUD;
     let progressNow = live.current.progress;
     /** When the break after a finished campaign level began, while an ad may
      * still be shown in it; null otherwise. */
     let adBreak: number | null = null;
+    /** The ad asked for in that break, until it is over. */
+    let levelAd = false;
+    /** When the platform began to cover the game for that ad; 0 before. */
+    let levelAdCoveredAt = 0;
+    /** The break's banner, while a held one asks a keyboard player to come
+     * back to the game after the ad. */
+    let waitingBanner: ShownBanner | null = null;
     const hands = new PlayerHands();
     const unwatchHands = PLAYGAMA_BUILD && !tutorial ? hands.watch() : () => {};
 
@@ -266,10 +286,11 @@ export function GameScreen(props: Props) {
       seconds: number,
       blocking: boolean,
       then?: () => void,
+      held = false,
     ) => {
       bannerId++;
-      setBanner({ ...data, id: bannerId, seconds });
-      banner = { data, left: seconds, blocking, then: then ?? null };
+      setBanner({ ...data, id: bannerId, seconds, held });
+      banner = { data, left: seconds, blocking, then: then ?? null, held };
     };
 
     const stageColours = (count: number) => paletteColours(live.current.settings.palettes).slice(0, count);
@@ -409,6 +430,7 @@ export function GameScreen(props: Props) {
     }
     const checkpoint = () => {
       if (tutorial || finished || engine.isGameOver || !live.current.onCheckpoint) return;
+      const saved = waitingBanner ?? banner;
       live.current.onCheckpoint({
         version: 1,
         id: runId.current,
@@ -418,16 +440,16 @@ export function GameScreen(props: Props) {
         levelBase,
         savedAt: Date.now(),
         banner:
-          banner === null
+          saved === null
             ? null
             : {
-                kicker: banner.data.kicker,
-                title: banner.data.title,
-                sub: banner.data.sub,
-                left: banner.left,
-                blocking: banner.blocking,
+                kicker: saved.data.kicker,
+                title: saved.data.title,
+                sub: saved.data.sub,
+                left: saved.left,
+                blocking: saved.blocking,
                 pendingLevel,
-                colours: banner.data.colours?.length ?? 0,
+                colours: saved.data.colours?.length ?? 0,
               },
       });
       saveCharge = 0;
@@ -645,13 +667,41 @@ export function GameScreen(props: Props) {
       keyboard.releaseAll();
       pads.releaseAll();
       hands.clear();
-      if (!tutorial && current === 'playing') setRunStatus('paused');
+      // The ad between levels takes the focus and covers the game: that only
+      // freezes the break. Leaving the page still pauses.
+      if (!tutorial && current === 'playing' && !(levelAd && !document.hidden)) setRunStatus('paused');
       checkpoint();
+    };
+    /** Shows the break's banner again, so that play does not go on the moment
+     * the ad closes. */
+    const replayBanner = (from: ShownBanner) =>
+      showBanner(from.data, Math.max(from.left, LEVEL_AD_RESUME_SECONDS), true, from.then ?? undefined);
+    const afterLevelAd = () => {
+      levelAd = false;
+      if (!banner?.blocking) return;
+      if (!touchMode.current && !document.hasFocus()) {
+        waitingBanner = banner;
+        showBanner({ ...banner.data, sub: LEVEL_AD_FOCUS_PROMPT }, banner.left, true, undefined, true);
+      } else if (levelAdCoveredAt > 0 && performance.now() - levelAdCoveredAt >= LEVEL_AD_SHOWN_MS) {
+        replayBanner(banner);
+      }
+    };
+    const onFocus = () => {
+      if (!waitingBanner) return;
+      const from = waitingBanner;
+      waitingBanner = null;
+      replayBanner(from);
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
-    const unsubscribeVisibility = subscribeVisibility((hidden) => { if (hidden) onBlur(); });
+    window.addEventListener('focus', onFocus);
+    const unsubscribeVisibility = subscribeVisibility((hidden) => {
+      if (hidden) {
+        if (levelAd && levelAdCoveredAt === 0) levelAdCoveredAt = performance.now();
+        onBlur();
+      } else if (levelAd) afterLevelAd();
+    });
     const onVisibility = () => {
       if (document.hidden) onBlur();
     };
@@ -710,7 +760,7 @@ export function GameScreen(props: Props) {
       }
 
       // Banners share the pause/settings gate with gameplay.
-      if (banner && current === 'playing' && !frozen) {
+      if (banner && !banner.held && current === 'playing' && !frozen) {
         banner.left -= seconds;
         if (banner.left <= 0) {
           const done = banner;
@@ -722,6 +772,7 @@ export function GameScreen(props: Props) {
 
       // The break after a level lasts while banners hold the game: the level
       // banner, and the new stage's one when a stage ends.
+      if (levelAd && levelAdCoveredAt === 0 && !banner?.blocking) levelAd = false;
       if (adBreak !== null) {
         if (!banner?.blocking) adBreak = null;
         else if (
@@ -732,6 +783,8 @@ export function GameScreen(props: Props) {
           hands.stillFor(LEVEL_AD_STILL_MS, now)
         ) {
           adBreak = null;
+          levelAd = true;
+          levelAdCoveredAt = 0;
           showInterstitial('level_completed');
         }
       }
@@ -833,6 +886,7 @@ export function GameScreen(props: Props) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
       unsubscribeVisibility();
       unwatchHands();
       document.removeEventListener('visibilitychange', onVisibility);

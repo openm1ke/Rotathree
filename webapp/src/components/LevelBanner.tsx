@@ -9,11 +9,13 @@ export interface BannerData {
   colours?: string[];
   /** How long it stays, in seconds. */
   seconds: number;
+  /** Comes in and stays until play goes on, rather than for `seconds`. */
+  held?: boolean;
 }
 
 export function LevelBanner({ banner }: { banner: BannerData }) {
   return (
-    <div className="banner" key={banner.id} role="status" style={{ ['--life' as string]: `${banner.seconds}s` }}>
+    <div className={`banner${banner.held ? ' banner--held' : ''}`} key={banner.id} role="status" style={{ ['--life' as string]: `${banner.seconds}s` }}>
       <div className="banner__sweep" />
       <div className="banner__card">
         <span className="banner__kicker"><T>{banner.kicker}</T></span>

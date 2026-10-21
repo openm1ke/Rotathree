@@ -47,6 +47,7 @@ describe('shared translation catalog', () => {
     expect(t('Кампания · уровень 3')).toBe('Campaign · level 3');
     // The pause dialog's heading: the shorter pattern must not swallow "из 16".
     expect(t('Кампания · уровень 1 из 16')).toBe('Campaign · level 1 of 16');
+    expect(t('Щёлкните по игре, чтобы продолжить')).toBe('Click the game to continue');
     expect(t('  движение ')).toBe('  move ');
   });
   it('uses English singular only at one and composes quantities in UI messages', () => {
