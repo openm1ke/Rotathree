@@ -1900,12 +1900,29 @@ select:focus-visible {
    so they never cover it. */
 @media (orientation: landscape) {
   .game--touch:not(.game--tutorial) .game__frame { padding-inline: calc(var(--pad-size, 144px) + 16px); }
-  .game--touch:not(.game--tutorial) .touch-controls {
+  .game--touch .touch-controls {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
     pointer-events: none;
+  }
+  /* The tutorial: the field in a middle column at full height, the lesson
+     in the left column above the left pad. */
+  .game--touch.game--tutorial .tutorial-layout {
+    --tutorial-side: max(calc(var(--pad-size, 144px) + 16px), 30vw);
+    display: grid;
+    grid-template-columns: var(--tutorial-side) minmax(0, 1fr) var(--tutorial-side);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .game--touch.game--tutorial .tutorial-play { grid-column: 2; grid-row: 1; }
+  .game--touch.game--tutorial .tutorial {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+    width: auto;
+    max-height: calc(100% - var(--pad-size, 144px) - 16px);
+    margin: max(8px, env(safe-area-inset-top)) 8px 0 max(8px, env(safe-area-inset-left));
   }
 }
 .pad-surface { width: 100%; position: relative; flex-shrink: 0; }

@@ -511,6 +511,21 @@ test('controls follow viewport changes and remain visible in a mobile landscape 
   expect(button!.height).toBeGreaterThanOrEqual(44);
   const canvas = await mobile.getByLabel('Игровое поле').boundingBox();
   expect(canvas!.y + canvas!.height).toBeLessThanOrEqual(501);
+  // Turned sideways, the field keeps the whole height and the pads stand
+  // beside it, in a game and in the tutorial alike.
+  const clearOfPads = async () => {
+    const field = (await mobile.getByLabel('Игровое поле').boundingBox())!;
+    expect(field.width).toBeGreaterThan(300);
+    for (const pad of await mobile.locator('.pad-surface__pad').all()) {
+      const r = (await pad.boundingBox())!;
+      expect(r.x + r.width <= field.x || r.x >= field.x + field.width || r.y + r.height <= field.y).toBe(true);
+    }
+  };
+  await clearOfPads();
+  await mobile.goto('/');
+  await mobile.getByRole('button', { name: /Обучение/ }).click();
+  await expect(mobile.locator('.tutorial')).toBeVisible();
+  await clearOfPads();
   await context.close();
 });
 
