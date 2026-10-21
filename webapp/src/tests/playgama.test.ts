@@ -114,6 +114,34 @@ describe('Playgama Bridge', () => {
     expect(lifecycle.isPlatformHidden()).toBe(false);
   });
 
+  it('takes the keyboard back from the host page when an ad closes', async () => {
+    const { bridge, emit } = fakeBridge();
+    window.bridge = bridge as unknown as PlaygamaBridge;
+    const { playgama, lifecycle } = await load();
+    await playgama.startPlaygama([]);
+    vi.useFakeTimers();
+    const focus = vi.spyOn(window, 'focus').mockImplementation(() => {});
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    try {
+      emit(EVENT_NAME.PAUSE_STATE_CHANGED, true);
+      expect(lifecycle.isAdShowing()).toBe(false);
+      emit(EVENT_NAME.PAUSE_STATE_CHANGED, false);
+
+      emit(EVENT_NAME.INTERSTITIAL_STATE_CHANGED, 'opened');
+      expect(lifecycle.isAdShowing()).toBe(true);
+      expect(focus).not.toHaveBeenCalled();
+      emit(EVENT_NAME.INTERSTITIAL_STATE_CHANGED, 'closed');
+      expect(lifecycle.isAdShowing()).toBe(false);
+      expect(focus).toHaveBeenCalledTimes(1);
+      // Once more after the host is done with the ad.
+      vi.advanceTimersByTime(150);
+      expect(focus).toHaveBeenCalledTimes(2);
+    } finally {
+      focus.mockRestore();
+      hasFocus.mockRestore();
+    }
+  });
+
   it('reports game_ready once and asks Bridge for interstitials', async () => {
     const { bridge } = fakeBridge();
     window.bridge = bridge as unknown as PlaygamaBridge;

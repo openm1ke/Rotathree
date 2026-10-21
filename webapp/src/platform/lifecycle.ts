@@ -1,6 +1,7 @@
 type Listener = (value: boolean) => void;
 
 let hidden = false;
+let adShowing = false;
 let muted = false;
 const visibilityListeners = new Set<Listener>();
 const muteListeners = new Set<Listener>();
@@ -13,6 +14,14 @@ export function setPlatformHidden(value: boolean): void {
   if (hidden === value) return;
   hidden = value;
   for (const listener of visibilityListeners) listener(value);
+}
+
+/** Part of the cover is a full-screen ad, which comes at a break in play: it
+ * freezes the game there without the pause menu. */
+export const isAdShowing = () => adShowing;
+
+export function setAdShowing(value: boolean): void {
+  adShowing = value;
 }
 
 export function subscribeVisibility(listener: Listener): () => void {

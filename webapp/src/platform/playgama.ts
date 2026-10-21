@@ -1,5 +1,5 @@
 import { installStorage, type KeyValue } from './storageBackend';
-import { setPlatformHidden, setPlatformMuted } from './lifecycle';
+import { setAdShowing, setPlatformHidden, setPlatformMuted } from './lifecycle';
 import { setPlatformLocale } from './runtime';
 
 /**
@@ -67,6 +67,8 @@ const AD_LOADING_LIMIT_MS = 8_000;
 /** A pause that arrives this soon after an ad closed is that ad's own,
  * delivered late, not the player leaving. */
 const LATE_AD_PAUSE_MS = 1_500;
+/** The host may move the focus once more as the ad goes away. */
+const FOCUS_AGAIN_MS = 150;
 
 let ready: PlaygamaBridge | null = null;
 
@@ -155,7 +157,10 @@ function watchPauseAndAudio(bridge: PlaygamaBridge): void {
   let adShowing = false;
   let adEndedAt = 0;
   let loadingTimer: ReturnType<typeof setTimeout> | undefined;
-  const update = () => setPlatformHidden(paused || adShowing);
+  const update = () => {
+    setAdShowing(adShowing);
+    setPlatformHidden(paused || adShowing);
+  };
 
   bridge.platform.on(bridge.EVENT_NAME.PAUSE_STATE_CHANGED, (isPaused) => {
     if (isPaused && !adShowing && Date.now() - adEndedAt < LATE_AD_PAUSE_MS) return;
@@ -178,6 +183,7 @@ function watchPauseAndAudio(bridge: PlaygamaBridge): void {
       adEndedAt = Date.now();
       // Some platforms pause for the ad and never resume after it.
       if (pausedByAd) paused = pausedByAd = false;
+      takeKeyboardBack();
     }
     update();
   };
@@ -187,6 +193,16 @@ function watchPauseAndAudio(bridge: PlaygamaBridge): void {
   onInterstitial(bridge.advertisement.interstitialState);
   bridge.platform.on(bridge.EVENT_NAME.AUDIO_STATE_CHANGED, (isEnabled) => setPlatformMuted(!isEnabled));
   setPlatformMuted(!bridge.platform.isAudioEnabled);
+}
+
+/** Closing an ad with a click leaves the keyboard on the host page, where the
+ * game cannot hear it: the game takes it back. */
+function takeKeyboardBack(): void {
+  const take = () => {
+    if (!document.hidden && !document.hasFocus()) window.focus();
+  };
+  take();
+  setTimeout(take, FOCUS_AGAIN_MS);
 }
 
 let gameReadySent = false;

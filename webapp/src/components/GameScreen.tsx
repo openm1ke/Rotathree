@@ -27,7 +27,7 @@ import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { BackButton, Button, GameIconButton, Overlay, SoundButton } from './ui';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
-import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
+import { isAdShowing, isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 import { PLAYGAMA_BUILD } from '../platform/target';
 import { showInterstitial } from '../platform/playgama';
 import { PlayerHands } from '../platform/hands';
@@ -98,14 +98,15 @@ const RESULT_ARM_MS = 700;
 const LEVEL_AD_STILL_MS = 700;
 /** Play must not be about to resume under the ad. */
 const LEVEL_AD_MIN_LEFT_SECONDS = 0.5;
-/** The ad only freezes the break, without the pause menu; after it, the
- * break's banner shows again for at least this long before play goes on. */
-const LEVEL_AD_RESUME_SECONDS = 1.2;
+/** An ad over a break in play (a banner holding the game, or a run not yet
+ * started) only freezes it, without the pause menu; after the ad, a banner
+ * shows for at least this long before play goes on. */
+const AD_RESUME_SECONDS = 1.2;
 /** A shorter cover was an ad that did not come (loading, then failed): the
  * banner simply goes on. */
-const LEVEL_AD_SHOWN_MS = 400;
-/** Closing the ad with a click can leave the keyboard on the platform's page. */
-const LEVEL_AD_FOCUS_PROMPT = 'Щёлкните по игре, чтобы продолжить';
+const AD_SHOWN_MS = 400;
+/** For when the keyboard could not be taken back from the platform's page. */
+const AD_FOCUS_PROMPT = 'Щёлкните по игре, чтобы продолжить';
 
 /** A banner on screen, as the game loop keeps it. */
 interface ShownBanner {
@@ -256,10 +257,9 @@ export function GameScreen(props: Props) {
     /** When the break after a finished campaign level began, while an ad may
      * still be shown in it; null otherwise. */
     let adBreak: number | null = null;
-    /** The ad asked for in that break, until it is over. */
-    let levelAd = false;
-    /** When the platform began to cover the game for that ad; 0 before. */
-    let levelAdCoveredAt = 0;
+    /** When an ad began to cover the game; 0 while none does. A run started
+     * by Retry opens under the game-over ad. */
+    let adCoveredAt = isPlatformHidden() && isAdShowing() ? performance.now() : 0;
     /** The break's banner, while a held one asks a keyboard player to come
      * back to the game after the ad. */
     let waitingBanner: ShownBanner | null = null;
@@ -667,24 +667,42 @@ export function GameScreen(props: Props) {
       keyboard.releaseAll();
       pads.releaseAll();
       hands.clear();
-      // The ad between levels takes the focus and covers the game: that only
-      // freezes the break. Leaving the page still pauses.
-      if (!tutorial && current === 'playing' && !(levelAd && !document.hidden)) setRunStatus('paused');
+      // An ad takes the focus and covers the game: at a break in play that only
+      // freezes it. An ad over live play, or leaving the page, pauses.
+      if (!tutorial && current === 'playing' && !(isAdShowing() && !document.hidden && atBreak())) {
+        setRunStatus('paused');
+      }
       checkpoint();
+    };
+    /** Play waits: a banner holds it, or the run has not started yet. */
+    const atBreak = () => (banner?.blocking ?? false) || totals().seconds === 0;
+    /** What a run that an ad held at its start shows before play begins. */
+    const startBanner = (): ShownBanner => {
+      const at = CAMPAIGN[campaignLevel];
+      return {
+        data: session.mode === 'campaign'
+          ? { kicker: `Уровень ${campaignLevel + 1}`, title: `цель ${formatScore(at.target)}`, sub: `${at.glasses} ст. · ${at.colours} цв.` }
+          : { kicker: MODE_NAMES[session.mode], title: 'Поехали!' },
+        left: 0,
+        blocking: true,
+        then: null,
+        held: false,
+      };
     };
     /** Shows the break's banner again, so that play does not go on the moment
      * the ad closes. */
     const replayBanner = (from: ShownBanner) =>
-      showBanner(from.data, Math.max(from.left, LEVEL_AD_RESUME_SECONDS), true, from.then ?? undefined);
-    const afterLevelAd = () => {
-      levelAd = false;
-      if (!banner?.blocking) return;
+      showBanner(from.data, Math.max(from.left, AD_RESUME_SECONDS), true, from.then ?? undefined);
+    const afterAd = () => {
+      const shown = performance.now() - adCoveredAt >= AD_SHOWN_MS;
+      adCoveredAt = 0;
+      if (tutorial || current !== 'playing') return;
+      const from = banner?.blocking ? banner : totals().seconds === 0 ? startBanner() : null;
+      if (!from) return;
       if (!touchMode.current && !document.hasFocus()) {
-        waitingBanner = banner;
-        showBanner({ ...banner.data, sub: LEVEL_AD_FOCUS_PROMPT }, banner.left, true, undefined, true);
-      } else if (levelAdCoveredAt > 0 && performance.now() - levelAdCoveredAt >= LEVEL_AD_SHOWN_MS) {
-        replayBanner(banner);
-      }
+        waitingBanner = from;
+        showBanner({ ...from.data, sub: AD_FOCUS_PROMPT }, from.left, true, undefined, true);
+      } else if (shown) replayBanner(from);
     };
     const onFocus = () => {
       if (!waitingBanner) return;
@@ -698,9 +716,9 @@ export function GameScreen(props: Props) {
     window.addEventListener('focus', onFocus);
     const unsubscribeVisibility = subscribeVisibility((hidden) => {
       if (hidden) {
-        if (levelAd && levelAdCoveredAt === 0) levelAdCoveredAt = performance.now();
+        if (isAdShowing() && adCoveredAt === 0) adCoveredAt = performance.now();
         onBlur();
-      } else if (levelAd) afterLevelAd();
+      } else if (adCoveredAt > 0) afterAd();
     });
     const onVisibility = () => {
       if (document.hidden) onBlur();
@@ -772,7 +790,6 @@ export function GameScreen(props: Props) {
 
       // The break after a level lasts while banners hold the game: the level
       // banner, and the new stage's one when a stage ends.
-      if (levelAd && levelAdCoveredAt === 0 && !banner?.blocking) levelAd = false;
       if (adBreak !== null) {
         if (!banner?.blocking) adBreak = null;
         else if (
@@ -783,8 +800,6 @@ export function GameScreen(props: Props) {
           hands.stillFor(LEVEL_AD_STILL_MS, now)
         ) {
           adBreak = null;
-          levelAd = true;
-          levelAdCoveredAt = 0;
           showInterstitial('level_completed');
         }
       }
