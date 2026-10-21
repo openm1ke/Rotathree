@@ -8,7 +8,7 @@ import { ResumeScreen } from './components/ResumeScreen';
 import { MainMenu, type MenuTarget } from './components/MainMenu';
 import { SettingsScreen } from './components/SettingsScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
-import { Overlay } from './components/ui';
+import { Overlay, SoundButton } from './components/ui';
 import { DEFAULT_CUSTOM, type CustomSetup } from './game/modes';
 import type { Session } from './game/session';
 import { setPalette } from './render/theme';
@@ -250,6 +250,10 @@ export default function App() {
     [written],
   );
   const home = useCallback(() => setRoute({ name: 'home' }), []);
+  const toggleMusic = useCallback(
+    () => setSettings((current) => ({ ...current, audio: { ...current.audio, music: !current.audio.music } })),
+    [],
+  );
 
   let screen: ReactNode;
   switch (route.name) {
@@ -328,6 +332,7 @@ export default function App() {
           onCheckpoint={(save) => checkpoint(route.session.mode, save)}
           onTutorialDone={finishTutorial}
           onSettings={() => setSettingsOpen(true)}
+          onToggleMusic={PLAYGAMA_BUILD ? toggleMusic : undefined}
           onPauseChanged={onPauseChanged}
           onExit={exit}
           onLevels={levels}
@@ -355,10 +360,13 @@ export default function App() {
 
       <div className="app__content">{screen}</div>
       {PLAYGAMA_BUILD && route.name === 'home' && (
-        <LanguageSwitch
-          language={i18n.language}
-          onChange={(language) => setSettings((current) => ({ ...current, language }))}
-        />
+        <div className="corner-controls">
+          <SoundButton on={settings.audio.music} onToggle={toggleMusic} />
+          <LanguageSwitch
+            language={i18n.language}
+            onChange={(language) => setSettings((current) => ({ ...current, language }))}
+          />
+        </div>
       )}
       {!stored && (
         <div className="storage-notice" role="status">

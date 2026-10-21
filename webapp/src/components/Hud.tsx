@@ -3,7 +3,7 @@ import { useI18n } from '../i18n/context';
 import type { HudOptions } from '../services/storage';
 import { CAMPAIGN_LAST } from '../game/campaign';
 import { formatClock, formatScore, type Callout, type HudState } from './hudState';
-import { GameIconButton } from './ui';
+import { GameIconButton, SoundButton } from './ui';
 
 interface Props {
   hud: HudState;
@@ -11,12 +11,15 @@ interface Props {
   options: HudOptions;
   onPause: () => void;
   onOpenSettings: () => void;
+  /** The music switch beside the gear (Playgama build). */
+  sound?: { on: boolean; toggle: () => void };
   compact?: boolean;
 }
 
 /** One compact row shares the canvas width and keeps the playfield clear. */
-export function Hud({ hud, callout, options, onPause, onOpenSettings, compact = false }: Props) {
+export function Hud({ hud, callout, options, onPause, onOpenSettings, sound, compact = false }: Props) {
   const { t } = useI18n();
+  const soundButton = sound && <SoundButton on={sound.on} onToggle={sound.toggle} />;
   if (compact) return <>
     <div className="hud__buttons"><GameIconButton icon="pause" label="Пауза" onClick={onPause} /></div>
     <div className="hud__mobile-readout" style={{ opacity: options.opacity }}>
@@ -32,7 +35,10 @@ export function Hud({ hud, callout, options, onPause, onOpenSettings, compact = 
         <CompactStat icon="pieces" value={`${hud.pieces}`} label={t('Фигуры')} />
       </>}
     </div>
-    <div className="hud__buttons"><GameIconButton icon="settings" label="Настройки" onClick={onOpenSettings} /></div>
+    <div className="hud__buttons">
+      {soundButton}
+      <GameIconButton icon="settings" label="Настройки" onClick={onOpenSettings} />
+    </div>
   </>;
   return <>
     {options.score && <section className="hud hud--score">
@@ -56,6 +62,7 @@ export function Hud({ hud, callout, options, onPause, onOpenSettings, compact = 
     </section>}
     <div className="hud__buttons">
       <GameIconButton icon="pause" label="Пауза" onClick={onPause} />
+      {soundButton}
       <GameIconButton icon="settings" label="Настройки" onClick={onOpenSettings} />
     </div>
   </>;

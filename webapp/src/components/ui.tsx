@@ -16,12 +16,17 @@ export function BackButton({ onClick, navigable = true }: { onClick: () => void;
 
 /** Compact game actions retain translated labels for keyboard and screen readers. */
 export function GameIconButton({ icon, label, onClick }: {
-  icon: 'pause' | 'settings'; label: string; onClick: () => void;
+  icon: 'pause' | 'settings' | 'sound-on' | 'sound-off'; label: string;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   const { t } = useI18n();
   return <button type="button" className="game-icon" aria-label={t(label)} title={t(label)} onClick={onClick}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      {icon === 'pause' ? <><path d="M8 5v14M16 5v14" strokeWidth="3" strokeLinecap="round" /></> : <>
+      {icon === 'pause' ? <><path d="M8 5v14M16 5v14" strokeWidth="3" strokeLinecap="round" /></>
+      : icon === 'sound-on' || icon === 'sound-off' ? <g strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3.5 9.5h3.5L11.5 6v12L7 14.5H3.5z" />
+        {icon === 'sound-on' ? <path d="M15 9.5a3.5 3.5 0 0 1 0 5M17.5 7a7 7 0 0 1 0 10" /> : <path d="m15 9.5 5 5m0-5-5 5" />}
+      </g> : <>
         <path d="m9 3-.6 2.3-1.5.9-2.3-.6-3 5.2 1.7 1.7v1.8l-1.7 1.7 3 5.2 2.3-.6 1.5.9.6 2.3h6l.6-2.3 1.5-.9 2.3.6 3-5.2-1.7-1.7v-1.8l1.7-1.7-3-5.2-2.3.6-1.5-.9L15 3Z" transform="translate(1 0) scale(.9)" />
         <circle cx="12" cy="12" r="3" />
       </>}
@@ -30,6 +35,18 @@ export function GameIconButton({ icon, label, onClick }: {
 }
 
 const FOCUSABLE = 'button:not(:disabled), input, select, [tabindex="0"]';
+
+/** The music on or off at once, without opening the settings: on the main
+ * menu beside the language switch and in a game beside the settings gear. A
+ * tap or click leaves no focus behind, so the next Space drops a piece instead
+ * of pressing the switch again. */
+export function SoundButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return <GameIconButton icon={on ? 'sound-on' : 'sound-off'} label={on ? 'Выключить музыку' : 'Включить музыку'}
+    onClick={(event) => {
+      onToggle();
+      if (event.detail > 0) event.currentTarget.blur();
+    }} />;
+}
 
 /** A layer over the whole window, not just the field it was opened from.
  *

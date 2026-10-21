@@ -25,7 +25,7 @@ import { Hud } from './Hud';
 import { CampaignProgress } from './CampaignProgress';
 import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
-import { BackButton, Button, GameIconButton, Overlay } from './ui';
+import { BackButton, Button, GameIconButton, Overlay, SoundButton } from './ui';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
 import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 import { PLAYGAMA_BUILD } from '../platform/target';
@@ -51,6 +51,8 @@ interface Props {
   /** True while the settings are open over the game: nothing moves. */
   blocked: boolean;
   onSettings: () => void;
+  /** Turns the music on or off from the game itself (Playgama build). */
+  onToggleMusic?: () => void;
   onPauseChanged?: (paused: boolean) => void;
   /** Back to the main menu. */
   onExit: () => void;
@@ -932,7 +934,10 @@ export function GameScreen(props: Props) {
         reportTutorial('tutorial_left', tutorialStep);
         props.onExit();
       }} navigable={false} />
-      <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
+      <div className="hud__buttons">
+        {props.onToggleMusic && <SoundButton on={settings.audio.music} onToggle={props.onToggleMusic} />}
+        <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
+      </div>
     </header>
   );
 
@@ -947,7 +952,8 @@ export function GameScreen(props: Props) {
     >
       {!tutorial && <header className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
         <Hud hud={hud} callout={callout} options={settings.hud}
-          compact={touch} onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings} />
+          compact={touch} onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings}
+          sound={props.onToggleMusic && { on: settings.audio.music, toggle: props.onToggleMusic }} />
       </header>}
       {campaign && !tutorial && <CampaignProgress compact={touch} level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}

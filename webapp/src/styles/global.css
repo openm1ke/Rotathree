@@ -2022,9 +2022,10 @@ select:focus-visible {
   }
 }
 
-/* A short screen on its side (a phone turned over, a low window): a smaller
-   logo, and the list in two columns. */
-@media (orientation: landscape) and (max-height: 540px) {
+/* A low screen (a phone turned over, a square frame, a low window): a
+   smaller logo, and the list in two columns. */
+@media (max-height: 540px) and (min-width: 400px),
+  (max-height: 640px) and (min-width: 400px) and (min-aspect-ratio: 4/5) and (max-aspect-ratio: 5/4) {
   .home {
     --navitem-title: min(clamp(20px, 7svh, 36px), 5vw);
     padding-block: 3svh;
@@ -2040,9 +2041,42 @@ select:focus-visible {
   /* The badge of a finished campaign goes under the title where a column is
      too narrow for both; the campaign card is gone by then. */
   .navitem__heading { flex-wrap: wrap; gap: 4px 10px; }
+  .navitem { padding-right: 8px; }
   .home__side { width: 100%; max-width: 760px; margin-inline: auto; }
   .home__side .card { gap: 4px; }
   .home__side .card strong { font-size: 20px; }
+}
+
+/* Dialogs stay whole, with no scroll of their own, as the screen gets lower:
+   the result numbers in two columns, then tighter spacing, and on a phone on
+   its side a wider dialog with three columns and the buttons in pairs. */
+@media (max-height: 760px) {
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+  .stats__row--main { grid-column: 1 / -1; }
+  .dialog { padding: 20px 22px 16px; }
+  .dialog__actions { gap: 8px; margin-top: 16px; }
+  .dialog .button { min-height: 40px; }
+}
+@media (max-height: 540px) {
+  .overlay { padding: 8px; }
+  .dialog { max-height: calc(100svh - 16px); padding: 14px 18px 12px; }
+  .dialog__title { font-size: 26px; }
+  .dialog__note { margin-top: 6px; font-size: 13px; }
+  .dialog__actions { gap: 6px; margin-top: 12px; }
+  .dialog .button { min-height: 36px; }
+  .stats { margin-top: 8px; }
+  .stats__row { padding: 4px 0; }
+  .stats__row--main dd { font-size: 26px; }
+}
+/* On the lowest screens a result keeps its title and numbers, not the line
+   that explains them. */
+@media (max-height: 440px), (max-width: 340px) and (max-height: 600px) {
+  .dialog:has(.stats) .dialog__note { display: none; }
+}
+@media (max-height: 460px) and (min-width: 560px) {
+  .dialog--narrow { width: min(620px, 94vw); }
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dialog__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Flags remain recognizable on systems without color emoji fonts. */
@@ -2146,13 +2180,19 @@ select:focus-visible {
 .card--campaign-shortcut strong { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .card--campaign-shortcut strong > span:last-child { color: var(--accent); font-size: 24px; }
 
-/* Playgama build: the language globe on the main menu, and no long-press
-   callout over the field (see src/platform). */
-.language-switch {
+/* Playgama build: the music switch and the language globe in the corner of
+   the main menu, and no long-press callout over the field (see src/platform). */
+.corner-controls {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
   z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.corner-controls .game-icon { width: 38px; height: 38px; background: var(--panel-strong); }
+.language-switch {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2174,8 +2214,11 @@ select:focus-visible {
 .language-switch svg { color: var(--accent); flex: none; }
 
 [data-platform='playgama'] body { -webkit-touch-callout: none; }
-/* Where the logo spans the width, it starts below the language switch: on a
-   narrow screen, unless the screen lies on its side and the logo is small. */
-@media (max-width: 760px) and (orientation: portrait), (max-width: 760px) and (min-height: 541px) {
+/* Where the centred logo could reach the corner controls, it starts below
+   them; on a low screen it starts at the list's left edge instead. */
+@media (max-width: 960px) and (min-height: 541px), (max-width: 760px) and (orientation: portrait) {
   [data-platform='playgama'] .home { padding-top: calc(max(12px, env(safe-area-inset-top)) + 52px); }
+}
+@media (max-height: 540px) and (min-width: 400px) {
+  [data-platform='playgama'] .home__brand { width: 100%; max-width: 760px; margin-inline: auto; text-align: left; }
 }
