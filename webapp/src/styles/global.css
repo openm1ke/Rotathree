@@ -1676,6 +1676,8 @@ input:focus-visible {
   gap: 12px;
   flex-shrink: 0;
 }
+/* The gear, and the music switch beside it, keep to the right edge. */
+.tutorial-hud .hud__buttons { flex: none; }
 .touch-controls {
   display: flex;
   justify-content: space-between;
