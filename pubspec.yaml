@@ -1,7 +1,7 @@
 name: rotathree
 description: "RotaThree — four glasses around one centre, match three."
 publish_to: 'none'
-version: 0.1.1+18
+version: 0.1.1+19
 
 environment:
   sdk: ^3.12.0

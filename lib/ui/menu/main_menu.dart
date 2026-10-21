@@ -80,12 +80,21 @@ class MainMenu extends StatelessWidget {
         ),
       );
     }
-    return TabletScale(
-      child: SafeArea(
-        child: Column(
-          children: [
-            if (corners) corner,
-            Expanded(
+    // On a tablet the corner grows as a whole, its buttons with its text.
+    final s = tabletScale(size);
+    return SafeArea(
+      child: Column(
+        children: [
+          if (corners)
+            SizedBox(
+              height: 50 * s,
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Transform.scale(scale: s, alignment: Alignment.topRight, child: corner),
+              ),
+            ),
+          Expanded(
+            child: TabletScale(
               child: LayoutBuilder(
                 builder: (context, box) => SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -100,8 +109,8 @@ class MainMenu extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
