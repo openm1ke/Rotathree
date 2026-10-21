@@ -11,7 +11,7 @@ interface Props {
   options: HudOptions;
   onPause: () => void;
   onOpenSettings: () => void;
-  /** The music switch beside the gear (Playgama build). */
+  /** The music switch beside the gear. */
   sound?: { on: boolean; toggle: () => void };
   compact?: boolean;
 }

@@ -34,7 +34,6 @@ import {
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
 import { MusicPlayer } from './services/music';
 import { isPlatformHidden, isPlatformMuted, subscribeMute, subscribeVisibility } from './platform/lifecycle';
-import { PLAYGAMA_BUILD } from './platform/target';
 import { LanguageSwitch } from './platform/LanguageSwitch';
 
 /** The page is hidden, or the platform has covered or muted the game. */
@@ -332,7 +331,7 @@ export default function App() {
           onCheckpoint={(save) => checkpoint(route.session.mode, save)}
           onTutorialDone={finishTutorial}
           onSettings={() => setSettingsOpen(true)}
-          onToggleMusic={PLAYGAMA_BUILD ? toggleMusic : undefined}
+          onToggleMusic={toggleMusic}
           onPauseChanged={onPauseChanged}
           onExit={exit}
           onLevels={levels}
@@ -359,7 +358,7 @@ export default function App() {
       </div>
 
       <div className="app__content">{screen}</div>
-      {PLAYGAMA_BUILD && route.name === 'home' && (
+      {route.name === 'home' && (
         <div className="corner-controls">
           <SoundButton on={settings.audio.music} onToggle={toggleMusic} />
           <LanguageSwitch

@@ -299,6 +299,7 @@ for (const legacyTabPause of [false, true]) {
     })));
     await startCampaign(page);
     const pause = page.getByRole('button', { name: 'Пауза', exact: true });
+    const sound = page.getByRole('button', { name: 'Выключить музыку', exact: true });
     const settings = page.getByRole('button', { name: 'Настройки', exact: true });
     const field = page.getByLabel('Игровое поле');
     await expect(field).toHaveAttribute('tabindex', '-1');
@@ -310,7 +311,11 @@ for (const legacyTabPause of [false, true]) {
       await page.keyboard.press('Tab');
       await expect(pause).toBeFocused();
       await page.keyboard.press('Tab');
+      await expect(sound).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(settings).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(sound).toBeFocused();
       await page.keyboard.press('Shift+Tab');
       await expect(pause).toBeFocused();
       await page.keyboard.press('Shift+Tab');
@@ -328,6 +333,8 @@ for (const legacyTabPause of [false, true]) {
     await page.keyboard.press('Tab');
     await expect(page.getByRole('dialog', { name: 'Пауза', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+    await page.keyboard.press('Tab');
+    await expect(sound).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(settings).toBeFocused();
     await page.keyboard.press('Enter');

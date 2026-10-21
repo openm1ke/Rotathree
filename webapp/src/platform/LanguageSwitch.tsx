@@ -4,8 +4,9 @@ const NAMES: Record<Language, string> = { ru: 'Русский', en: 'English' };
 
 /**
  * A globe on the main menu that switches to the other language, named in that
- * language. Playgama asks for the language choice to be reachable by someone
- * who cannot read the current one; the full picker stays in the settings.
+ * language, so that someone who cannot read the current one finds it
+ * (Playgama asks for that; the site has it too). The full picker stays in the
+ * settings.
  */
 export function LanguageSwitch({ language, onChange }: { language: Language; onChange: (language: Language) => void }) {
   const next: Language = language === 'ru' ? 'en' : 'ru';

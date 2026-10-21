@@ -2213,8 +2213,8 @@ select:focus-visible {
 .card--campaign-shortcut strong { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .card--campaign-shortcut strong > span:last-child { color: var(--accent); font-size: 24px; }
 
-/* Playgama build: the music switch and the language globe in the corner of
-   the main menu, and no long-press callout over the field (see src/platform). */
+/* The music switch and the language globe in the corner of the main menu;
+   in the Playgama build, no long-press callout over the field either. */
 .corner-controls {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
@@ -2250,8 +2250,8 @@ select:focus-visible {
 /* Where the centred logo could reach the corner controls, it starts below
    them; on a low screen it starts at the list's left edge instead. */
 @media (max-width: 960px) and (min-height: 541px), (max-width: 760px) and (orientation: portrait) {
-  [data-platform='playgama'] .home { padding-top: calc(max(12px, env(safe-area-inset-top)) + 52px); }
+  .home { padding-top: calc(max(12px, env(safe-area-inset-top)) + 52px); }
 }
 @media (max-height: 540px) and (min-width: 400px) {
-  [data-platform='playgama'] .home__brand { width: 100%; max-width: 760px; margin-inline: auto; text-align: left; }
+  .home__brand { width: 100%; max-width: 760px; margin-inline: auto; text-align: left; }
 }

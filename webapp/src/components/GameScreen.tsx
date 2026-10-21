@@ -51,7 +51,7 @@ interface Props {
   /** True while the settings are open over the game: nothing moves. */
   blocked: boolean;
   onSettings: () => void;
-  /** Turns the music on or off from the game itself (Playgama build). */
+  /** Turns the music on or off from the game itself. */
   onToggleMusic?: () => void;
   onPauseChanged?: (paused: boolean) => void;
   /** Back to the main menu. */
