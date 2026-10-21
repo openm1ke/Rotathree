@@ -2,6 +2,7 @@ import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { PlayerHands } from '../platform/hands';
 
 /** The way back of every page: a small chevron, the same on every screen. The
  * label stays translated for keyboard users and screen readers. */
@@ -35,6 +36,13 @@ export function GameIconButton({ icon, label, onClick }: {
 }
 
 const FOCUSABLE = 'button:not(:disabled), input, select, [tabindex="0"]';
+/** After its delay, a layer that opened by itself waits until no key or finger
+ * has pressed for this long: a player still hammering the drop key presses
+ * nothing. */
+const ARM_STILL_MS = 400;
+/** It arms by this time whatever is held, so that a stuck key cannot lock it;
+ * a press that began earlier still never counts. */
+const ARM_LATEST_MS = 3000;
 
 /** The music on or off at once, without opening the settings: on the main
  * menu beside the language switch and in a game beside the settings gear. A
@@ -51,10 +59,11 @@ export function SoundButton({ on, onToggle }: { on: boolean; onToggle: () => voi
 /** A layer over the whole window, not just the field it was opened from.
  *
  * `armAfterMs` is for a layer that opens by itself, under keys and fingers
- * still busy with the game: for that long it presses nothing, and only then
- * does its first button take the focus. A press that began before that never
- * counts, so a key held through the opening, its auto-repeat or a finger
- * lifted afterwards cannot choose for the player. */
+ * still busy with the game: for that long, and then until the player's hands
+ * have been still for a moment, it presses nothing, and only then does its
+ * first button take the focus. A press that began before that never counts,
+ * so a key held through the opening, its auto-repeat or a finger lifted
+ * afterwards cannot choose for the player. */
 export function Overlay({
   children,
   onDismiss,
@@ -112,15 +121,26 @@ export function Overlay({
     const onKeyUp = (event: KeyboardEvent) => {
       if (presses(event) && !fresh.delete(event.code)) event.preventDefault();
     };
-    const timer = setTimeout(() => {
+    const opened = performance.now();
+    const hands = new PlayerHands();
+    const unwatchHands = hands.watch();
+    let timer: ReturnType<typeof setTimeout>;
+    const arm = () => {
+      const now = performance.now();
+      if (now - opened < ARM_LATEST_MS && !hands.stillFor(ARM_STILL_MS, now)) {
+        timer = setTimeout(arm, 100);
+        return;
+      }
       armed.current = true;
       setReady(true);
       if (document.activeElement === dialog) dialog.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-    }, armAfterMs);
+    };
+    timer = setTimeout(arm, armAfterMs);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     return () => {
       clearTimeout(timer);
+      unwatchHands();
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };

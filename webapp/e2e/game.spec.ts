@@ -411,6 +411,20 @@ test('the result screen ignores a key held and a tap begun before it could answe
   await expect(over).toBeVisible();
   await retry.click();
   await expect(over).toHaveCount(0);
+
+  // A player still hammering the drop key well past the first moment: each
+  // press is a new one, yet none of them picks the next step.
+  await expect(pause).toBeVisible();
+  await fillGlass();
+  await expect(retry).toBeVisible();
+  for (let i = 0; i < 10; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(150);
+  }
+  await expect(over).toBeVisible();
+  await expect(retry).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(over).toHaveCount(0);
 });
 
 test('settings freeze campaign banners and ending a run records statistics', async ({ page }) => {

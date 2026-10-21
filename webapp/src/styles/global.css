@@ -1894,6 +1894,20 @@ select:focus-visible {
 
 /* The editor and running game share one bounded control surface. */
 .touch-controls { display: block; }
+/* A touch screen on its side: the field takes the whole height under the
+   readout, and the pads stand in the bottom corners beside it instead of in
+   a band under it. The field gives up exactly the pads' width on each side,
+   so they never cover it. */
+@media (orientation: landscape) {
+  .game--touch:not(.game--tutorial) .game__frame { padding-inline: calc(var(--pad-size, 144px) + 16px); }
+  .game--touch:not(.game--tutorial) .touch-controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+}
 .pad-surface { width: 100%; position: relative; flex-shrink: 0; }
 .pad-surface__space { position: absolute; left: 0; top: 0; transform-origin: top left; pointer-events: none; }
 .pad-surface__pad { position: absolute; pointer-events: auto; }

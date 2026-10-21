@@ -281,6 +281,7 @@
   "Время в играх": "Time played",
   "Кампания · пройдена": "Campaign · completed",
   "Кампания · уровень {n}": "Campaign · level {n}",
+  "Кампания · уровень {n} из {total}": "Campaign · level {n} of {total}",
   "партия прервана": "game ended early",
   "кампания пройдена": "campaign completed",
   "уровень {n}": "level {n}",

@@ -946,6 +946,7 @@ export function GameScreen(props: Props) {
       className={`game ${touch ? 'game--touch' : ''} ${tutorial ? 'game--tutorial' : ''}`}
       style={{
         ['--field-size' as string]: size > 0 ? `${size}px` : '100%',
+        ['--pad-size' as string]: `${Math.max(settings.padPositions.left.size, settings.padPositions.right.size)}px`,
         ['--tutorial-aspect' as string]: tutorialStep < 4 ? 0.56 : 1,
       }}
       data-frozen={status === 'paused' || blocked}
