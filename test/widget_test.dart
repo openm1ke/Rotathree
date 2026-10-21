@@ -47,6 +47,27 @@ void main() {
     expect(find.text('Цель 1\u00a0200'), findsOneWidget);
   });
 
+  testWidgets('the menu corner switches the music and the language at once', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+
+    await tester.tap(find.byTooltip('Выключить музыку'));
+    await settle(tester);
+    expect(find.byTooltip('Включить музыку'), findsOneWidget);
+    final prefs = await tester.runAsync(SharedPreferences.getInstance);
+    expect(prefs!.getString('rotathree.settings.v2'), contains('"music":false'));
+
+    // The globe names the other language in that language.
+    expect(find.text('English'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('language-switch')));
+    await settle(tester);
+    expect(find.text('Campaign'), findsOneWidget);
+    expect(find.text('Русский'), findsOneWidget);
+    expect(find.byTooltip('Turn music on'), findsOneWidget);
+  });
+
   testWidgets('completed campaign uses a compact label and unlocks Play inside its menu', (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;

@@ -9,10 +9,19 @@ typedef Option<T> = ({T value, String label});
 
 /// A round game-header action with a full-size touch target and spoken label.
 class GameIconButton extends StatelessWidget {
-  const GameIconButton({super.key, required this.icon, required this.label, required this.onPressed});
+  const GameIconButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.size = 44,
+    this.background = Palette.panel,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final double size;
+  final Color background;
 
   @override
   Widget build(BuildContext context) => IconButton.outlined(
@@ -20,14 +29,33 @@ class GameIconButton extends StatelessWidget {
     onPressed: onPressed,
     icon: Icon(icon, size: 22),
     style: IconButton.styleFrom(
-      minimumSize: const Size(44, 44),
-      maximumSize: const Size(44, 44),
+      minimumSize: Size.square(size),
+      maximumSize: Size.square(size),
       padding: EdgeInsets.zero,
       shape: const CircleBorder(),
       side: const BorderSide(color: Palette.lineStrong),
       foregroundColor: Palette.accent,
-      backgroundColor: Palette.panel,
+      backgroundColor: background,
     ),
+  );
+}
+
+/// The music on or off at once, without opening the settings: on the main
+/// menu beside the language switch and in a game beside the settings gear.
+class SoundButton extends StatelessWidget {
+  const SoundButton({super.key, required this.on, required this.onToggle, this.size = 44, this.background = Palette.panel});
+  final bool on;
+  final VoidCallback onToggle;
+  final double size;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) => GameIconButton(
+    icon: on ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+    label: on ? 'Выключить музыку' : 'Включить музыку',
+    onPressed: onToggle,
+    size: size,
+    background: background,
   );
 }
 

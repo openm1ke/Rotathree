@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
@@ -209,19 +211,10 @@ class _PadButton extends StatelessWidget {
                       if (showLabel && slot != PadSlot.center)
                         Padding(
                           padding: EdgeInsets.only(top: size * 0.02),
-                          // The caption shrinks to the button instead of being cut off.
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: LText(
-                              padActionCaption(action),
-                              maxLines: 1,
-                              overflow: TextOverflow.clip,
-                              softWrap: false,
-                              style: Type.label(
-                                9,
-                                color: pressed ? Colors.white : Palette.textDim,
-                              ).copyWith(letterSpacing: 0.3),
-                            ),
+                          child: _PadCaption(
+                            text: padActionCaption(action),
+                            color: pressed ? Colors.white : Palette.textDim,
+                            room: size - 4,
                           ),
                         ),
                     ],
@@ -290,6 +283,58 @@ IconData padActionIcon(GameAction action) => switch (action) {
   GameAction.pause => Icons.pause_rounded,
   GameAction.restart => Icons.refresh_rounded,
 };
+
+/// Captions read at 11 px, as on the web. A word wider than its button is
+/// condensed to fit, and only a word that would need more than that drops to
+/// 10 px.
+class _PadCaption extends StatelessWidget {
+  const _PadCaption({required this.text, required this.color, required this.room});
+
+  static const _size = 11.0;
+  static const _smallSize = 10.0;
+  static const _mostCondensed = 0.8;
+
+  final String text;
+  final Color color;
+  final double room;
+
+  @override
+  Widget build(BuildContext context) {
+    final caption = context.tr(text);
+    final scaler = MediaQuery.textScalerOf(context);
+    TextStyle style(double size) => Type.label(size, color: color).copyWith(letterSpacing: 0.3);
+    Size measure(double size) {
+      final painter = TextPainter(
+        text: TextSpan(text: caption, style: style(size)),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final measured = painter.size;
+      painter.dispose();
+      return measured;
+    }
+
+    var size = _size;
+    var measured = measure(size);
+    if (measured.width > room && room / measured.width < _mostCondensed) {
+      size = _smallSize;
+      measured = measure(size);
+    }
+    final label = Text(caption, maxLines: 1, softWrap: false, style: style(size));
+    if (measured.width <= room) return label;
+    return SizedBox(
+      width: room,
+      height: measured.height,
+      child: ClipRect(
+        child: OverflowBox(
+          maxWidth: double.infinity,
+          child: Transform.scale(scaleX: math.max(_mostCondensed, room / measured.width), scaleY: 1, child: label),
+        ),
+      ),
+    );
+  }
+}
 
 /// A word for the action, small under its picture.
 String padActionCaption(GameAction action) => switch (action) {

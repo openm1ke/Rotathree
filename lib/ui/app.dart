@@ -195,6 +195,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('settings', _store!.saveSettings(next));
   }
 
+  void _toggleMusic() =>
+      _changeSettings(_settings.copyWith(audio: _settings.audio.copyWith(music: !_settings.audio.music)));
+
   void _changeProgress(Progress next) {
     setState(() => _progress = next);
     _saved('progress', _store!.saveProgress(next));
@@ -330,6 +333,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onCustom: () => _show(_Screen.custom),
           onStatistics: () => _show(_Screen.statistics),
           onSettings: () => _show(_Screen.settings),
+          music: _settings.audio.music,
+          onToggleMusic: _toggleMusic,
+          onLanguage: (language) => _changeSettings(_settings.copyWith(language: language)),
         ),
         _Screen.resume => ResumeScreen(
           runs: _savedRuns,
@@ -370,6 +376,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           blocked: _settingsOpen,
           onPauseChanged: _setMusicPaused,
           onSettings: () => setState(() => _settingsOpen = true),
+          onToggleMusic: _toggleMusic,
           onExit: () => _show(_Screen.home),
           onLevels: () => _show(_Screen.campaign),
           onRetry: _retry,

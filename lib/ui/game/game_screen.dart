@@ -28,6 +28,7 @@ import '../input/game_action.dart';
 import '../input/pad_controller.dart';
 import '../layout.dart';
 import '../style.dart';
+import '../widgets/armed_layer.dart';
 import '../widgets/controls.dart';
 import 'hud.dart';
 import 'campaign_progress.dart';
@@ -82,6 +83,7 @@ class GameScreen extends StatefulWidget {
     this.tutorial = false,
     this.onTutorialDone,
     this.onPauseChanged,
+    this.onToggleMusic,
   });
 
   final Session session;
@@ -115,6 +117,9 @@ class GameScreen extends StatefulWidget {
   final bool tutorial;
   final VoidCallback? onTutorialDone;
   final ValueChanged<bool>? onPauseChanged;
+
+  /// The music switch beside the gear.
+  final VoidCallback? onToggleMusic;
 
   @override
   State<GameScreen> createState() => GameScreenState();
@@ -785,6 +790,7 @@ class GameScreenState extends State<GameScreen>
                         title: 'Обучение',
                         onBack: handleBack,
                         actions: [
+                          ?_soundButton,
                           GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
                         ],
                       )
@@ -803,6 +809,7 @@ class GameScreenState extends State<GameScreen>
                                 ),
                               ),
                             ),
+                            if (_soundButton case final sound?) ...[sound, const SizedBox(width: 6)],
                             GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
                           ],
                         ),
@@ -871,8 +878,11 @@ class GameScreenState extends State<GameScreen>
             ),
           ),
           if (!widget.tutorial && !widget.blocked && _status == _Status.paused) _dialog(_pauseDialog()),
-          if (!widget.blocked && _status == _Status.over && _result != null) _dialog(_overDialog(_result!)),
-          if (!widget.blocked && _status == _Status.done && _result != null) _dialog(_doneDialog(_result!)),
+          // Result screens open by themselves, under fingers still playing.
+          if (!widget.blocked && _status == _Status.over && _result != null)
+            _dialog(ArmedLayer(builder: (context, armed) => _overDialog(_result!, armed: armed))),
+          if (!widget.blocked && _status == _Status.done && _result != null)
+            _dialog(ArmedLayer(builder: (context, armed) => _doneDialog(_result!, armed: armed))),
         ],
       ),
     );
@@ -968,7 +978,12 @@ class GameScreenState extends State<GameScreen>
     );
   }
 
-  Widget _overDialog(RunRecord record) {
+  Widget? get _soundButton => switch (widget.onToggleMusic) {
+    final toggle? => SoundButton(on: widget.settings.audio.music, onToggle: toggle),
+    null => null,
+  };
+
+  Widget _overDialog(RunRecord record, {bool armed = true}) {
     final campaign = _isCampaign;
     final custom = widget.session is CustomSession;
     return DialogCard(
@@ -981,7 +996,7 @@ class GameScreenState extends State<GameScreen>
       children: [
         _RunStats(record: record, campaign: campaign),
         const SizedBox(height: 14),
-        _buttons([
+        _buttons(armed: armed, [
           GoButton(label: campaign ? 'Повторить уровень' : 'Заново', expand: true, onPressed: _retry),
           if (custom && !widget.tutorial)
             OutlineButton(label: 'Изменить режим', onPressed: () => _leave(widget.onCustomise)),
@@ -992,14 +1007,14 @@ class GameScreenState extends State<GameScreen>
     );
   }
 
-  Widget _doneDialog(RunRecord record) => DialogCard(
+  Widget _doneDialog(RunRecord record, {bool armed = true}) => DialogCard(
     kicker: 'Кампания',
     title: 'Кампания пройдена',
     note: 'Все ${campaignLevels.length} уровней позади. Кошмар открыт.',
     children: [
       _RunStats(record: record, campaign: true),
       const SizedBox(height: 14),
-      _buttons([
+      _buttons(armed: armed, [
         GoButton(label: 'Кошмар', expand: true, onPressed: widget.onInsane),
         OutlineButton(label: 'К уровням', onPressed: widget.onLevels),
         OutlineButton(label: 'В меню', onPressed: () => _leave(widget.onExit)),
@@ -1007,10 +1022,16 @@ class GameScreenState extends State<GameScreen>
     ],
   );
 
-  Widget _buttons(List<Widget> buttons) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    mainAxisSize: MainAxisSize.min,
-    children: [for (final button in buttons) Padding(padding: const EdgeInsets.only(bottom: 8), child: button)],
+  /// The buttons light up once they will answer.
+  Widget _buttons(List<Widget> buttons, {bool armed = true}) => AnimatedOpacity(
+    opacity: armed ? 1 : 0.5,
+    duration: const Duration(milliseconds: 180),
+    curve: Curves.easeOut,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [for (final button in buttons) Padding(padding: const EdgeInsets.only(bottom: 8), child: button)],
+    ),
   );
 }
 
@@ -1031,17 +1052,27 @@ class _RunStats extends StatelessWidget {
       ('Лучшее комбо', '×${record.bestCombo}'),
       ('Время', formatDuration(record.seconds)),
     ];
+    Widget row((String, String) entry) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: LText(entry.$1, style: const TextStyle(fontSize: 14))),
+          LText(entry.$2, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+    // Below 760 dp of height the numbers go into two columns, so that the
+    // dialog stays whole on a low phone, as on the web.
+    if (MediaQuery.sizeOf(context).height >= 760) return Column(children: [for (final entry in rows) row(entry)]);
     return Column(
       children: [
-        for (final (label, value) in rows)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(child: LText(label, style: const TextStyle(fontSize: 14))),
-                LText(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-              ],
-            ),
+        for (var i = 0; i < rows.length; i += 2)
+          Row(
+            children: [
+              Expanded(child: row(rows[i])),
+              const SizedBox(width: 18),
+              Expanded(child: i + 1 < rows.length ? row(rows[i + 1]) : const SizedBox()),
+            ],
           ),
       ],
     );

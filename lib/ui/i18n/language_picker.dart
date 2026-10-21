@@ -58,6 +58,42 @@ class LanguagePicker extends StatelessWidget {
   );
 }
 
+/// A globe on the main menu that switches to the other language, named in that
+/// language, so that someone who cannot read the current one finds it. The
+/// full picker stays in the settings.
+class LanguageSwitch extends StatelessWidget {
+  const LanguageSwitch({super.key, required this.onChanged});
+  final ValueChanged<LanguageChoice> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final next = AppStrings.of(context).language == 'ru' ? LanguageChoice.en : LanguageChoice.ru;
+    return Material(
+      color: Palette.panelStrong,
+      shape: const StadiumBorder(side: BorderSide(color: Palette.line)),
+      child: InkWell(
+        key: const ValueKey('language-switch'),
+        customBorder: const StadiumBorder(),
+        onTap: () => onChanged(next),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.language_rounded, size: 20, color: Palette.accent),
+              const SizedBox(width: 8),
+              Text(
+                next == LanguageChoice.ru ? 'Русский' : 'English',
+                style: Type.body(14, weight: FontWeight.w800).copyWith(letterSpacing: 0.3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FlagPainter extends CustomPainter {
   const _FlagPainter(this.language);
   final LanguageChoice language;

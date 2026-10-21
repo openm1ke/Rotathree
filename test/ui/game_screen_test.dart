@@ -29,6 +29,7 @@ Future<GameScreenState> pumpGame(
   Size size = const Size(390, 844),
   VoidCallback? onTutorialDone,
   ValueChanged<bool>? onPauseChanged,
+  VoidCallback? onToggleMusic,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -44,6 +45,7 @@ Future<GameScreenState> pumpGame(
         tutorial: tutorial,
         onTutorialDone: onTutorialDone,
         onPauseChanged: onPauseChanged,
+        onToggleMusic: onToggleMusic,
         onCheckpoint: onCheckpoint,
         onSettings: () {},
         onExit: onExit ?? () {},
@@ -221,6 +223,20 @@ void main() {
     expect(find.text('НОВЫЙ ЭТАП'), findsOneWidget);
     expect(state.engine.config.numberOfColors, campaignLevels[4].colours);
     expect(state.engine.sides.length, 1);
+  });
+
+  testWidgets('the music switch stands beside the gear in a game and in training', (tester) async {
+    for (final tutorial in [false, true]) {
+      var toggles = 0;
+      await pumpGame(tester, tutorial: tutorial, onToggleMusic: () => toggles++);
+      final sound = find.byTooltip('Выключить музыку');
+      expect(sound, findsOneWidget);
+      final gear = tester.getRect(find.byTooltip('Настройки'));
+      expect(tester.getRect(sound).right, lessThan(gear.left));
+      expect(gear.left - tester.getRect(sound).right, lessThan(12));
+      await tester.tap(sound);
+      expect(toggles, 1);
+    }
   });
 
   testWidgets('the pause button opens the pause dialog and the game stops', (tester) async {

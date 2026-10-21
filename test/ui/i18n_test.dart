@@ -52,6 +52,10 @@ void main() {
     expect(english.tr('150 мс'), '150 ms');
     expect(english.tr('Левая: → · Правая: ↻'), 'Left: → · Right: ↻');
     expect(english.tr('Кампания · уровень 3'), 'Campaign · level 3');
+    // The pause dialog's kicker: the shorter pattern must not swallow "из 16".
+    expect(english.tr('Кампания · уровень 1 из 16'), 'Campaign · level 1 of 16');
+    expect(english.tr('КАМПАНИЯ · УРОВЕНЬ 1 ИЗ 16'), 'CAMPAIGN · LEVEL 1 OF 16');
+    expect(english.tr('Выключить музыку'), 'Turn music off');
     expect(
       english.tr('Правый стакан заполнился до конца рукава. Уровень не пройден: начнём его заново или выберем другой.'),
       'The Right glass is full. Level incomplete: retry it or choose another.',
