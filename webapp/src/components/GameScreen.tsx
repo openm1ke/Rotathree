@@ -70,7 +70,8 @@ interface Props {
   resumeImmediately?: boolean;
   onCheckpoint?: (save: RunSave | null) => void;
   tutorial?: boolean;
-  onTutorialDone?: () => void;
+  /** `played`: Play on the last lesson; false when the player skipped. */
+  onTutorialDone?: (played: boolean) => void;
 }
 
 /** Longest frame the game will simulate in one go (hitches, tab switches). */
@@ -529,7 +530,7 @@ export function GameScreen(props: Props) {
         if (current !== 'playing' || live.current.blocked || (lesson > 0 && lesson < TUTORIAL_LESSONS.length - 1 && !lessonPerformed)) return;
         if (lesson === TUTORIAL_LESSONS.length - 1) {
           reportTutorial('tutorial_completed', lesson);
-          live.current.onTutorialDone?.();
+          live.current.onTutorialDone?.(true);
           return;
         }
         keyboard.releaseAll();
@@ -644,7 +645,7 @@ export function GameScreen(props: Props) {
         if (event.repeat) return;
         if (event.code === 'Backspace') {
           reportTutorial('tutorial_skipped', lesson);
-          live.current.onTutorialDone?.();
+          live.current.onTutorialDone?.(false);
         }
         else if (lesson > 0 && lesson < TUTORIAL_LESSONS.length - 1 && !lessonPerformed) {
           // A custom Enter binding can still perform the lesson's required action.
@@ -993,7 +994,7 @@ export function GameScreen(props: Props) {
       onNext={() => actions.current.nextLesson()}
       onSkip={() => {
         reportTutorial('tutorial_skipped', tutorialStep);
-        props.onTutorialDone?.();
+        props.onTutorialDone?.(false);
       }}
     />
   );

@@ -214,17 +214,34 @@ export default function App() {
     [tutorialDone, openTutorial, openGame],
   );
 
-  const finishTutorial = useCallback(() => {
-    setTutorialDone(true);
-    written('tutorial', saveTutorial(true));
-    const after = afterTutorial.current;
-    afterTutorial.current = null;
-    if (after) openGame(after.session, after.from);
-    else {
-      setSettingsOpen(false);
-      setRoute({ name: 'home' });
-    }
-  }, [written, openGame]);
+  /** The campaign where the player left it: the saved run, else the furthest
+   * open level, started through `fresh`. */
+  const playCampaign = useCallback(
+    (fresh: (session: Session, from: From) => void) => {
+      const save = savedRef.current.campaign;
+      if (save) openGame(save.session, 'home', save, true);
+      else fresh({ mode: 'campaign', level: progress.unlocked }, 'home');
+    },
+    [openGame, progress.unlocked],
+  );
+
+  /** `played`: the player pressed Play on the last lesson rather than Skip.
+   * A tutorial opened from the menu then goes on into the campaign. */
+  const finishTutorial = useCallback(
+    (played: boolean) => {
+      setTutorialDone(true);
+      written('tutorial', saveTutorial(true));
+      const after = afterTutorial.current;
+      afterTutorial.current = null;
+      if (after) openGame(after.session, after.from);
+      else if (played) playCampaign(openGame);
+      else {
+        setSettingsOpen(false);
+        setRoute({ name: 'home' });
+      }
+    },
+    [written, openGame, playCampaign],
+  );
 
   const retry = useCallback((session: Session) => {
     setNonce((n) => n + 1);
@@ -264,11 +281,7 @@ export default function App() {
           tutorialDone={tutorialDone}
           onTutorial={() => openTutorial()}
           onResume={() => setRoute({ name: 'resume' })}
-          onPlayCampaign={() => {
-            const save = savedRef.current.campaign;
-            if (save) openGame(save.session, 'home', save, true);
-            else start({ mode: 'campaign', level: progress.unlocked }, 'home');
-          }}
+          onPlayCampaign={() => playCampaign(start)}
           onOpen={(target: MenuTarget) => setRoute(routeOf(target))}
           active={!settingsOpen}
         />

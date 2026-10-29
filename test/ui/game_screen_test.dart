@@ -27,7 +27,7 @@ Future<GameScreenState> pumpGame(
   ValueChanged<RunSave?>? onCheckpoint,
   ValueChanged<RunRecord>? onRecord,
   Size size = const Size(390, 844),
-  VoidCallback? onTutorialDone,
+  ValueChanged<bool>? onTutorialDone,
   ValueChanged<bool>? onPauseChanged,
   VoidCallback? onToggleMusic,
 }) async {
@@ -149,7 +149,7 @@ void main() {
       tutorial: true,
       session: CustomSession(defaultCustom.copyWith(extraGlasses: 0)),
       onExit: () => exits++,
-      onTutorialDone: () => completions++,
+      onTutorialDone: (_) => completions++,
     );
     expect(find.text('Пауза'), findsNothing);
     expect(find.byTooltip('Настройки'), findsOneWidget);
@@ -372,7 +372,7 @@ void main() {
       tutorial: true,
       size: const Size(320, 568),
       session: CustomSession(defaultCustom.copyWith(extraGlasses: 0)),
-      onTutorialDone: () => done = true,
+      onTutorialDone: (played) => done = played,
     );
     final row = state.engine.activePiece!.row;
     await pumpFrames(tester, 80);

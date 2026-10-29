@@ -115,7 +115,8 @@ class GameScreen extends StatefulWidget {
   final bool resumeImmediately;
   final ValueChanged<RunSave?>? onCheckpoint;
   final bool tutorial;
-  final VoidCallback? onTutorialDone;
+  /// `true`: Play on the last lesson; `false` when the player skipped.
+  final ValueChanged<bool>? onTutorialDone;
   final ValueChanged<bool>? onPauseChanged;
 
   /// The music switch beside the gear.
@@ -539,7 +540,7 @@ class GameScreenState extends State<GameScreen>
       return;
     }
     if (_tutorialStep == tutorialLessons.length - 1) {
-      widget.onTutorialDone?.call();
+      widget.onTutorialDone?.call(true);
       return;
     }
     _pads.releaseAll();
@@ -863,7 +864,7 @@ class GameScreenState extends State<GameScreen>
                                 }
                               : null,
                           onNext: _tutorialNext,
-                          onSkip: () => widget.onTutorialDone?.call(),
+                          onSkip: () => widget.onTutorialDone?.call(false),
                         ),
                       ),
                     RepaintBoundary(

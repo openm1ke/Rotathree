@@ -281,15 +281,19 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     });
   }
 
-  void _finishTutorial() {
+  /// [played]: the player pressed Play on the last lesson rather than Skip.
+  /// A tutorial opened from the menu then goes on into the campaign.
+  void _finishTutorial(bool played) {
     _tutorialDone = true;
     _saved('tutorial', _store!.saveTutorial(true));
     final next = _afterTutorial;
     _afterTutorial = null;
-    if (next == null) {
-      _show(_Screen.home);
-    } else {
+    if (next != null) {
       _start(next);
+    } else if (played) {
+      _playCampaign();
+    } else {
+      _show(_Screen.home);
     }
   }
 

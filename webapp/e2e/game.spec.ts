@@ -202,10 +202,21 @@ test('phone-sized browser gets touch controls and a complete tutorial', async ({
   await right.getByRole('button', { name: 'Поднять наверх стакан, который справа', exact: true }).click();
   await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
   await page.getByRole('button', { name: 'Играть', exact: true }).click();
-  await page.getByRole('button', { name: /Настройки/ }).click();
+  await expect(page.locator('.tutorial')).toHaveCount(0);
+  await expect(page.getByLabel('Уровень 1 / 16', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Левая крестовина' })).toBeVisible();
   await expect(page.locator('.bind__key')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('skipping a tutorial opened from the menu returns to the menu', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /Обучение/ }).click();
+  await page.getByRole('button', { name: 'Пропустить', exact: true }).click();
+  await expect(page.locator('.tutorial')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Кампания/ })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
 });
 
 test('tutorial shortcuts respect settings and custom Enter bindings, Backspace skips', async ({ page }) => {
@@ -608,7 +619,7 @@ test.describe('automatic English locale', () => {
     await page.getByRole('button', { name: '✓ Next', exact: true }).click();
     await expectEnglish(page);
     await page.getByRole('button', { name: 'Play', exact: true }).click();
-    await expect(page.getByRole('button', { name: /Campaign/ })).toBeVisible();
+    await expect(page.getByLabel('Level 1 / 16', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 });
