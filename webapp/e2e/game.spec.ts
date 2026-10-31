@@ -135,47 +135,91 @@ test('game pause ducks music until Continue or leaving for the menu', async ({ p
   await expect.poll(gain).toBeCloseTo(0.035, 5);
 });
 
-test('tutorial can be completed using only the keyboard with gated, repeat-safe Enter', async ({ page }) => {
+test('tutorial teaches by doing: lesson above the glass, hints on wrong keys, steps that move on by themselves', async ({ page }) => {
   await startCampaign(page, false);
-  await expect(page.getByRole('heading', { name: 'Одна фигура — три клетки' })).toBeVisible();
-  await expect(page.locator('.tutorial__action kbd')).toHaveText(['Backspace', 'Enter']);
-  await expect(page.locator('.tutorial__next')).toHaveClass(/is-ready/);
+  const phase = () => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase);
+  await expect(page.getByRole('heading', { name: 'Собирай 3 в ряд' })).toBeVisible();
   await expect(page.locator('.tutorial__next')).toBeFocused();
-  const panel = await page.locator('.tutorial').boundingBox();
-  const field = await page.locator('.game__frame').boundingBox();
-  const header = await page.locator('.tutorial-hud').boundingBox();
-  expect(field!.x - panel!.x - panel!.width).toBeCloseTo(24, 0);
-  expect(header!.x).toBeCloseTo(field!.x, 0);
-  expect(header!.width).toBeCloseTo(field!.width, 0);
+  // Read top-down: the lesson, then the glass under it.
+  const lesson = (await page.locator('.tutorial').boundingBox())!;
+  const stage = (await page.locator('.stage').boundingBox())!;
+  expect(lesson.y + lesson.height).toBeLessThanOrEqual(stage.y + 1);
+  // A held Enter starts the lessons once and does not run through them.
   await page.keyboard.down('Enter');
   await page.keyboard.down('Enter');
   await page.keyboard.up('Enter');
-  await expect(page.getByRole('button', { name: 'Дальше', exact: true })).toBeDisabled();
-  await expect(page.locator('.tutorial__next')).not.toHaveClass(/is-ready/);
-  await expect(page.locator('.tutorial__next')).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Двигай фигуру' })).toBeVisible();
   await expect(page.locator('.tutorial__controls kbd')).toHaveText(['A', 'D']);
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
+  await expect(page.locator('.tutorial__next')).toHaveCount(0);
+  // The arrows turn the cross: pressed here, they say which keys move the piece.
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.tutorial__hint')).toHaveText('Стрелки поворачивают крест — фигуру двигают эти клавиши');
   await page.keyboard.press('KeyD');
-  await expect(page.locator('.tutorial__next')).toBeEnabled();
-  await expect(page.locator('.tutorial__next')).toBeFocused();
-  await page.keyboard.press('Enter');
+  await expect(page.locator('.tutorial--done')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни фигуру' })).toBeVisible();
+  await expect(page.locator('.tutorial__hint')).toHaveCount(0);
   await page.keyboard.press('KeyW');
-  await expect(page.locator('.tutorial__next')).toBeEnabled();
-  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Брось — собери 3' })).toBeVisible();
   await page.keyboard.press('Space');
-  await expect(page.locator('.tutorial__next')).toBeEnabled();
-  await expect(page.getByRole('heading', { name: 'Соберите три в ряд' })).toBeVisible();
-  await page.keyboard.press('Enter');
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase))
-    .toBe('playing');
+  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  // Left and right only: with two glasses there is none opposite to bring up.
+  // Q and E do it too, for a hand that stays on A, W, S, D.
+  await expect(page.locator('.tutorial__control')).toHaveText(['Q или ←', 'E или →']);
+  await expect.poll(phase).toBe('playing');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('.tutorial__hint')).toHaveText('Нажми подсвеченную клавишу');
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator('.tutorial__next')).toBeEnabled();
-  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Следи за всеми стаканами' })).toBeVisible();
+  await expect(page.locator('.tutorial__next')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('rotathree.tutorial.v1'))).toBe('true');
+});
+
+test('a player who tries the basics before Start goes straight to turning the cross', async ({ page }) => {
+  await startCampaign(page, false);
+  const phase = () => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase);
+  await expect(page.getByRole('heading', { name: 'Собирай 3 в ряд' })).toBeVisible();
+  await page.keyboard.press('KeyD');
+  await page.keyboard.press('KeyW');
+  await expect(page.getByRole('heading', { name: 'Собирай 3 в ряд' })).toBeVisible();
+  await page.keyboard.press('KeyS');
+  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  await expect(page.locator('.tutorial__count')).toHaveText('5 / 6');
+  await expect.poll(phase).toBe('playing');
+  await page.keyboard.press('KeyE');
+  await expect(page.getByRole('heading', { name: 'Следи за всеми стаканами' })).toBeVisible();
+  await expect(page.locator('.tutorial__keys-hint kbd')).toHaveText(['Enter']);
+  // The last screen is the game itself: the pieces fall by themselves, and
+  // Space drops one, as in the game, while Play waits for Enter.
+  const row = () => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.activePiece?.row ?? -1);
+  await expect.poll(phase).toBe('playing');
+  const from = await row();
+  await expect.poll(row, { timeout: 4000 }).toBeGreaterThan(from);
+  const landed = () => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.state.piecesPlaced);
+  const before = await landed();
+  await page.keyboard.press('Space');
+  await expect.poll(landed).toBeGreaterThan(before);
+  await expect(page.getByRole('heading', { name: 'Следи за всеми стаканами' })).toBeVisible();
+  await page.keyboard.press('KeyA');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
+});
+
+test('a basic tried before Start skips its lesson, and Space starts', async ({ page }) => {
+  await startCampaign(page, false);
+  await page.keyboard.press('KeyA');
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('heading', { name: 'Поверни фигуру' })).toBeVisible();
+  await expect(page.locator('.tutorial__count')).toHaveText('3 / 6');
+});
+
+test('a waiting lesson says again what to press', async ({ page }) => {
+  await startCampaign(page, false);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Двигай фигуру' })).toBeVisible();
+  await expect(page.locator('.tutorial__hint')).toHaveText('Нажми подсвеченную клавишу', { timeout: 6000 });
+  await expect(page.locator('.tutorial__controls')).toHaveClass(/is-urging/);
 });
 
 test('phone-sized browser gets touch controls and a complete tutorial', async ({ page }) => {
@@ -189,18 +233,24 @@ test('phone-sized browser gets touch controls and a complete tutorial', async ({
   await expect(left.locator('.dpad__button--down')).toHaveAttribute('aria-label', 'Мгновенно поставить фигуру');
   await expect(left).toBeVisible();
   await expect(right).toBeVisible();
-  await page.getByRole('button', { name: 'Дальше', exact: true }).click();
+  await page.getByRole('button', { name: 'Начать', exact: true }).click();
+  // The lesson's own pad buttons glow; the others step back.
+  await expect(left.locator('.dpad__button.is-hinted')).toHaveCount(2);
+  await expect(left).toHaveClass(/dpad--hinting/);
+  await expect(page.locator('.tutorial__pads')).toBeVisible();
   await left.getByRole('button', { name: 'Сдвинуть фигуру вправо', exact: true }).click();
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Поверни фигуру' })).toBeVisible();
   await right.getByRole('button', { name: 'Повернуть фигуру на четверть оборота', exact: true }).click();
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Брось — собери 3' })).toBeVisible();
   await left.getByRole('button', { name: 'Мгновенно поставить фигуру', exact: true }).click();
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  // The two glass buttons glow, not the opposite one.
+  await expect(right.locator('.dpad__button.is-hinted')).toHaveCount(2);
+  await expect(right.getByRole('button', { name: 'Развернуть поле на 180°', exact: true })).not.toHaveClass(/is-hinted/);
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase))
     .toBe('playing');
   await right.getByRole('button', { name: 'Поднять наверх стакан, который справа', exact: true }).click();
-  await page.getByRole('button', { name: '✓ Дальше', exact: true }).click();
   await page.getByRole('button', { name: 'Играть', exact: true }).click();
   await expect(page.locator('.tutorial')).toHaveCount(0);
   await expect(page.getByLabel('Уровень 1 / 16', { exact: true })).toBeVisible();
@@ -225,18 +275,17 @@ test('tutorial shortcuts respect settings and custom Enter bindings, Backspace s
   })));
   await startCampaign(page, false);
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Двигай фигуру' })).toBeVisible();
   await expect(page.locator('.tutorial__controls kbd')).toContainText(['A', 'Enter']);
   await page.getByRole('button', { name: 'Настройки', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible();
   await page.keyboard.press('Backspace');
-  await expect(page.getByRole('heading', { name: 'Сдвиньте фигуру' })).toBeVisible();
-  await expect(page.locator('.tutorial__next')).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Двигай фигуру' })).toBeVisible();
+  await expect(page.locator('.tutorial')).toBeFocused();
+  // Enter is the move here: it does the lesson, which then moves on.
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: '✓ Дальше', exact: true })).toBeEnabled();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Поверните фигуру' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни фигуру' })).toBeVisible();
   await page.keyboard.press('Backspace');
   await expect(page.locator('.tutorial')).toHaveCount(0);
   await expect(page.getByText('Уровень 1 / 16', { exact: true })).toBeVisible();
@@ -358,6 +407,29 @@ for (const legacyTabPause of [false, true]) {
   });
 }
 
+test('the pause menu is walked with the arrows and with W and S, round its ends', async ({ page }) => {
+  await startCampaign(page);
+  await page.keyboard.press('KeyP');
+  const dialog = page.getByRole('dialog', { name: 'Пауза', exact: true });
+  const item = (name: string) => dialog.getByRole('button', { name, exact: true });
+  await expect(item('Продолжить')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(item('Повторить уровень')).toBeFocused();
+  await page.keyboard.press('KeyS');
+  await expect(item('Настройки')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('KeyW');
+  await expect(item('Продолжить')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(item('Завершить партию')).toBeFocused();
+  await page.keyboard.press('KeyS');
+  await expect(item('Продолжить')).toBeFocused();
+  // The keys only move the focus: the game stays paused until a choice.
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveCount(0);
+});
+
 test('pause traps focus, Space activates Continue, saved transition resumes after reload', async ({ page }) => {
   await startCampaign(page);
   await finishLevel(page);
@@ -473,7 +545,7 @@ test('unavailable storage warns the player while the app remains usable', async 
   await page.goto('/');
   await expect(page.getByText(/Не удалось сохранить данные/)).toBeVisible();
   await page.getByRole('button', { name: /Обучение/ }).click();
-  await expect(page.getByRole('heading', { name: 'Одна фигура — три клетки' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Собирай 3 в ряд' })).toBeVisible();
 });
 
 test('small phone shares the header row and uses free space above the configured pads', async ({ page }) => {
@@ -607,16 +679,17 @@ test.describe('automatic English locale', () => {
     const left = page.getByRole('group', { name: 'Left D-pad' });
     const right = page.getByRole('group', { name: 'Right D-pad' });
     await expectEnglish(page);
-    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Start', exact: true }).click();
+    await expectEnglish(page);
     await left.getByRole('button', { name: 'Move the piece right', exact: true }).click();
-    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Rotate the piece' })).toBeVisible();
     await right.getByRole('button', { name: 'Rotate the piece a quarter turn', exact: true }).click();
-    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Drop it — match 3' })).toBeVisible();
     await left.getByRole('button', { name: 'Drop the piece instantly', exact: true }).click();
-    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Turn the cross' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase)).toBe('playing');
     await right.getByRole('button', { name: 'Bring the right glass to the top', exact: true }).click();
-    await page.getByRole('button', { name: '✓ Next', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Watch every glass' })).toBeVisible();
     await expectEnglish(page);
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByLabel('Level 1 / 16', { exact: true })).toBeVisible();

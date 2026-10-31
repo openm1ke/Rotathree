@@ -8,7 +8,7 @@ import { planFor, type Session } from '../game/session';
 import { MODE_NAMES, type RunPlan } from '../game/modes';
 import type { Side } from '../game/side';
 import { KeyboardController } from '../input/keyboard';
-import { ACTIONS, type Action } from '../input/bindings';
+import { ACTIONS, actionForCode, type Action } from '../input/bindings';
 import { PadController, type PadAction } from '../input/pads';
 import { useTouchControls } from '../input/touch';
 import { makePiece } from '../game/piece';
@@ -110,6 +110,31 @@ const AD_SHOWN_MS = 400;
 /** For when the keyboard could not be taken back from the platform's page. */
 const AD_FOCUS_PROMPT = 'Щёлкните по игре, чтобы продолжить';
 
+/** A field still for this long has settled: its canvas is sized then. */
+const RESIZE_SETTLE_MS = 120;
+
+/** A tutorial lesson, once its action is done, moves on after this long. */
+const TUTORIAL_NEXT_MS = 900;
+/** A lesson still waiting after this long says again what to press. */
+const TUTORIAL_IDLE_MS = 4000;
+
+/** On the first screen the piece can be moved, turned and dropped already:
+ * a player who tries all three is taken straight to the cross. */
+const INTRO_ACTIONS: readonly Action[] = ['moveLeft', 'moveRight', 'rotateCW', 'rotateCCW', 'hardDrop'];
+type Basic = 'move' | 'rotate' | 'drop';
+/** The basic each early lesson teaches: a lesson already tried is skipped. */
+const BASIC_OF_LESSON: Record<number, Basic> = { 1: 'move', 2: 'rotate', 3: 'drop' };
+
+/** What each tutorial lesson asks for; the first and the last ask for none.
+ * The cross is turned left or right: with two glasses there is none opposite
+ * yet, so that key would do nothing here. */
+const lessonActionsOf = (lesson: number): readonly Action[] =>
+  lesson === 1 ? ['moveLeft', 'moveRight']
+  : lesson === 2 ? ['rotateCW', 'rotateCCW']
+  : lesson === 3 ? ['hardDrop']
+  : lesson === 4 ? ['glassLeft', 'glassRight']
+  : [];
+
 /** A banner on screen, as the game loop keeps it. */
 interface ShownBanner {
   data: Omit<BannerData, 'id' | 'seconds'>;
@@ -158,6 +183,9 @@ export function GameScreen(props: Props) {
   const [overSlot, setOverSlot] = useState(0);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [performed, setPerformed] = useState(false);
+  /** What to press, said again after a wrong key or button, or a pause. */
+  const [tutorialHint, setTutorialHint] = useState<string | null>(null);
+  const [urging, setUrging] = useState(false);
 
   // The loop reads the latest settings and callbacks through this.
   const live = useRef(props);
@@ -193,31 +221,32 @@ export function GameScreen(props: Props) {
     if (import.meta.env.DEV) Object.assign(window, { __rotathreeView: { renderer, fx } });
     /** Set when the picture has to be drawn even though nothing moved. */
     let dirty = true;
-    const measure = () => {
-      const style = getComputedStyle(frame);
-      let width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-      const height = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-      const layout = frame.closest<HTMLElement>('.tutorial-layout');
-      if (layout && getComputedStyle(layout).getPropertyValue('--tutorial-wide').trim() === '1') {
-        const panel = layout.querySelector<HTMLElement>('.tutorial')!;
-        const gap = parseFloat(getComputedStyle(layout).columnGap);
-        const aspect = parseFloat(style.getPropertyValue('--tutorial-aspect'));
-        // The square canvas has empty sides around a single tall glass. Fit its
-        // visible portion beside the lesson, without shrinking the glass itself.
-        width = (layout.clientWidth - panel.offsetWidth - gap) / aspect;
-      }
-      const next = Math.floor(Math.max(0, Math.min(width, height)));
-      setSize(next);
+    /** The canvas bitmap is sized once a resize settles: while the field
+     * keeps changing (the tutorial's lesson frame easing its height, a window
+     * being dragged), the picture is only scaled, and no frame is dropped to
+     * reallocate it on every step. */
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    let bitmapSize = 0;
+    const sizeBitmap = (next: number) => {
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PIXELS / Math.max(1, next));
       renderer.resize(next, dpr * quality.scale);
       quality.restart();
+      bitmapSize = next;
       dirty = true;
+    };
+    const measure = () => {
+      const style = getComputedStyle(frame);
+      const width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const height = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const next = Math.floor(Math.max(0, Math.min(width, height)));
+      setSize(next);
+      clearTimeout(settleTimer);
+      if (bitmapSize === 0) sizeBitmap(next);
+      else if (next !== bitmapSize) settleTimer = setTimeout(() => sizeBitmap(next), RESIZE_SETTLE_MS);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
-    const tutorialLayout = frame.closest('.tutorial-layout');
-    if (tutorialLayout) observer.observe(tutorialLayout);
 
     let current: Status = props.restore && !props.resumeImmediately ? 'paused' : 'playing';
     setStatus(current);
@@ -461,24 +490,48 @@ export function GameScreen(props: Props) {
       });
       saveCharge = 0;
     };
+    /** The last screen is the game itself: pieces fall and every control
+     * works, until the player chooses to play for real. */
+    const freePlay = () => tutorial && lesson === TUTORIAL_LESSONS.length - 1;
     const allowsTutorial = (action: Action) =>
-      !tutorial ||
-      (engine.phase === 'playing' &&
-        (lesson === 1
-          ? action === 'moveLeft' || action === 'moveRight'
-          : lesson === 2
-            ? action === 'rotateCW' || action === 'rotateCCW'
-            : lesson === 3
-              ? action === 'hardDrop'
-              : lesson === 4
-                ? ['glassLeft', 'glassRight', 'glassOpposite'].includes(action)
-                : false));
+      !tutorial || freePlay() || (engine.phase === 'playing' && (lesson === 0 ? INTRO_ACTIONS : lessonActionsOf(lesson)).includes(action));
+    /** The basics the player tried on the first screen. */
+    let tried = new Set<Basic>();
+    const tryBasic = (basic: Basic) => {
+      if (tutorial && lesson === 0) tried.add(basic);
+    };
+    /** The second glass comes once the field is still enough to build it. */
+    let glassPending = false;
+    /** Lesson hints are sent once per lesson and reason, to keep them few. */
+    let hintsSent = new Set<string>();
+    const hintOnce = (reason: 'idle' | 'wrong_key') => {
+      if (hintsSent.has(reason)) return;
+      hintsSent.add(reason);
+      reportTutorial('tutorial_hint', lesson, reason);
+    };
+    /** A key or pad button that this lesson does not take: say which one does. */
+    const wrongInput = (from: 'key' | 'pad', action: Action, code = '') => {
+      if (!tutorial || lessonPerformed || lessonActionsOf(lesson).length === 0 || lessonActionsOf(lesson).includes(action)) return;
+      // The arrows are what a falling-block player tries first.
+      setTutorialHint(from === 'key' && lesson === 1 && code.startsWith('Arrow')
+        ? 'Стрелки поворачивают крест — фигуру двигают эти клавиши'
+        : from === 'key' ? 'Нажми подсвеченную клавишу' : 'Нажми подсвеченную кнопку');
+      setUrging(true);
+      hintOnce('wrong_key');
+    };
+    let autoNext: ReturnType<typeof setTimeout> | undefined;
     const didLesson = () => {
-      if (tutorial && !lessonPerformed) {
+      if (tutorial && !lessonPerformed && lessonActionsOf(lesson).length > 0) {
         lessonPerformed = true;
         setPerformed(true);
+        setUrging(false);
+        // Done is done: the next lesson follows by itself after a moment.
+        const at = lesson;
+        clearTimeout(autoNext);
+        autoNext = setTimeout(() => { if (lesson === at && lessonPerformed) actions.current.nextLesson(); }, TUTORIAL_NEXT_MS);
       }
     };
+    if (tutorial) reportTutorial('tutorial_started', 0);
 
     const togglePause = () => {
       if (tutorial) {
@@ -506,8 +559,14 @@ export function GameScreen(props: Props) {
         lesson = 0;
         lessonPerformed = false;
         tutorialMatch = false;
+        hintsSent = new Set();
+        tried = new Set();
+        glassPending = false;
+        clearTimeout(autoNext);
         setTutorialStep(0);
         setPerformed(false);
+        setTutorialHint(null);
+        setUrging(false);
         setRunStatus('playing');
         return;
       }
@@ -522,7 +581,10 @@ export function GameScreen(props: Props) {
         pads.down(action);
         pads.up(action);
       },
-      down: (action) => pads.down(action),
+      down: (action) => {
+        if (action !== 'none') wrongInput('pad', action);
+        pads.down(action);
+      },
       up: (action) => pads.up(action),
       leave: (destination, save = true) => {
         keyboard.releaseAll();
@@ -539,20 +601,11 @@ export function GameScreen(props: Props) {
           live.current.onTutorialDone?.(true);
           return;
         }
-        keyboard.releaseAll();
-        pads.releaseAll();
         reportTutorial('tutorial_step', lesson);
-        lesson++;
-        lessonPerformed = false;
-        setTutorialStep(lesson);
-        setPerformed(false);
-        if (lesson === 3) {
-          engine = newEngine(plan);
-          fx.reset(engine.activeSide);
-          exposeEngine();
-          engine.board.paintCenter(['. Y . . . . . . . .', 'B . . . . . . . . .', 'R R . . . . . . . .']);
-          engine.incoming.put(0, makePiece([0, 1, 2]), { column: 2 });
-        } else if (lesson === 4) engine.addGlass();
+        let next = lesson + 1;
+        // A lesson whose action was already tried on the first screen is skipped.
+        while (BASIC_OF_LESSON[next] && tried.has(BASIC_OF_LESSON[next])) next++;
+        enterLesson(next);
       },
       activeGlass: (slot: number) => {
         if (current !== 'playing' || live.current.blocked || !allowsTutorial('glassRight') || banner?.blocking) return;
@@ -562,6 +615,35 @@ export function GameScreen(props: Props) {
       },
     };
 
+    const enterLesson = (next: number) => {
+      keyboard.releaseAll();
+      pads.releaseAll();
+      lesson = next;
+      lessonPerformed = false;
+      hintsSent = new Set();
+      clearTimeout(autoNext);
+      setTutorialStep(lesson);
+      setPerformed(false);
+      setTutorialHint(null);
+      setUrging(false);
+      if (lesson === 3) {
+        engine = newEngine(plan);
+        fx.reset(engine.activeSide);
+        exposeEngine();
+        engine.board.paintCenter(['. Y . . . . . . . .', 'B . . . . . . . . .', 'R R . . . . . . . .']);
+        engine.incoming.put(0, makePiece([0, 1, 2]), { column: 2 });
+      } else if (lesson === 4) glassPending = true;
+    };
+
+    const refillTutorial = () => {
+      keyboard.releaseAll();
+      pads.releaseAll();
+      engine = newEngine(plan);
+      fx.reset(engine.activeSide);
+      exposeEngine();
+      if (lesson >= 4) glassPending = true;
+    };
+
     const acceptsInput = () => current === 'playing' && !live.current.blocked && !(banner?.blocking ?? false);
 
     const sink = {
@@ -569,7 +651,10 @@ export function GameScreen(props: Props) {
         if (!acceptsInput() || !allowsTutorial(direction < 0 ? 'moveLeft' : 'moveRight')) return;
         const before = engine.activePiece?.column;
         engine.moveActive(toWall ? direction * engine.config.boardSize : direction);
-        if (engine.activePiece?.column !== before) didLesson();
+        if (engine.activePiece?.column !== before) {
+          tryBasic('move');
+          didLesson();
+        }
       },
       softDrop: (held: boolean) => engine.setSoftDrop(held && acceptsInput() && allowsTutorial('softDrop')),
       press: (action: Exclude<Action, 'moveLeft' | 'moveRight' | 'softDrop'>) => {
@@ -603,7 +688,11 @@ export function GameScreen(props: Props) {
             engine.switchSide(2);
             break;
         }
-        if (['rotateCW', 'rotateCCW'].includes(action) && engine.activePiece?.piece !== beforePiece) didLesson();
+        if (['rotateCW', 'rotateCCW'].includes(action) && engine.activePiece?.piece !== beforePiece) {
+          tryBasic('rotate');
+          didLesson();
+        }
+        if (action === 'hardDrop') tryBasic('drop');
         if (engine.activeSide !== beforeSide) didLesson();
       },
     };
@@ -659,17 +748,31 @@ export function GameScreen(props: Props) {
         } else actions.current.nextLesson();
         return;
       }
-      // Space remains a game control while the lesson's Next button has focus.
-      // Prevent the browser from treating it as another click on Next.
+      // On the first screen Space starts, as Enter does. Elsewhere it is the
+      // game's own key, the last screen's free play included, even while the
+      // Play button has the focus.
+      if (tutorial && event.code === 'Space' && lesson === 0 && !target?.closest('button:not(.tutorial__next)')) {
+        event.preventDefault();
+        if (!event.repeat) actions.current.nextLesson();
+        return;
+      }
       if (tutorial && event.code === 'Space' && target?.closest('.tutorial__next')) {
         event.preventDefault();
         keyboard.keyDown(event.code, event.repeat);
         return;
       }
       if (target?.closest('button') && ['Space', 'Enter', 'NumpadEnter'].includes(event.code)) return;
+      if (tutorial && !event.repeat) {
+        const action = actionForCode(live.current.settings.bindings, event.code);
+        if (action) wrongInput('key', action, event.code);
+      }
       if (keyboard.keyDown(event.code, event.repeat)) event.preventDefault();
     };
-    const onKeyUp = (event: KeyboardEvent) => keyboard.keyUp(event.code);
+    const onKeyUp = (event: KeyboardEvent) => {
+      // A Space released on the focused Play button drops, and presses nothing.
+      if (tutorial && event.code === 'Space' && (event.target as HTMLElement | null)?.closest('.tutorial__next')) event.preventDefault();
+      keyboard.keyUp(event.code);
+    };
     const onBlur = () => {
       keyboard.releaseAll();
       pads.releaseAll();
@@ -781,7 +884,7 @@ export function GameScreen(props: Props) {
       if (current === 'playing' && !holding) {
         keyboard.update(seconds);
         pads.update(seconds);
-        if (!tutorial || engine.phase !== 'playing') engine.update(seconds);
+        if (!tutorial || engine.phase !== 'playing' || freePlay()) engine.update(seconds);
       }
 
       // Banners share the pause/settings gate with gameplay.
@@ -835,11 +938,21 @@ export function GameScreen(props: Props) {
           setCallout({ id: ++calloutId, kind: 'speed', speed: event.level + 1 });
           sounds.play('level');
         } else if (event.type === 'gameEnded' && !finished) {
-          gameOver(event.side);
+          // The tutorial has no lost game: a glass filled in its free play
+          // empties, and the player goes on with both glasses.
+          if (tutorial) refillTutorial();
+          else gameOver(event.side);
         }
       }
 
       if (tutorial && tutorialMatch && lesson === 3 && engine.phase === 'playing') didLesson();
+      // Moved, turned and dropped on the first screen already: on to the cross.
+      if (tutorial && lesson === 0 && tried.size === 3 && current === 'playing' && engine.phase === 'playing') {
+        reportTutorial('tutorial_step', 0);
+        reportTutorial('tutorial_shortcut', 4);
+        enterLesson(4);
+      }
+      if (glassPending && engine.phase === 'playing' && engine.addGlass()) glassPending = false;
       if (current === 'playing' && !frozen) saveCharge += seconds;
       if (
         saveCharge >= 2 ||
@@ -847,7 +960,8 @@ export function GameScreen(props: Props) {
       )
         checkpoint();
 
-      if (campaign && !finished && !completing && acceptsInput() && engine.phase === 'playing') {
+      // The tutorial's free play scores, but completes no level of the campaign.
+      if (campaign && !tutorial && !finished && !completing && acceptsInput() && engine.phase === 'playing') {
         if (engine.state.score - levelBase >= CAMPAIGN[campaignLevel].target) completeLevel();
       }
 
@@ -863,7 +977,7 @@ export function GameScreen(props: Props) {
         drawnPalette = paletteRevision();
       }
       // On a machine that cannot keep up, fewer pixels are drawn.
-      if (engineRunning && quality.sample(frameMs)) measure();
+      if (engineRunning && quality.sample(frameMs)) sizeBitmap(bitmapSize);
 
       // The numbers in the corners, compared one by one so that a frame in
       // which none of them changed creates nothing.
@@ -916,6 +1030,8 @@ export function GameScreen(props: Props) {
 
     return () => {
       cancelAnimationFrame(raf);
+      clearTimeout(autoNext);
+      clearTimeout(settleTimer);
       observer.disconnect();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
@@ -934,6 +1050,17 @@ export function GameScreen(props: Props) {
     // it for every new game.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A lesson still waiting says again what to press, and the keys pulse harder.
+  useEffect(() => {
+    if (!tutorial || lessonActionsOf(tutorialStep).length === 0 || performed || status !== 'playing' || blocked) return;
+    const timer = setTimeout(() => {
+      setUrging(true);
+      setTutorialHint((said) => said ?? (touch ? 'Нажми подсвеченную кнопку' : 'Нажми подсвеченную клавишу'));
+      reportTutorial('tutorial_hint', tutorialStep, 'idle');
+    }, TUTORIAL_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [tutorial, tutorialStep, performed, status, blocked, touch]);
 
   /** Clicking a glass brings it to the top. */
   const onCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -955,16 +1082,7 @@ export function GameScreen(props: Props) {
     go();
   };
   const playingLevel = campaign ? CAMPAIGN[level] : undefined;
-  const lessonActions: Action[] =
-    tutorialStep === 1
-      ? ['moveLeft', 'moveRight']
-      : tutorialStep === 2
-        ? ['rotateCW', 'rotateCCW']
-        : tutorialStep === 3
-          ? ['hardDrop']
-          : tutorialStep === 4
-            ? ['glassLeft', 'glassRight', 'glassOpposite']
-            : [];
+  const lessonActions = tutorial ? lessonActionsOf(tutorialStep) : [];
   const tutorialControls = touch
     ? (['left', 'right'] as const).flatMap((side) => {
         const slots = PAD_SLOTS.filter((slot) => lessonActions.includes(settings.pads[side][slot] as Action));
@@ -974,7 +1092,11 @@ export function GameScreen(props: Props) {
           : [];
       })
     : lessonActions.flatMap((action) => settings.bindings[action].length
-      ? [{ label: ACTIONS.find(({ id }) => id === action)!.label, keys: settings.bindings[action] }]
+      // Letters first: a hand on A, W, S, D finds Q and E beside it.
+      ? [{
+          label: ACTIONS.find(({ id }) => id === action)!.label,
+          keys: [...settings.bindings[action]].sort((a, b) => Number(a.startsWith('Arrow')) - Number(b.startsWith('Arrow'))),
+        }]
       : []);
   const missingControl = lessonActions.length > 0 && tutorialControls.length === 0;
   const field = (
@@ -1007,6 +1129,8 @@ export function GameScreen(props: Props) {
       performed={performed}
       keyboard={!touch}
       active={!blocked && status === 'playing'}
+      hint={tutorialHint}
+      urging={urging}
       controls={tutorialControls}
       onPractice={missingControl ? () => actions.current.practice(lessonActions[0]) : undefined}
       onNext={() => actions.current.nextLesson()}
@@ -1035,7 +1159,6 @@ export function GameScreen(props: Props) {
       style={{
         ['--field-size' as string]: size > 0 ? `${size}px` : '100%',
         ['--pad-size' as string]: `${Math.max(settings.padPositions.left.size, settings.padPositions.right.size)}px`,
-        ['--tutorial-aspect' as string]: tutorialStep < 4 ? 0.56 : 1,
       }}
       data-frozen={status === 'paused' || blocked}
     >
@@ -1047,14 +1170,14 @@ export function GameScreen(props: Props) {
       {campaign && !tutorial && <CampaignProgress compact={touch} level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
       {tutorial ? <div className="tutorial-layout">
-        <div className="tutorial-play">{tutorialHeader}{field}</div>
-        {lessonPanel}
+        <div className="tutorial-play">{tutorialHeader}{lessonPanel}{field}</div>
       </div> : field}
       {touch && (
         <div className="touch-controls">
           <TouchControls
             settings={settings}
             disabled={status !== 'playing' || blocked}
+            hint={tutorial && !performed ? lessonActions : undefined}
             onDown={(action) => actions.current.down(action)}
             onUp={(action) => actions.current.up(action)}
           />

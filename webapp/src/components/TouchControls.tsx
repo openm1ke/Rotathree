@@ -12,6 +12,7 @@ export function TouchControls({
   onUp,
   onEdit,
   highlight,
+  hint,
 }: {
   settings: Settings;
   disabled?: boolean;
@@ -20,6 +21,8 @@ export function TouchControls({
   onEdit?: (positions: PadPositions) => void;
   /** The pad and button to outline while the layout is being edited. */
   highlight?: { side: PadSide; slot: PadSlot };
+  /** Actions the tutorial asks for: their buttons glow. */
+  hint?: readonly PadAction[];
 }) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
@@ -141,6 +144,7 @@ export function TouchControls({
                   shape={settings.padShape}
                   tweaks={settings.padButtons[side]}
                   highlight={highlight?.side === side ? highlight.slot : undefined}
+                  hint={hint}
                   onDown={onDown}
                   onUp={onUp}
                 />

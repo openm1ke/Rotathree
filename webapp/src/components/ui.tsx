@@ -172,14 +172,29 @@ export function Overlay({
           event.stopPropagation();
           onDismiss();
         }
-        if (event.key !== 'Tab') return;
-        const items = [
+        const items = () => [
           ...(root.current?.querySelectorAll<HTMLElement>(
             'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea, [tabindex="0"]',
           ) ?? []),
         ].filter((el) => el.getClientRects().length > 0);
-        const first = items[0],
-          last = items.at(-1);
+        // Up and down, or W and S, walk the dialog's buttons round, as in the
+        // menus; a text field or a list keeps those keys for itself.
+        const step = event.key === 'ArrowDown' || event.code === 'KeyS' ? 1 : event.key === 'ArrowUp' || event.code === 'KeyW' ? -1 : 0;
+        const target = event.target as HTMLElement;
+        if (step !== 0 && !event.altKey && !event.ctrlKey && !event.metaKey
+          && !target.closest('select, textarea, input[type="text"], input[type="color"]')) {
+          const list = items();
+          if (list.length === 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const at = list.indexOf(document.activeElement as HTMLElement);
+          list[at === -1 ? (step > 0 ? 0 : list.length - 1) : (at + step + list.length) % list.length].focus();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const all = items();
+        const first = all[0],
+          last = all.at(-1);
         if (!first) {
           event.preventDefault();
           root.current?.focus();

@@ -54,10 +54,11 @@ export const defaultBindings: Bindings = {
   moveRight: ['KeyD'],
   rotateCW: ['KeyW'],
   rotateCCW: [],
-  softDrop: [],
+  softDrop: ['KeyX'],
   hardDrop: ['KeyS', 'Space'],
-  glassLeft: ['ArrowLeft'],
-  glassRight: ['ArrowRight'],
+  // Q and E turn the cross too, beside A, W, S, D: the game plays with one hand.
+  glassLeft: ['ArrowLeft', 'KeyQ'],
+  glassRight: ['ArrowRight', 'KeyE'],
   glassOpposite: ['ArrowUp', 'ArrowDown'],
   pause: USES_ESCAPE ? ['Escape', 'KeyP'] : ['KeyP'],
   restart: ['KeyN'],
@@ -95,6 +96,14 @@ export function unbindKey(bindings: Bindings, action: Action, slot: number): Bin
   return next;
 }
 
+/** Keys that joined the defaults later: a save that still has the action's
+ * earlier default gets them too, unless it uses the key for something else. */
+const LATER_DEFAULTS: readonly { action: Action; was: readonly string[]; key: string }[] = [
+  { action: 'glassLeft', was: ['ArrowLeft'], key: 'KeyQ' },
+  { action: 'glassRight', was: ['ArrowRight'], key: 'KeyE' },
+  { action: 'softDrop', was: [], key: 'KeyX' },
+];
+
 /** Makes sense of whatever was stored: unknown actions are dropped, missing
  * ones get their defaults, a key bound twice keeps its first use. */
 export function sanitizeBindings(raw: unknown): Bindings {
@@ -114,6 +123,14 @@ export function sanitizeBindings(raw: unknown): Bindings {
       seen.add(code);
       return true;
     });
+  }
+  for (const { action, was, key } of LATER_DEFAULTS) {
+    const keys = result[action];
+    const unchanged = keys.length === was.length && keys.every((code, i) => code === was[i]);
+    if (unchanged && !seen.has(key) && keys.length < SLOTS_PER_ACTION) {
+      result[action] = [...keys, key];
+      seen.add(key);
+    }
   }
   return result;
 }

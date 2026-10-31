@@ -1835,74 +1835,193 @@ select:focus-visible {
   min-height: 0;
   min-width: 0;
 }
+/* The lesson stands above the glass: read top-down, then look at the piece.
+   One short line, big keys that pulse, and a hint when the player waits or
+   presses something else. */
 .tutorial {
-  display: flex;
-  flex-direction: column;
-  width: min(620px, calc(100% - 16px));
-  max-height: min(190px, 30dvh);
+  box-sizing: content-box;
+  width: min(760px, calc(100% - 16px));
   align-self: center;
   flex-shrink: 0;
-  margin: 4px 8px;
-  padding: 8px 10px 6px;
+  margin: 0 8px 8px;
+  overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 18px;
   background: var(--panel-strong);
+  text-align: center;
+  /* The height is set from the content (TutorialPanel) and eased: the frame
+     grows and shrinks instead of jumping, and the glass below follows. */
+  transition: height 320ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
-.tutorial > div:first-child { min-height: 0; overflow-y: auto; }
+.tutorial__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 12px;
+}
+/* A new lesson fades in where the last one was. */
+@keyframes lesson-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+/* A done lesson keeps its size: its keys and hint dim instead of leaving. */
+.tutorial__controls.is-done, .tutorial__pads.is-done, .tutorial__hint.is-done {
+  opacity: 0.25;
+  transition: opacity 200ms ease;
+}
+.tutorial__controls.is-done .keycap, .tutorial__pads.is-done { animation: none; }
+.tutorial--done {
+  border-color: var(--accent);
+  box-shadow: 0 0 24px rgb(125 240 197 / 0.25);
+}
+.tutorial__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  align-self: stretch;
+}
+.tutorial__count { font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--accent); }
+.tutorial__skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tutorial__skip:hover, .tutorial__skip:focus-visible { color: var(--text); }
+.tutorial__body { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: lesson-in 260ms ease both; }
 .tutorial h2 {
-  font-size: 16px;
+  margin: 0;
+  font-size: clamp(22px, 4vw, 38px);
   font-style: italic;
   font-weight: 900;
-  line-height: 1.2;
-  margin: 4px 0;
+  line-height: 1.05;
+  text-transform: uppercase;
 }
-.tutorial__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.tutorial__heading .kicker { flex-shrink: 0; font-size: 10px; }
-.tutorial p {
-  font-size: 12px;
-  line-height: 1.35;
-  margin: 4px 0;
-}
-.tutorial__controls { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
-.tutorial__control { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--accent); }
-.tutorial .keys { flex-wrap: wrap; }
+.tutorial__tick { color: var(--accent); }
+.tutorial__line { margin: 0; font-size: clamp(15px, 2vw, 20px); line-height: 1.3; }
+.tutorial__controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 28px; }
+.tutorial__control { display: flex; align-items: center; gap: 8px; }
+.tutorial__or { font-size: 14px; color: var(--text-dim); }
+.tutorial .keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .tutorial .keycap {
   display: inline-grid;
   place-items: center;
-  min-width: 26px;
-  min-height: 26px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 21px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  animation: key-call 1.3s ease-in-out infinite;
+}
+.tutorial__controls.is-urging .keycap { animation-duration: 0.6s; }
+@keyframes key-call {
+  0%, 100% { border-color: var(--line-strong); box-shadow: 0 0 0 0 rgb(125 240 197 / 0); transform: translateY(0); }
+  50% { border-color: var(--accent); box-shadow: 0 0 18px 2px rgb(125 240 197 / 0.55); transform: translateY(-2px); }
+}
+.tutorial__hint { margin: 0; font-size: clamp(14px, 1.8vw, 17px); font-weight: 700; color: #ffd36a; }
+.tutorial:focus { outline: none; }
+.tutorial__pads { margin: 0; font-size: clamp(15px, 2vw, 19px); font-weight: 800; color: var(--accent); animation: pads-call 1.3s ease-in-out infinite; }
+.tutorial__pads.is-urging { animation-duration: 0.6s; }
+@keyframes pads-call { 50% { transform: translateY(3px); } }
+.tutorial__missing { margin: 0; font-size: 13px; color: var(--text-dim); }
+.tutorial__action { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 4px; }
+.tutorial__action .button { min-height: 52px; min-width: 200px; padding: 12px 28px; font-size: 18px; }
+.tutorial__keys-hint { display: inline-flex; align-items: center; gap: 6px; }
+.tutorial__keys-hint .tutorial__or { font-size: 11px; }
+.tutorial__skip .keycap,
+.tutorial__keys-hint .keycap {
+  min-width: 0;
+  min-height: 0;
   padding: 3px 6px;
   border-radius: 4px;
-  font-size: 12px;
-  font-style: normal;
-  line-height: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  animation: none;
 }
-.tutorial__actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-  flex-shrink: 0;
-}
-.tutorial__actions .button {
-  min-height: 44px;
-  padding: 8px 12px;
-  font-size: 13px;
-}
-.tutorial__action { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.tutorial__action kbd { color: var(--text-dim); font-size: 11px; }
 .tutorial__next.is-ready {
   box-shadow: 0 0 18px rgba(255, 42, 134, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
-.tutorial__next { transition: box-shadow 180ms ease; }
-.tutorial__next[aria-disabled='true'] {
-  background: var(--panel);
-  border-color: var(--line);
-  color: var(--text-dim);
-  box-shadow: none;
-  cursor: default;
+/* A wide window keeps the glass tall: the title and its keys share a row. */
+@media (min-width: 720px) and (min-height: 541px) {
+  .tutorial__body { flex-direction: row; flex-wrap: wrap; justify-content: center; column-gap: 28px; }
+  .tutorial__body > h2 + .tutorial__line { flex-basis: 100%; order: 3; }
+  .tutorial__hint { flex-basis: 100%; order: 4; }
 }
-.tutorial__next[aria-disabled='true']:focus-visible { outline-color: var(--line-strong); }
+/* A short phone held upright: a tighter lesson leaves the glass more room. */
+@media (max-height: 700px) and (orientation: portrait) {
+  .tutorial { margin-bottom: 6px; }
+  .tutorial__inner { gap: 4px; padding: 6px 12px 8px; }
+  .tutorial h2 { font-size: 22px; }
+  .tutorial__line, .tutorial__pads { font-size: 14px; }
+  .tutorial__action { margin-top: 2px; }
+  .tutorial__action .button { min-height: 44px; min-width: 160px; padding: 8px 20px; font-size: 16px; }
+}
+/* A low screen, such as a phone on its side: the lesson becomes one line in
+   the top row, between the back button and the gear, so the glass keeps the
+   height. */
+@media (max-height: 540px) and (orientation: landscape) {
+  .game--tutorial .tutorial-play { position: relative; }
+  .game--tutorial .tutorial-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .game--tutorial .tutorial-hud > * { pointer-events: auto; }
+  .tutorial {
+    width: auto;
+    max-width: calc(100% - 240px);
+    margin: max(6px, env(safe-area-inset-top)) auto 6px;
+  }
+  .tutorial__inner {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 14px;
+    padding: 6px 12px;
+  }
+  .tutorial__top { display: contents; }
+  .tutorial__count { order: 0; }
+  .tutorial__body { order: 1; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+  .tutorial__action { order: 2; flex-direction: row; margin: 0; }
+  .tutorial__skip { order: 3; }
+  .tutorial h2 { font-size: 20px; }
+  .tutorial__line { font-size: 13px; }
+  .tutorial__hint { flex-basis: 100%; font-size: 13px; }
+  .tutorial .keycap { min-width: 34px; min-height: 34px; padding: 4px 8px; font-size: 16px; }
+  .tutorial__action .button { min-height: 40px; min-width: 0; padding: 8px 18px; font-size: 15px; }
+}
+/* The pads glow where the lesson wants a press; the other buttons step back. */
+.dpad--hinting .dpad__button:not(.is-hinted) { opacity: 0.35; }
+.dpad__button.is-hinted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgb(125 240 197 / 0.55);
+  animation: pad-call 1.3s ease-in-out infinite;
+}
+@keyframes pad-call {
+  50% { box-shadow: 0 0 0 2px var(--accent), 0 0 30px 4px rgb(125 240 197 / 0.8); }
+}
+/* A triangle key glows along its own outline. */
+.dpad--triangle .dpad__button.is-hinted { box-shadow: none; animation: none; }
+.dpad--triangle .dpad__button.is-hinted .dpad__shape polygon {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 6px rgb(125 240 197 / 0.8));
+}
 .game--touch .level-banner {
   max-width: 92%;
 }
@@ -1935,23 +2054,9 @@ select:focus-visible {
     bottom: 0;
     pointer-events: none;
   }
-  /* The tutorial: the field in a middle column at full height, the lesson
-     in the left column above the left pad. */
-  .game--touch.game--tutorial .tutorial-layout {
-    --tutorial-side: max(calc(var(--pad-size, 144px) + 16px), 30vw);
-    display: grid;
-    grid-template-columns: var(--tutorial-side) minmax(0, 1fr) var(--tutorial-side);
-    grid-template-rows: minmax(0, 1fr);
-  }
-  .game--touch.game--tutorial .tutorial-play { grid-column: 2; grid-row: 1; }
-  .game--touch.game--tutorial .tutorial {
-    grid-column: 1;
-    grid-row: 1;
-    align-self: start;
-    width: auto;
-    max-height: calc(100% - var(--pad-size, 144px) - 16px);
-    margin: max(8px, env(safe-area-inset-top)) 8px 0 max(8px, env(safe-area-inset-left));
-  }
+  /* The tutorial keeps the pads beside its field too, and its lesson in one
+     line at the top, between the back button and the gear. */
+  .game--touch.game--tutorial .game__frame { padding-inline: calc(var(--pad-size, 144px) + 16px); }
 }
 .pad-surface { width: 100%; position: relative; flex-shrink: 0; }
 .pad-surface__space { position: absolute; left: 0; top: 0; transform-origin: top left; pointer-events: none; }
@@ -1974,59 +2079,6 @@ select:focus-visible {
   height: auto;
   min-height: 0;
   padding: 0;
-}
-
-@media (min-width: 960px) and (min-height: 560px) {
-  .game--tutorial:not(.game--touch) .tutorial-hud { width: 100%; padding: 16px 0; }
-  .game--tutorial:not(.game--touch) .tutorial-layout {
-    --tutorial-wide: 1;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
-    width: min(1520px, calc(100% - 64px));
-    margin-inline: auto;
-    padding-bottom: 24px;
-  }
-  .game--tutorial:not(.game--touch) .tutorial-play {
-    flex: 0 1 calc(var(--field-size) * var(--tutorial-aspect));
-    height: 100%;
-  }
-  .game--tutorial:not(.game--touch) .game__frame {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-    overflow: hidden;
-  }
-  .game--tutorial:not(.game--touch) .stage { flex-shrink: 0; }
-  .game--tutorial:not(.game--touch) .tutorial {
-    order: -1;
-    width: clamp(360px, 32vw, 520px);
-    max-height: 100%;
-    margin: 0;
-    padding: clamp(24px, 2vw, 36px);
-    border-radius: 24px;
-  }
-  .game--tutorial:not(.game--touch) .tutorial h2 {
-    font-size: clamp(28px, 2.1vw, 38px);
-    line-height: 1.1;
-    text-transform: uppercase;
-    margin: 16px 0;
-  }
-  .game--tutorial:not(.game--touch) .tutorial p {
-    font-size: clamp(18px, 1.35vw, 24px);
-    line-height: 1.5;
-    margin: 12px 0;
-  }
-  .game--tutorial:not(.game--touch) .tutorial__heading .kicker { font-size: 13px; }
-  .game--tutorial:not(.game--touch) .tutorial__controls { flex-direction: column; gap: 12px; margin-top: 24px; }
-  .game--tutorial:not(.game--touch) .tutorial__control { justify-content: space-between; gap: 12px; font-size: 16px; }
-  .game--tutorial:not(.game--touch) .tutorial .keycap { min-width: 40px; min-height: 40px; font-size: 17px; padding: 7px 10px; }
-  .game--tutorial:not(.game--touch) .tutorial__actions { margin-top: 28px; gap: 12px; }
-  .game--tutorial:not(.game--touch) .tutorial__actions .button { min-height: 52px; padding: 12px 16px; font-size: 17px; }
-  .game--tutorial:not(.game--touch) .tutorial__action { gap: 8px; }
-  .game--tutorial:not(.game--touch) .tutorial__action > .keycap { min-height: 28px; min-width: 28px; font-size: 12px; padding: 5px 8px; color: var(--text-dim); }
 }
 
 .game__readout {

@@ -34,11 +34,18 @@ export const reportLevel = (message: LevelMessage, place: Place) => sendPlatform
 /** The player ended the run, or started it over, before it was decided. */
 export const reportAbandoned = (place: Place) => sendAnalytics('level_abandoned', placeData(place));
 
-/** A tutorial step done (its index), or how the tutorial ended and where. */
+/** Which tutorial the events describe: 2 is the short one with its lesson
+ * above the glass, glowing controls and hints. */
+const TUTORIAL_VERSION = 2;
+
+/** The tutorial began; a step done (its index); a hint shown, and why; a
+ * player who tried the basics on the first screen taken on to the cross (the
+ * lesson reached); or how the tutorial ended and where. */
 export const reportTutorial = (
-  event: 'tutorial_step' | 'tutorial_completed' | 'tutorial_skipped' | 'tutorial_left',
+  event: 'tutorial_started' | 'tutorial_step' | 'tutorial_hint' | 'tutorial_shortcut' | 'tutorial_completed' | 'tutorial_skipped' | 'tutorial_left',
   step: number,
-) => sendAnalytics(event, { step_index: step });
+  reason?: 'idle' | 'wrong_key',
+) => sendAnalytics(event, { step_index: step, tutorial_version: TUTORIAL_VERSION, ...(reason ? { reason } : {}) });
 
 export const reportPerformance = (sample: AnalyticsData | null) => {
   if (sample) sendAnalytics('performance_sample', sample);

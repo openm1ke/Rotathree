@@ -55,7 +55,7 @@ RotaThree is a falling-block puzzle with a twist: four glasses stand around one 
 
 **How to play**
 
-Keyboard: A and D move the stick, W rotates it, S or Space drops it. The arrow keys turn the cross: Left and Right bring the neighbouring glass to the top, Up or Down the opposite one; clicking a glass brings it up too. P or the pause button pauses. On a phone or tablet two on-screen pads do the same. Match three cells of one colour in a row to clear them. A glass that fills to the end of its arm ends the game. The first game starts with a short tutorial, and every key and pad button can be changed in Settings.
+Keyboard: A and D move the stick, W rotates it, X lowers it gently, S or Space drops it. The arrow keys or Q and E turn the cross: Left or Q and Right or E bring the neighbouring glass to the top, Up or Down the opposite one; clicking a glass brings it up too. P or the pause button pauses. On a phone or tablet two on-screen pads do the same. Match three cells of one colour in a row to clear them. A glass that fills to the end of its arm ends the game. The first game starts with a short tutorial, and every key and pad button can be changed in Settings.
 
 **Story**
 

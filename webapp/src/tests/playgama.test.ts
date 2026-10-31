@@ -188,7 +188,7 @@ describe('Playgama Bridge', () => {
     expect(bridge.platform.sendMessage).toHaveBeenNthCalledWith(1, 'level_started', { world: 'campaign', level: '3' });
     expect(bridge.platform.sendMessage).toHaveBeenNthCalledWith(2, 'level_failed', { world: 'custom' });
     expect(bridge.analytics.send).toHaveBeenNthCalledWith(1, 'level_abandoned', { world: 'insane' });
-    expect(bridge.analytics.send).toHaveBeenNthCalledWith(2, 'tutorial_skipped', { step_index: 2 });
+    expect(bridge.analytics.send).toHaveBeenNthCalledWith(2, 'tutorial_skipped', { step_index: 2, tutorial_version: 2 });
   });
 
   it('keeps the browser storage when Bridge is not there', async () => {

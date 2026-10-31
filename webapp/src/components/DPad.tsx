@@ -62,6 +62,7 @@ export function DPad({
   shape = 'square',
   tweaks = {},
   highlight,
+  hint,
   onDown,
   onUp,
 }: {
@@ -73,6 +74,8 @@ export function DPad({
   tweaks?: PadTweaks;
   /** The button to outline while the layout is being edited. */
   highlight?: PadSlot;
+  /** Actions the tutorial asks for: their buttons glow, the others step back. */
+  hint?: readonly PadAction[];
   onDown: (action: PadAction) => void;
   onUp: (action: PadAction) => void;
 }) {
@@ -120,7 +123,7 @@ export function DPad({
   }, [layout, showLabels, shape, tweaks, t]);
   const rects = buttonRects(tweaks);
   return (
-    <div ref={root} className={`dpad dpad--${shape}`} role="group" aria-label={t(label)}>
+    <div ref={root} className={`dpad dpad--${shape} ${hint?.length ? 'dpad--hinting' : ''}`} role="group" aria-label={t(label)}>
       {PAD_SLOTS.map((slot) => {
         const action = layout[slot];
         const rect = rects[slot];
@@ -128,7 +131,7 @@ export function DPad({
           <button
             key={slot}
             type="button"
-            className={`dpad__button dpad__button--${slot} ${pressed.includes(action) ? 'is-pressed' : ''} ${highlight === slot ? 'is-edited' : ''}`}
+            className={`dpad__button dpad__button--${slot} ${pressed.includes(action) ? 'is-pressed' : ''} ${highlight === slot ? 'is-edited' : ''} ${hint?.includes(action) ? 'is-hinted' : ''}`}
             style={{
               left: `${rect.x * 100}%`,
               top: `${rect.y * 100}%`,

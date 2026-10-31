@@ -25,8 +25,22 @@ describe('key bindings', () => {
     expect(actionForCode(defaultBindings, 'ArrowUp')).toBe('glassOpposite');
     expect(actionForCode(defaultBindings, 'ArrowDown')).toBe('glassOpposite');
     expect(actionForCode(defaultBindings, 'KeyN')).toBe('restart');
+    // One hand on the keyboard: Q and E turn the cross, X lowers the piece.
+    expect(actionForCode(defaultBindings, 'KeyQ')).toBe('glassLeft');
+    expect(actionForCode(defaultBindings, 'KeyE')).toBe('glassRight');
+    expect(actionForCode(defaultBindings, 'KeyX')).toBe('softDrop');
     expect(defaultBindings.rotateCCW).toEqual([]);
-    expect(defaultBindings.softDrop).toEqual([]);
+  });
+
+  it('a save made before Q, E and X were defaults gets them, unless it uses them elsewhere', () => {
+    const old = sanitizeBindings({ glassLeft: ['ArrowLeft'], glassRight: ['ArrowRight'], softDrop: [] });
+    expect(old.glassLeft).toEqual(['ArrowLeft', 'KeyQ']);
+    expect(old.glassRight).toEqual(['ArrowRight', 'KeyE']);
+    expect(old.softDrop).toEqual(['KeyX']);
+    const taken = sanitizeBindings({ glassLeft: ['ArrowLeft'], rotateCCW: ['KeyQ'], softDrop: ['KeyJ'] });
+    expect(taken.glassLeft).toEqual(['ArrowLeft']);
+    expect(taken.rotateCCW).toEqual(['KeyQ']);
+    expect(taken.softDrop).toEqual(['KeyJ']);
   });
 
   it('rebinding replaces the key in that slot', () => {
@@ -119,7 +133,7 @@ describe('keyboard controller', () => {
 
   it('keys that are not bound are left to the browser', () => {
     const { controller, log } = setup();
-    expect(controller.keyDown('KeyQ')).toBe(false);
+    expect(controller.keyDown('KeyZ')).toBe(false);
     expect(controller.keyDown('F5')).toBe(false);
     expect(log).toEqual([]);
   });
