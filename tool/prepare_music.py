@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Prepare equal-loudness, faded AAC tracks for Flutter and the browser.
+"""Prepare equal-loudness, faded tracks: AAC for Flutter, MP3 for the browser.
 
-Requires ffmpeg and ffprobe. Originals and license records stay untouched.
-Run from anywhere with: python3 tool/prepare_music.py
+The web version ships MP3 because Playgama asks for ogg or mp3 audio.
+Requires ffmpeg (with libmp3lame) and ffprobe. Originals and license records
+stay untouched.
+Run from anywhere with: python3 tool/prepare_music.py [--web-only]
+(--web-only writes the browser's MP3 copies and leaves the AAC files alone.)
 """
 
 import json
-import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +27,7 @@ TRACKS = [
 ]
 
 
-def prepare(source: Path, slug: str) -> dict:
+def prepare(source: Path, slug: str, web_only: bool) -> dict:
     probe = subprocess.run(
         ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
          '-of', 'json', str(source)],
@@ -51,22 +54,31 @@ def prepare(source: Path, slug: str) -> dict:
     fade_out = duration - FADE_SECONDS
     filters = f'{normalizer},afade=t=in:d={FADE_SECONDS},afade=t=out:st={fade_out:.6f}:d={FADE_SECONDS}'
     destination = OUTPUT / f'{slug}.m4a'
+    if not web_only:
+        subprocess.run(
+            ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-i', str(source),
+             '-map', '0:a:0', '-vn', '-af', filters, '-c:a', 'aac', '-b:a', '160k',
+             '-ar', '44100', '-ac', '2', '-movflags', '+faststart', str(destination)],
+            check=True,
+        )
     subprocess.run(
         ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-i', str(source),
-         '-map', '0:a:0', '-vn', '-af', filters, '-c:a', 'aac', '-b:a', '160k',
-         '-ar', '44100', '-ac', '2', '-movflags', '+faststart', str(destination)],
+         '-map', '0:a:0', '-vn', '-af', filters, '-c:a', 'libmp3lame', '-b:a', '160k',
+         '-ar', '44100', '-ac', '2', str(WEB_OUTPUT / f'{slug}.mp3')],
         check=True,
     )
-    shutil.copy2(destination, WEB_OUTPUT / destination.name)
     print(f'{slug}: {measured["input_i"]} LUFS -> target {TARGET_LUFS} LUFS, fades {FADE_SECONDS}s', flush=True)
     return {'file': destination.name, 'durationSeconds': duration,
             'sourceLufs': float(measured['input_i'])}
 
 
 def main() -> None:
+    web_only = '--web-only' in sys.argv[1:]
     OUTPUT.mkdir(parents=True, exist_ok=True)
     WEB_OUTPUT.mkdir(parents=True, exist_ok=True)
-    tracks = [prepare(ROOT / 'assets' / source, slug) for source, slug in TRACKS]
+    tracks = [prepare(ROOT / 'assets' / source, slug, web_only) for source, slug in TRACKS]
+    if web_only:
+        return
     (OUTPUT / 'processing.json').write_text(
         json.dumps({'targetLufs': TARGET_LUFS, 'truePeakDbtp': -2,
                     'fadeInSeconds': FADE_SECONDS, 'fadeOutSeconds': FADE_SECONDS,

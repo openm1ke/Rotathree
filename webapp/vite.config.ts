@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
           ['node_modules/react/LICENSE', 'React-MIT.txt'],
           ['node_modules/react-dom/LICENSE', 'ReactDOM-MIT.txt'],
         ]) cpSync(source, `${outDir}/licenses/${name}`);
-        for (const name of ['deep-focus.m4a', 'deep-focus-1.m4a']) rmSync(`${outDir}/music/${name}`, { force: true });
+        for (const name of ['deep-focus.m4a', 'deep-focus-1.m4a', 'deep-focus.mp3', 'deep-focus-1.mp3']) rmSync(`${outDir}/music/${name}`, { force: true });
         if (!playgama) return;
         // The site's privacy page and install files have no place in a game
         // that runs inside somebody else's frame.

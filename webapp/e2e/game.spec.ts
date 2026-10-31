@@ -84,7 +84,7 @@ test('real browser audio uses the chosen gain and advances sequentially', async 
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
     return state.musicTestPlayers.filter((audio) => !audio.paused).map((audio) => new URL(audio.src).pathname);
-  })).toEqual(['/music/project-utopia-loop.m4a']);
+  })).toEqual(['/music/project-utopia-loop.mp3']);
   await page.getByRole('tabpanel').locator('section.group').filter({ hasText: 'Фоновая музыка' }).getByRole('button', { name: 'выкл', exact: true }).click();
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
