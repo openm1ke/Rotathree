@@ -50,7 +50,7 @@ const ARM_LATEST_MS = 3000;
  * tap or click leaves no focus behind, so the next Space drops a piece instead
  * of pressing the switch again. */
 export function SoundButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
-  return <GameIconButton icon={on ? 'sound-on' : 'sound-off'} label={on ? 'Выключить музыку' : 'Включить музыку'}
+  return <GameIconButton icon={on ? 'sound-on' : 'sound-off'} label={on ? 'Выключить звук' : 'Включить звук'}
     onClick={(event) => {
       onToggle();
       if (event.detail > 0) event.currentTarget.blur();

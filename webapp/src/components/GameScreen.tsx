@@ -31,6 +31,7 @@ import { isAdShowing, isPlatformHidden, subscribeVisibility } from '../platform/
 import { PLAYGAMA_BUILD } from '../platform/target';
 import { showInterstitial } from '../platform/playgama';
 import { PlayerHands } from '../platform/hands';
+import { sounds } from '../services/sounds';
 import {
   PerformanceSampler,
   reportAbandoned,
@@ -258,6 +259,8 @@ export function GameScreen(props: Props) {
     /** When the break after a finished campaign level began, while an ad may
      * still be shown in it; null otherwise. */
     let adBreak: number | null = null;
+    /** The combo of the match flashing now: it bursts that many steps up. */
+    let poppingCombo = 0;
     /** When an ad began to cover the game; 0 while none does. A run started
      * by Retry opens under the game-over ad. */
     let adCoveredAt = isPlatformHidden() && isAdShowing() ? performance.now() : 0;
@@ -324,12 +327,14 @@ export function GameScreen(props: Props) {
       setOverSlot(slotOfSide(engine.activeSide, side));
       recordRun(false);
       setRunStatus('over');
+      sounds.play('over');
     };
 
     const campaignDone = () => {
       finished = true;
       recordRun(true);
       setRunStatus('done');
+      sounds.play('level');
     };
 
     /** A campaign level is finished: keep its best score, open the next one,
@@ -352,6 +357,7 @@ export function GameScreen(props: Props) {
         return;
       }
       pendingLevel = next;
+      sounds.play('level');
       if (PLAYGAMA_BUILD && !tutorial) adBreak = performance.now();
       const to = CAMPAIGN[next];
       showBanner(
@@ -814,8 +820,20 @@ export function GameScreen(props: Props) {
         if (event.type === 'matchScored') {
           if (tutorial && lesson === 3) tutorialMatch = true;
           setCallout({ id: ++calloutId, kind: 'score', score: event.score, combo: event.combo });
+          poppingCombo = event.combo;
+        } else if (event.type === 'cellsPopped') {
+          sounds.pop(poppingCombo);
+        } else if (event.type === 'pieceMoved') {
+          if (!event.blocked) sounds.play('move');
+        } else if (event.type === 'pieceRotated') {
+          if (!event.blocked) sounds.play('rotate');
+        } else if (event.type === 'sideSwitched') {
+          sounds.play('turn');
+        } else if (event.type === 'pieceLanded') {
+          sounds.play('land');
         } else if (event.type === 'speedUp') {
           setCallout({ id: ++calloutId, kind: 'speed', speed: event.level + 1 });
+          sounds.play('level');
         } else if (event.type === 'gameEnded' && !finished) {
           gameOver(event.side);
         }
@@ -1005,7 +1023,7 @@ export function GameScreen(props: Props) {
         props.onExit();
       }} navigable={false} />
       <div className="hud__buttons">
-        {props.onToggleMusic && <SoundButton on={settings.audio.music} onToggle={props.onToggleMusic} />}
+        {props.onToggleMusic && <SoundButton on={settings.audio.music || settings.audio.sounds} onToggle={props.onToggleMusic} />}
         <GameIconButton icon="settings" label="Настройки" onClick={props.onSettings} />
       </div>
     </header>
@@ -1024,7 +1042,7 @@ export function GameScreen(props: Props) {
       {!tutorial && <header className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
         <Hud hud={hud} callout={callout} options={settings.hud}
           compact={touch} onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings}
-          sound={props.onToggleMusic && { on: settings.audio.music, toggle: props.onToggleMusic }} />
+          sound={props.onToggleMusic && { on: settings.audio.music || settings.audio.sounds, toggle: props.onToggleMusic }} />
       </header>}
       {campaign && !tutorial && <CampaignProgress compact={touch} level={hud.level || level + 1} into={hud.into} target={hud.target || playingLevel?.target || 0}
           animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}

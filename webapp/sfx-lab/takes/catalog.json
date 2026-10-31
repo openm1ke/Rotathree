@@ -1,0 +1,198 @@
+{
+ "ui": [
+  {
+   "file": "ui-select.mp3",
+   "source": "Kenney Interface Sounds, select_001"
+  },
+  {
+   "file": "ui-select-soft.mp3",
+   "source": "Kenney Interface Sounds, select_002"
+  },
+  {
+   "file": "ui-click.mp3",
+   "source": "Kenney Interface Sounds, click_001"
+  },
+  {
+   "file": "ui-blip.mp3",
+   "source": "Kenney Interface Sounds, drop_001"
+  }
+ ],
+ "move": [
+  {
+   "file": "move-click.mp3",
+   "source": "Kenney Interface Sounds, click_002"
+  },
+  {
+   "file": "move-tick.mp3",
+   "source": "Kenney Interface Sounds, tick_004"
+  },
+  {
+   "file": "move-select.mp3",
+   "source": "Kenney Interface Sounds, select_002"
+  }
+ ],
+ "rotate": [
+  {
+   "file": "rotate-bloop.mp3",
+   "source": "Kenney Interface Sounds, drop_002"
+  },
+  {
+   "file": "rotate-pluck.mp3",
+   "source": "Kenney Interface Sounds, pluck_002"
+  },
+  {
+   "file": "rotate-select.mp3",
+   "source": "Kenney Interface Sounds, select_003"
+  },
+  {
+   "file": "rotate-click.mp3",
+   "source": "Kenney Interface Sounds, click_001"
+  }
+ ],
+ "turn": [
+  {
+   "file": "turn-sweep-low.mp3",
+   "source": "Kenney Interface Sounds, maximize_006"
+  },
+  {
+   "file": "turn-sweep-deep.mp3",
+   "source": "Kenney Interface Sounds, maximize_008"
+  },
+  {
+   "file": "turn-switch.mp3",
+   "source": "Kenney Interface Sounds, switch_003"
+  },
+  {
+   "file": "turn-scroll.mp3",
+   "source": "Kenney Interface Sounds, scroll_002"
+  }
+ ],
+ "land": [
+  {
+   "file": "land-wood.mp3",
+   "source": "Kenney Impact Sounds, impactWood_light_000"
+  },
+  {
+   "file": "land-knock.mp3",
+   "source": "Kenney Impact Sounds, impactGeneric_light_000"
+  },
+  {
+   "file": "land-soft.mp3",
+   "source": "Kenney Impact Sounds, impactSoft_medium_000"
+  },
+  {
+   "file": "land-bloop.mp3",
+   "source": "Kenney Interface Sounds, drop_003"
+  }
+ ],
+ "pop": [
+  {
+   "file": "pop-bubble-a.mp3",
+   "source": "Pop sounds by EZduzziteh, pop5"
+  },
+  {
+   "file": "pop-bubble-b.mp3",
+   "source": "Pop sounds by EZduzziteh, pop7"
+  },
+  {
+   "file": "pop-bubble-c.mp3",
+   "source": "Pop sounds (wav), pop3"
+  },
+  {
+   "file": "pop-bubble-d.mp3",
+   "source": "Pop sounds (wav), pop6"
+  },
+  {
+   "file": "pop-water.mp3",
+   "source": "Bubble Sound Effects, bubbles-single2"
+  },
+  {
+   "file": "pop-plop.mp3",
+   "source": "100 CC0 SFX, plop_01"
+  },
+  {
+   "file": "pop-pop-long.mp3",
+   "source": "3 Pop Sounds, pop1"
+  },
+  {
+   "file": "pop-coin.mp3",
+   "source": "Juhani Junkala, 512 Sound Effects, sfx_coin_double1"
+  },
+  {
+   "file": "pop-bubble-sparkle.mp3",
+   "source": "Pop sounds (wav), pop3 + Crystal Twinkle (LaurenPonder, Freesound)"
+  },
+  {
+   "file": "pop-bubble-chord.mp3",
+   "source": "Pop sounds by EZduzziteh, pop5 + Item Pickup Chime (Irolan, Freesound)"
+  }
+ ],
+ "level": [
+  {
+   "file": "level-rise-1.mp3",
+   "source": "Level up, power up, Coin get (WobbleBoxx), Rise01"
+  },
+  {
+   "file": "level-rise-2.mp3",
+   "source": "Level up, power up, Coin get (WobbleBoxx), Rise02"
+  },
+  {
+   "file": "level-rise-3.mp3",
+   "source": "Level up, power up, Coin get (WobbleBoxx), Rise03"
+  },
+  {
+   "file": "level-rise-warm.mp3",
+   "source": "Level up, power up, Coin get (WobbleBoxx), Rise07"
+  },
+  {
+   "file": "level-rise-long.mp3",
+   "source": "Level up, power up, Coin get (WobbleBoxx), Rise05"
+  },
+  {
+   "file": "level-upper.mp3",
+   "source": "Level up, power up, Coin get (WobbleBoxx), Upper01"
+  },
+  {
+   "file": "level-level-up.mp3",
+   "source": "7 Assorted Sound Effects (Menu, Level Up), Level Up"
+  },
+  {
+   "file": "level-ability.mp3",
+   "source": "7 Assorted Sound Effects (Menu, Level Up), Ability Learn"
+  },
+  {
+   "file": "level-synth-swell.mp3",
+   "source": "50 CC0 retro / synth SFX, synth_misc_01"
+  },
+  {
+   "file": "level-synth-pad.mp3",
+   "source": "50 CC0 retro / synth SFX, synth_misc_03"
+  },
+  {
+   "file": "level-force-field.mp3",
+   "source": "Kenney Sci-fi Sounds, forceField_002"
+  },
+  {
+   "file": "level-up.mp3",
+   "source": "Up (3x), upmid"
+  }
+ ],
+ "over": [
+  {
+   "file": "over-digital.mp3",
+   "source": "Kenney Digital SFX, lowDown"
+  },
+  {
+   "file": "over-steel.mp3",
+   "source": "Kenney Music Jingles, jingles_STEEL06"
+  },
+  {
+   "file": "over-pizzicato.mp3",
+   "source": "Kenney Music Jingles, jingles_PIZZI03"
+  },
+  {
+   "file": "over-sax.mp3",
+   "source": "Kenney Music Jingles, jingles_SAX07"
+  }
+ ]
+}

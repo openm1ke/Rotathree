@@ -29,7 +29,7 @@ test('music volume and toggle survive reload without resetting existing preferen
   await page.reload();
   await openSound();
   await expect(slider).toHaveValue('35');
-  await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
+  await page.getByRole('tabpanel').locator('section.group').filter({ hasText: 'Фоновая музыка' }).getByRole('button', { name: 'выкл', exact: true }).click();
   await page.reload();
   await openSound();
   await expect(slider).toHaveValue('35');
@@ -85,7 +85,7 @@ test('real browser audio uses the chosen gain and advances sequentially', async 
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
     return state.musicTestPlayers.filter((audio) => !audio.paused).map((audio) => new URL(audio.src).pathname);
   })).toEqual(['/music/project-utopia-loop.m4a']);
-  await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
+  await page.getByRole('tabpanel').locator('section.group').filter({ hasText: 'Фоновая музыка' }).getByRole('button', { name: 'выкл', exact: true }).click();
   await expect.poll(() => page.evaluate(() => {
     const state = window as typeof window & { musicTestPlayers: HTMLAudioElement[] };
     return state.musicTestPlayers.every((audio) => audio.paused);
@@ -115,8 +115,8 @@ test('game pause ducks music until Continue or leaving for the menu', async ({ p
   await page.getByRole('dialog', { name: 'Пауза', exact: true }).getByRole('button', { name: 'Настройки', exact: true }).click();
   await page.getByRole('tab', { name: 'Звуки', exact: true }).click();
   await page.getByRole('slider', { name: 'Громкость музыки', exact: true }).fill('35');
-  await page.getByRole('tabpanel').getByRole('button', { name: 'выкл', exact: true }).click();
-  await page.getByRole('tabpanel').getByRole('button', { name: 'вкл', exact: true }).click();
+  await page.getByRole('tabpanel').locator('section.group').filter({ hasText: 'Фоновая музыка' }).getByRole('button', { name: 'выкл', exact: true }).click();
+  await page.getByRole('tabpanel').locator('section.group').filter({ hasText: 'Фоновая музыка' }).getByRole('button', { name: 'вкл', exact: true }).click();
   await expect.poll(playing).toBe(true);
   await expect.poll(gain).toBeCloseTo(0.035, 5);
   await page.keyboard.press('Escape');
@@ -310,7 +310,7 @@ for (const legacyTabPause of [false, true]) {
     })));
     await startCampaign(page);
     const pause = page.getByRole('button', { name: 'Пауза', exact: true });
-    const sound = page.getByRole('button', { name: 'Выключить музыку', exact: true });
+    const sound = page.getByRole('button', { name: 'Выключить звук', exact: true });
     const settings = page.getByRole('button', { name: 'Настройки', exact: true });
     const field = page.getByLabel('Игровое поле');
     await expect(field).toHaveAttribute('tabindex', '-1');

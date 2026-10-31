@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Звуки Rotathree</title>
+  <link rel="icon" href="../favicon.svg" />
+  <style>
+    :root { color-scheme: dark; --bg: #07070c; --card: #12121c; --line: #2a2a3a; --text: #eceff9; --dim: #8b90a8; --accent: #7df0c5; --pink: #ff3d8b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+    main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 26px; margin: 0 0 4px; font-style: italic; }
+    h2 { font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin: 28px 0 4px; }
+    h2 + p { margin-top: 0; }
+    p { color: var(--dim); margin: 0 0 12px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-bottom: 6px; }
+    .row.chosen { border-color: var(--accent); }
+    .row small { display: block; color: var(--dim); font-size: 12.5px; }
+    .buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    button { font: inherit; color: var(--text); background: #1d1d2b; border: 1px solid #34344a; border-radius: 9px; padding: 6px 11px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button.main { background: linear-gradient(90deg, var(--pink), #a53dff); border: 0; }
+    .tag { font-size: 11px; color: var(--bg); background: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+    label { display: flex; gap: 10px; align-items: center; color: var(--dim); }
+    input[type=range] { width: 220px; }
+    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } .buttons { justify-content: flex-start; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Звуки Rotathree</h1>
+  <p>Все варианты звуков игры. Отмеченный звучит в игре, запущенной на этом компьютере через <code>npm run dev</code>: после выбора перезагрузите вкладку с игрой. Чтобы выбор попал в сборки, см. README.md рядом. Все звуки — CC0.</p>
+  <label>Громкость <input id="volume" type="range" min="0" max="100" value="60" /></label>
+  <div id="groups"></div>
+</main>
+<script>
+  const GROUPS = [
+    ['ui', 'Кнопки', 'нажатие кнопок в меню, окнах и настройках'],
+    ['move', 'Сдвиг фишки', 'влево и вправо; звучит часто, поэтому тихо'],
+    ['rotate', 'Поворот фишки', ''],
+    ['turn', 'Поворот креста', 'другой стакан встаёт наверх'],
+    ['land', 'Приземление', 'фишка легла'],
+    ['pop', 'Линия лопнула', 'на каждом шаге комбо на ступень гаммы выше'],
+    ['level', 'Плашка «Уровень пройден»', 'короткая электронная подложка под появление плашки; в игре фоновая музыка на это время приглушается'],
+    ['over', 'Проигрыш', ''],
+  ];
+  const DEFAULTS = { ui: 'ui-blip', move: 'move-select', rotate: 'rotate-bloop', turn: 'turn-sweep-deep', land: 'land-soft', pop: 'pop-plop', level: 'level-up', over: 'over-digital' };
+  const STEPS = [0, 2, 4, 5, 7, 9, 11, 12];
+  const KEY = 'rotathree.dev.sfx';
+  const tried = () => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}'); } catch { return {}; } };
+  const chosen = (group) => { const t = tried(); return group in t ? t[group] : DEFAULTS[group]; };
+  const choose = (group, take) => { const t = tried(); t[group] = take; try { localStorage.setItem(KEY, JSON.stringify(t)); } catch {} draw(); };
+
+  let context, master;
+  const buffers = new Map();
+  const audio = () => {
+    if (!context) { context = new AudioContext(); master = context.createGain(); master.connect(context.destination); setVolume(); }
+    if (context.state === 'suspended') context.resume();
+    return context;
+  };
+  const load = (name) => {
+    if (!buffers.has(name)) buffers.set(name, fetch(`takes/${name}`).then((r) => r.arrayBuffer()).then((b) => audio().decodeAudioData(b)));
+    return buffers.get(name);
+  };
+  const play = async (name, rate = 1, at = 0) => {
+    const ctx = audio();
+    const source = ctx.createBufferSource();
+    source.buffer = await load(name);
+    source.playbackRate.value = rate;
+    source.connect(master);
+    source.start(ctx.currentTime + at);
+  };
+  const repeat = (name, gap, count) => { for (let i = 0; i < count; i++) play(name, 1, i * gap); };
+  const chain = (name) => STEPS.slice(0, 6).forEach((step, i) => play(name, 2 ** (step / 12), i * 0.42));
+  const setVolume = () => { if (master) master.gain.value = document.getElementById('volume').value / 100; };
+  document.getElementById('volume').addEventListener('input', setVolume);
+
+  let catalog = {};
+  const button = (label, action, main) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (main) b.className = 'main';
+    b.addEventListener('click', action);
+    return b;
+  };
+  const draw = () => {
+    const root = document.getElementById('groups');
+    root.replaceChildren();
+    for (const [group, title, note] of GROUPS) {
+      const h = document.createElement('h2');
+      h.textContent = title;
+      const p = document.createElement('p');
+      p.textContent = note;
+      root.append(h, p);
+      const takes = [...(catalog[group] ?? []), { file: null, source: 'в этой группе звука нет' }];
+      for (const { file, source } of takes) {
+        const take = file && file.replace(/\.mp3$/, '');
+        const inGame = chosen(group) === take;
+        const row = document.createElement('div');
+        row.className = `row${inGame ? ' chosen' : ''}`;
+        const name = take ? take.slice(group.length + 1) : 'Без звука';
+        row.innerHTML = `<div><b></b>${inGame ? '<span class="tag">в игре</span>' : ''}<small></small></div><div class="buttons"></div>`;
+        row.querySelector('b').textContent = name;
+        row.querySelector('small').textContent = source;
+        const buttons = row.querySelector('.buttons');
+        if (file) {
+          buttons.append(button('▶', () => play(file), true));
+          if (group === 'pop') buttons.append(button('▶ Комбо ×1…×6', () => chain(file)));
+          if (group === 'move') buttons.append(button('▶ Серия', () => repeat(file, 0.09, 6)));
+        }
+        if (!inGame) buttons.append(button('В игру', () => choose(group, take)));
+        root.append(row);
+      }
+    }
+  };
+  fetch('takes/catalog.json').then((r) => r.json()).then((c) => { catalog = c; draw(); });
+</script>
+</body>
+</html>

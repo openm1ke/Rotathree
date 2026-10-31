@@ -26,7 +26,7 @@ describe('music settings', () => {
       setItem: (key: string, value: string) => { values.set(key, value); },
     };
     for (const musicVolume of [0, 0.05, 0.35, 0.6, 1]) {
-      const settings = { ...defaultSettings(), audio: { music: false, musicVolume } };
+      const settings = { ...defaultSettings(), audio: { ...defaultSettings().audio, music: false, musicVolume } };
       expect(saveSettings(settings, storage)).toBe(true);
       expect(loadSettings(storage)).toEqual(settings);
     }

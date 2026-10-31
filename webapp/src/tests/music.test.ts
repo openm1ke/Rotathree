@@ -59,7 +59,7 @@ describe('background music playback', () => {
     expect(output.gain.value).toBe(0.1);
     expect(player.src).toBe(`/${MUSIC_TRACKS[0]}`);
     player.currentTime = 25;
-    music.setSettings({ music: true, musicVolume: 0.35 });
+    music.setSettings({ music: true, musicVolume: 0.35, sounds: true, soundsVolume: 0.5 });
     expect(output.gain.value).toBe(0.35);
     expect(player.currentTime).toBe(25);
     expect(player.play).toHaveBeenCalledTimes(1);
@@ -87,17 +87,38 @@ describe('background music playback', () => {
     music.ensurePlaying();
     expect(player.paused).toBe(false);
     expect(player.play).toHaveBeenCalledTimes(1);
-    music.setSettings({ music: true, musicVolume: 0.35 });
+    music.setSettings({ music: true, musicVolume: 0.35, sounds: true, soundsVolume: 0.5 });
     expect(output.gain.value).toBeCloseTo(0.035);
     music.setPaused(false);
     expect(output.gain.value).toBe(0.35);
     expect(player.currentTime).toBe(25);
     expect(player.play).toHaveBeenCalledTimes(1);
-    music.setSettings({ music: false, musicVolume: 0.35 });
+    music.setSettings({ music: false, musicVolume: 0.35, sounds: true, soundsVolume: 0.5 });
     music.setPaused(true);
     music.setPaused(false);
     expect(player.paused).toBe(true);
     expect(output.gain.value).toBe(0);
+  });
+
+  it('steps aside for the victory jingle and comes back after it, under a pause too', async () => {
+    await music.start();
+    const output = TestContext.instances[0].output;
+    vi.useFakeTimers();
+    try {
+      music.duck(3);
+      expect(output.gain.value).toBeCloseTo(0.01);
+      vi.advanceTimersByTime(2_900);
+      expect(output.gain.value).toBeCloseTo(0.01);
+      vi.advanceTimersByTime(200);
+      expect(output.gain.value).toBe(0.1);
+      // A pause during the jingle keeps the music down after it.
+      music.duck(3);
+      music.setPaused(true);
+      vi.advanceTimersByTime(3_100);
+      expect(output.gain.value).toBeCloseTo(0.01);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('restores a suspended or interrupted audio context even if the track is already playing', async () => {
@@ -129,13 +150,13 @@ describe('background music playback', () => {
   it('mutes, ignores further gestures while disabled, and resumes at the chosen volume', async () => {
     await music.start();
     const player = TestAudio.instances[0];
-    music.setSettings({ music: false, musicVolume: 0.2 });
+    music.setSettings({ music: false, musicVolume: 0.2, sounds: true, soundsVolume: 0.5 });
     expect(player.paused).toBe(true);
     expect(TestContext.instances[0].output.gain.value).toBe(0);
     music.ensurePlaying();
     await music.start();
     expect(player.play).toHaveBeenCalledTimes(1);
-    music.setSettings({ music: true, musicVolume: 0.2 });
+    music.setSettings({ music: true, musicVolume: 0.2, sounds: true, soundsVolume: 0.5 });
     await music.start();
     expect(player.paused).toBe(false);
     expect(TestContext.instances[0].output.gain.value).toBe(0.2);
@@ -149,7 +170,7 @@ describe('background music playback', () => {
     }));
     const starting = music.start();
     await Promise.resolve();
-    music.setSettings({ music: false, musicVolume: 0.1 });
+    music.setSettings({ music: false, musicVolume: 0.1, sounds: true, soundsVolume: 0.5 });
     finish();
     await starting;
     expect(player.paused).toBe(true);
@@ -172,14 +193,14 @@ describe('background music playback', () => {
 
   it('uses the media volume as fallback when Web Audio is unavailable', async () => {
     vi.stubGlobal('AudioContext', undefined);
-    music.setSettings({ music: true, musicVolume: 0.05 });
+    music.setSettings({ music: true, musicVolume: 0.05, sounds: true, soundsVolume: 0.5 });
     await music.start();
     expect(TestAudio.instances[0].volume).toBe(0.05);
   });
 
   it('still plays at the selected volume if AudioContext construction is rejected', async () => {
     vi.stubGlobal('AudioContext', class { constructor() { throw new Error('context unavailable'); } });
-    music.setSettings({ music: true, musicVolume: 0.2 });
+    music.setSettings({ music: true, musicVolume: 0.2, sounds: true, soundsVolume: 0.5 });
     music.setPaused(true);
     await music.start();
     expect(TestAudio.instances[0].paused).toBe(false);

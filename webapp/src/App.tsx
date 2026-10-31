@@ -33,6 +33,7 @@ import {
 } from './services/storage';
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
 import { MusicPlayer } from './services/music';
+import { sounds } from './services/sounds';
 import { isPlatformHidden, isPlatformMuted, subscribeMute, subscribeVisibility } from './platform/lifecycle';
 import { LanguageSwitch } from './platform/LanguageSwitch';
 
@@ -120,16 +121,28 @@ export default function App() {
     const player = new MusicPlayer();
     music.current = player;
     player.setPaused(musicPaused.current);
-    const unlock = () => { if (!silent()) player.ensurePlaying(); };
+    sounds.setDucker((seconds) => player.duck(seconds));
+    const unlock = () => {
+      sounds.unlock();
+      if (!silent()) player.ensurePlaying();
+    };
     const onVisibility = () => {
+      sounds.setSilenced(silent());
       if (silent()) player.stop();
       else player.ensurePlaying();
     };
     const onPageHide = () => player.stop();
+    // Every button clicks, except the on-screen pads: their actions have the game's own sounds.
+    const onButton = (event: MouseEvent) => {
+      const button = event.target instanceof Element ? event.target.closest('button') : null;
+      if (button && !button.closest('.touch-controls, .pad-surface, .dpad')) sounds.play('ui');
+    };
     const unsubscribeVisibility = subscribeVisibility(onVisibility);
     const unsubscribeMute = subscribeMute(onVisibility);
+    sounds.setSilenced(silent());
     if (silent()) player.stop();
     document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('click', onButton);
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('click', unlock);
@@ -139,15 +152,18 @@ export default function App() {
       window.removeEventListener('click', unlock);
       window.removeEventListener('keydown', unlock);
       document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('click', onButton);
       window.removeEventListener('pagehide', onPageHide);
       unsubscribeVisibility();
       unsubscribeMute();
+      sounds.setDucker(undefined);
       player.dispose();
       music.current = null;
     };
   }, []);
   useEffect(() => {
     music.current?.setSettings(settings.audio);
+    sounds.setSettings(settings.audio);
     if (silent()) music.current?.stop();
   }, [settings.audio]);
 
@@ -266,8 +282,13 @@ export default function App() {
     [written],
   );
   const home = useCallback(() => setRoute({ name: 'home' }), []);
+  /** The quick sound switch mutes music and effects together, and turns both
+   * back on. */
   const toggleMusic = useCallback(
-    () => setSettings((current) => ({ ...current, audio: { ...current.audio, music: !current.audio.music } })),
+    () => setSettings((current) => {
+      const on = !(current.audio.music || current.audio.sounds);
+      return { ...current, audio: { ...current.audio, music: on, sounds: on } };
+    }),
     [],
   );
 
@@ -373,7 +394,7 @@ export default function App() {
       <div className="app__content">{screen}</div>
       {route.name === 'home' && (
         <div className="corner-controls">
-          <SoundButton on={settings.audio.music} onToggle={toggleMusic} />
+          <SoundButton on={settings.audio.music || settings.audio.sounds} onToggle={toggleMusic} />
           <LanguageSwitch
             language={i18n.language}
             onChange={(language) => setSettings((current) => ({ ...current, language }))}

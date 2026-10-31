@@ -488,6 +488,24 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               onChange={(percent) => onChange({ ...settings, audio: { ...settings.audio, musicVolume: percent / 100 } })}
             />
           </section>
+          <section className="group">
+            <h3><T>Звуки игры</T></h3>
+            <p className="hint"><T>Ходы, линии, кнопки и итоги уровня</T></p>
+            <Toggle
+              label="Звуки"
+              value={settings.audio.sounds}
+              onChange={(sounds) => onChange({ ...settings, audio: { ...settings.audio, sounds } })}
+            />
+            <Slider
+              label="Громкость звуков"
+              value={Math.round(settings.audio.soundsVolume * 100)}
+              min={0}
+              max={100}
+              step={5}
+              unit="%"
+              onChange={(percent) => onChange({ ...settings, audio: { ...settings.audio, soundsVolume: percent / 100 } })}
+            />
+          </section>
           <div className="form__start">
             <Button ghost onClick={() => onChange({ ...settings, audio: defaults.audio })}><T>
               Сбросить звук

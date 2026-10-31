@@ -57,6 +57,10 @@ export interface AudioOptions {
   music: boolean;
   /** Master volume from 0 to 1. */
   musicVolume: number;
+  /** Effects of play and of the interface. */
+  sounds: boolean;
+  /** Volume of the effects, from 0 to 1. */
+  soundsVolume: number;
 }
 
 export interface Settings {
@@ -102,7 +106,7 @@ export const defaultSettings = (): Settings => ({
   padPositions: structuredClone(DEFAULT_POSITIONS),
   padShape: 'square',
   padButtons: structuredClone(DEFAULT_BUTTONS),
-  audio: { music: true, musicVolume: 0.1 },
+  audio: { music: true, musicVolume: 0.1, sounds: true, soundsVolume: 0.3 },
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -183,6 +187,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     audio: {
       music: audio.music !== false,
       musicVolume: numberIn(audio.musicVolume ?? audio.volume, 0, 1, base.audio.musicVolume),
+      sounds: audio.sounds !== false,
+      soundsVolume: numberIn(audio.soundsVolume, 0, 1, base.audio.soundsVolume),
     },
   };
 }

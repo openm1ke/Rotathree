@@ -22,6 +22,8 @@ export class MusicPlayer {
   private loaded = false;
   private wanted = false;
   private paused = false;
+  private ducked = false;
+  private duckTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
   private pending: Promise<void> | undefined;
   private failures = 0;
@@ -71,9 +73,22 @@ export class MusicPlayer {
     this.applyVolume();
   }
 
+  /** Steps aside for a musical effect, such as the victory jingle: as quiet as
+   * under a pause for `seconds`, so that two tunes do not clash. */
+  duck(seconds: number): void {
+    clearTimeout(this.duckTimer);
+    this.ducked = true;
+    this.applyVolume();
+    this.duckTimer = setTimeout(() => {
+      this.ducked = false;
+      this.applyVolume();
+    }, seconds * 1000);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    clearTimeout(this.duckTimer);
     this.stop();
     this.player.removeEventListener('ended', this.onEnded);
     this.player.removeEventListener('error', this.onError);
@@ -83,7 +98,7 @@ export class MusicPlayer {
   }
 
   private applyVolume(): void {
-    const volume = this.options.music ? this.options.musicVolume * (this.paused ? 0.1 : 1) : 0;
+    const volume = this.options.music ? this.options.musicVolume * (this.paused || this.ducked ? 0.1 : 1) : 0;
     if (this.gain) this.gain.gain.value = volume;
     else this.player.volume = volume;
   }
