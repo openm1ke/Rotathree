@@ -631,6 +631,28 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ],
       ),
+      Section(
+        title: 'Звуки игры',
+        note: 'Ходы, линии, кнопки и итоги уровня',
+        children: [
+          SwitchRow(
+            label: 'Звуки',
+            value: audio.sounds,
+            on: 'вкл',
+            off: 'выкл',
+            onChanged: (sounds) => setAudio(audio.copyWith(sounds: sounds)),
+          ),
+          SliderRow(
+            label: 'Громкость звуков',
+            value: (audio.soundsVolume * 100).round(),
+            min: 0,
+            max: 100,
+            step: 5,
+            unit: '%',
+            onChanged: (value) => setAudio(audio.copyWith(soundsVolume: value / 100)),
+          ),
+        ],
+      ),
       Center(
         child: OutlineButton(
           label: 'Сбросить звук',

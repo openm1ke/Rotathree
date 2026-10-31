@@ -87,6 +87,14 @@ void main() {
               .arguments['volume'],
           0.35,
         );
+        // The level jingle ducks the music for its length, then it comes back.
+        double lastVolume() =>
+            calls.lastWhere((call) => call.method == 'setVolume').arguments['volume'] as double;
+        music.duck(0.05);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(lastVolume(), closeTo(0.035, 0.0001));
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        expect(lastVolume(), 0.35);
         await music.setPaused(true);
         await music.update(const AudioOptions(music: false));
         await music.setPaused(false);

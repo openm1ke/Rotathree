@@ -77,16 +77,21 @@ class HudOptions {
       );
 }
 
-/// Background music preferences. The volume is stored from 0.0 to 1.0.
+/// Music and sound effect preferences. Volumes are stored from 0.0 to 1.0;
+/// the effects start quiet, as on the web.
 class AudioOptions {
-  const AudioOptions({this.music = true, this.musicVolume = 0.1});
+  const AudioOptions({this.music = true, this.musicVolume = 0.1, this.sounds = true, this.soundsVolume = 0.3});
 
   final bool music;
   final double musicVolume;
+  final bool sounds;
+  final double soundsVolume;
 
-  AudioOptions copyWith({bool? music, double? musicVolume}) => AudioOptions(
+  AudioOptions copyWith({bool? music, double? musicVolume, bool? sounds, double? soundsVolume}) => AudioOptions(
         music: music ?? this.music,
         musicVolume: musicVolume ?? this.musicVolume,
+        sounds: sounds ?? this.sounds,
+        soundsVolume: soundsVolume ?? this.soundsVolume,
       );
 }
 
@@ -313,6 +318,8 @@ class Settings {
       audio: AudioOptions(
         music: audio['music'] != false,
         musicVolume: _doubleIn(audio['volume'], 0, 1, base.audio.musicVolume),
+        sounds: audio['sounds'] != false,
+        soundsVolume: _doubleIn(audio['soundsVolume'], 0, 1, base.audio.soundsVolume),
       ),
       leftPad: _padFromJson(pads['left'], base.leftPad),
       rightPad: _padFromJson(pads['right'], base.rightPad),
@@ -405,6 +412,8 @@ class Settings {
         'audio': {
           'music': audio.music,
           'volume': audio.musicVolume,
+          'sounds': audio.sounds,
+          'soundsVolume': audio.soundsVolume,
         },
         'padPositions': padPositions.toJson(),
         'pads': {

@@ -16,6 +16,11 @@ an optional credit to kenney.nl.
    reload the game's tab.
 3. To ship the choice, copy `takes/<take>.mp3` to `public/sfx/` and set it in
    `CHOSEN`; remove the take it replaces from `public/sfx/`.
+4. The mobile app plays the same takes from `assets/sfx/`, with `takes` in
+   `lib/ui/audio/sound_effects.dart` set as `CHOSEN` is: run
+   `python3 -I tool/prepare_app_sfx.py` to copy them there. It also renders the
+   burst once per step of the scale, since the app cannot raise the pitch as it
+   plays.
 
 Volume: the groups are levelled by `tool/prepare_sfx.py` (buttons and moves
 quietest, bursts and the banner loudest); the player's "Громкость звуков"

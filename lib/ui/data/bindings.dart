@@ -20,10 +20,10 @@ Bindings defaultBindings() => {
       GameAction.moveRight: [PhysicalKeyboardKey.keyD],
       GameAction.rotateCW: [PhysicalKeyboardKey.keyW],
       GameAction.rotateCCW: [],
-      GameAction.softDrop: [],
+      GameAction.softDrop: [PhysicalKeyboardKey.keyX],
       GameAction.hardDrop: [PhysicalKeyboardKey.keyS, PhysicalKeyboardKey.space],
-      GameAction.glassLeft: [PhysicalKeyboardKey.arrowLeft],
-      GameAction.glassRight: [PhysicalKeyboardKey.arrowRight],
+      GameAction.glassLeft: [PhysicalKeyboardKey.arrowLeft, PhysicalKeyboardKey.keyQ],
+      GameAction.glassRight: [PhysicalKeyboardKey.arrowRight, PhysicalKeyboardKey.keyE],
       GameAction.glassOpposite: [PhysicalKeyboardKey.arrowUp, PhysicalKeyboardKey.arrowDown],
       GameAction.pause: [PhysicalKeyboardKey.escape, PhysicalKeyboardKey.keyP],
       GameAction.restart: [PhysicalKeyboardKey.keyN],
@@ -72,6 +72,14 @@ Bindings unbindKey(Bindings bindings, GameAction action, int slot) {
   return next;
 }
 
+/// Keys that joined the defaults later: a save that still has the action's
+/// earlier default gets them too, unless it uses the key for something else.
+const _laterDefaults = [
+  (action: GameAction.glassLeft, was: [PhysicalKeyboardKey.arrowLeft], key: PhysicalKeyboardKey.keyQ),
+  (action: GameAction.glassRight, was: [PhysicalKeyboardKey.arrowRight], key: PhysicalKeyboardKey.keyE),
+  (action: GameAction.softDrop, was: <PhysicalKeyboardKey>[], key: PhysicalKeyboardKey.keyX),
+];
+
 /// Makes sense of whatever was stored: unknown actions are dropped, missing
 /// ones get their defaults, and a key bound twice keeps its first use.
 Bindings sanitizeBindings(Object? raw) {
@@ -93,6 +101,11 @@ Bindings sanitizeBindings(Object? raw) {
       for (final key in result[action]!)
         if (used.add(key.usbHidUsage)) key,
     ];
+  }
+  for (final (:action, :was, :key) in _laterDefaults) {
+    final keys = result[action]!;
+    final unchanged = keys.length == was.length && [for (var i = 0; i < was.length; i++) keys[i] == was[i]].every((same) => same);
+    if (unchanged && keys.length < slotsPerAction && used.add(key.usbHidUsage)) result[action] = [...keys, key];
   }
   return result;
 }

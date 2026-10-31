@@ -53,11 +53,13 @@ void main() {
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
 
-    await tester.tap(find.byTooltip('Выключить музыку'));
+    await tester.tap(find.byTooltip('Выключить звук'));
     await settle(tester);
-    expect(find.byTooltip('Включить музыку'), findsOneWidget);
+    expect(find.byTooltip('Включить звук'), findsOneWidget);
     final prefs = await tester.runAsync(SharedPreferences.getInstance);
+    // The quick button mutes music and effects together.
     expect(prefs!.getString('rotathree.settings.v2'), contains('"music":false'));
+    expect(prefs.getString('rotathree.settings.v2'), contains('"sounds":false'));
 
     // The globe names the other language in that language.
     expect(find.text('English'), findsOneWidget);
@@ -65,7 +67,7 @@ void main() {
     await settle(tester);
     expect(find.text('Campaign'), findsOneWidget);
     expect(find.text('Русский'), findsOneWidget);
-    expect(find.byTooltip('Turn music on'), findsOneWidget);
+    expect(find.byTooltip('Turn sound on'), findsOneWidget);
   });
 
   testWidgets('completed campaign uses a compact label and unlocks Play inside its menu', (tester) async {
@@ -187,10 +189,10 @@ void main() {
     await tester.scrollUntilVisible(find.text('Начать'), 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Начать'));
     await settle(tester);
-    expect(find.text('Одна фигура — три клетки'), findsOneWidget);
+    expect(find.textContaining('СОБИРАЙ 3 В РЯД', findRichText: true), findsOneWidget);
     await tester.tap(find.text('Пропустить'));
     await settle(tester);
-    expect(find.text('Одна фигура — три клетки'), findsNothing);
+    expect(find.textContaining('СОБИРАЙ 3 В РЯД', findRichText: true), findsNothing);
     expect(find.byTooltip('Пауза'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('rotathree.tutorial.v1'), 'true');

@@ -9,6 +9,7 @@ import '../format.dart';
 import '../layout.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
+import '../audio/sound_effects.dart';
 
 /// Compact level tiles, with the player's palette showing the colours in play.
 class CampaignScreen extends StatelessWidget {
@@ -144,7 +145,7 @@ class _LevelTile extends StatelessWidget {
               side: BorderSide(color: status == _LevelStatus.open ? Palette.accent : Palette.line),
             ),
             child: InkWell(
-              onTap: locked ? null : onTap,
+              onTap: locked ? null : clicking(onTap),
               borderRadius: BorderRadius.circular(4 * s),
               child: Padding(
                 padding: EdgeInsets.all(12 * s),

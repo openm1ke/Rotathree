@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../data/settings.dart' show colourToHex;
 import '../style.dart';
 import '../widgets/controls.dart';
+import '../audio/sound_effects.dart';
 
 /// Asks for a colour with hue, saturation and brightness. Null when cancelled.
 Future<Color?> showColourPicker(BuildContext context, Color initial, String name) {
@@ -122,7 +123,7 @@ class ColourSwatch extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
+        onTap: clicking(onTap),
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: Row(

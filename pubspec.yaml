@@ -30,6 +30,7 @@ flutter:
     - assets/music/playback/chill-loopable.m4a
     - assets/music/playback/insistent-background-loop.m4a
     - assets/music/playback/claimed-by-the-void-loop.m4a
+    - assets/sfx/
 
   fonts:
     - family: Exo2

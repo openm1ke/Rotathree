@@ -8,6 +8,7 @@ import '../layout.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import '../widgets/completed_badge.dart';
+import '../audio/sound_effects.dart';
 
 /// The first screen: a column of large entries, the progress on the side.
 class MainMenu extends StatelessWidget {
@@ -237,7 +238,7 @@ class _NavItem extends StatelessWidget {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(14 * s),
-          onTap: onTap,
+          onTap: clicking(onTap),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: _lerp(14, 8, squeeze) * s),
             child: Row(
@@ -286,7 +287,7 @@ class _CampaignShortcut extends StatelessWidget {
         color: Palette.panel,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14 * s), side: const BorderSide(color: Palette.line)),
         child: InkWell(
-          onTap: onTap,
+          onTap: clicking(onTap),
           borderRadius: BorderRadius.circular(14 * s),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: _lerp(14, 10, squeeze) * s),

@@ -12,6 +12,7 @@ import 'data/stats.dart';
 import 'data/store.dart';
 import 'data/run_save.dart';
 import 'audio/music_service.dart';
+import 'audio/sound_effects.dart';
 import 'game/game_screen.dart';
 import 'layout.dart';
 import 'menu/campaign_screen.dart';
@@ -104,11 +105,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    SoundEffects.instance.duckMusic = _music.duck;
     _load();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    SoundEffects.instance.setSilenced(state != AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed && _store != null) {
       unawaited(_music.start());
     } else if (state != AppLifecycleState.resumed) {
@@ -119,6 +122,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    SoundEffects.instance.duckMusic = null;
     unawaited(_music.dispose());
     super.dispose();
   }
@@ -142,6 +146,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     widget.onLanguageChanged(_settings.language);
     BlockTones.setColours(_settings.palettes.activeSet.colours);
     unawaited(_music.update(_settings.audio));
+    SoundEffects.instance.setSettings(_settings.audio);
     if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
       unawaited(_music.start());
     }
@@ -188,6 +193,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     widget.onLanguageChanged(next.language);
     BlockTones.setColours(next.palettes.activeSet.colours);
     unawaited(_music.update(next.audio));
+    SoundEffects.instance.setSettings(next.audio);
     if (!wasMusicEnabled && next.audio.music &&
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
       unawaited(_music.start());
@@ -195,8 +201,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('settings', _store!.saveSettings(next));
   }
 
-  void _toggleMusic() =>
-      _changeSettings(_settings.copyWith(audio: _settings.audio.copyWith(music: !_settings.audio.music)));
+  /// The quick sound button mutes music and effects together, and brings
+  /// both back.
+  void _toggleMusic() {
+    final on = !(_settings.audio.music || _settings.audio.sounds);
+    _changeSettings(_settings.copyWith(audio: _settings.audio.copyWith(music: on, sounds: on)));
+  }
 
   void _changeProgress(Progress next) {
     setState(() => _progress = next);
@@ -337,7 +347,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onCustom: () => _show(_Screen.custom),
           onStatistics: () => _show(_Screen.statistics),
           onSettings: () => _show(_Screen.settings),
-          music: _settings.audio.music,
+          music: _settings.audio.music || _settings.audio.sounds,
           onToggleMusic: _toggleMusic,
           onLanguage: (language) => _changeSettings(_settings.copyWith(language: language)),
         ),
@@ -428,7 +438,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 style: TextStyle(fontSize: 12),
                               ),
                             ),
-                            TextButton(onPressed: _retryStorage, child: const LText('Повторить')),
+                            TextButton(onPressed: clicking(_retryStorage), child: const LText('Повторить')),
                           ],
                         ),
                       ),

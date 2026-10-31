@@ -41,25 +41,19 @@ void main() {
   testWidgets('Play at the end of a tutorial opened from the menu starts the campaign', (tester) async {
     await openTutorialFromMenu(tester);
     final state = tester.state<GameScreenState>(find.byType(GameScreen));
-    await tester.tap(find.text('Дальше'));
+    await tester.tap(find.text('Начать'));
     await tester.pump();
+    // Each lesson goes on by itself once its action is done.
     state.move(1, toWall: false);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    await pumpFrames(tester, 20);
     state.press(GameAction.rotateCW);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    await pumpFrames(tester, 20);
     state.press(GameAction.hardDrop);
-    await pumpFrames(tester, 50);
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
-    await pumpFrames(tester, 25);
+    // The match plays out, then the second glass grows out of the cross.
+    await pumpFrames(tester, 80);
     state.press(GameAction.glassRight);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    // The last lesson comes after a moment, and its frame grows to fit Play.
+    await pumpFrames(tester, 30);
     await tester.tap(find.text('Играть'));
     await settle(tester);
 

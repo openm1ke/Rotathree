@@ -153,7 +153,8 @@ void main() {
     );
     expect(find.text('Пауза'), findsNothing);
     expect(find.byTooltip('Настройки'), findsOneWidget);
-    expect(tester.getSize(find.byType(TutorialPanel)).height, lessThan(190));
+    // The lesson and its button fit whole, and the glass stays large.
+    expect(tester.getRect(find.text('Начать')).bottom, lessThan(tester.getRect(find.byType(TutorialPanel)).bottom));
     final field = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is FieldPainter);
     expect(tester.getSize(field).height, greaterThan(280));
     state.didChangeAppLifecycleState(AppLifecycleState.inactive);
@@ -229,7 +230,7 @@ void main() {
     for (final tutorial in [false, true]) {
       var toggles = 0;
       await pumpGame(tester, tutorial: tutorial, onToggleMusic: () => toggles++);
-      final sound = find.byTooltip('Выключить музыку');
+      final sound = find.byTooltip('Выключить звук');
       expect(sound, findsOneWidget);
       final gear = tester.getRect(find.byTooltip('Настройки'));
       expect(tester.getRect(sound).right, lessThan(gear.left));
@@ -344,6 +345,9 @@ void main() {
     expect(saved!.engine, state.engine.snapshot());
     expect(records, isEmpty);
   });
+  /// The lesson the tutorial shows.
+  TutorialPanel lessonOf(WidgetTester tester) => tester.widget<TutorialPanel>(find.byType(TutorialPanel));
+
   testWidgets('training uses customized pad bindings and positions', (tester) async {
     final settings = Settings.defaults().copyWith(
       leftPad: {...defaultLeftPad, PadSlot.up: GameAction.none, PadSlot.down: GameAction.rotateCW},
@@ -352,20 +356,21 @@ void main() {
     final state = await pumpGame(tester, tutorial: true, settings: settings);
     final left = tester.widget<DPad>(find.byType(DPad).first);
     expect(left.layout[PadSlot.down], GameAction.rotateCW);
-    await tester.tap(find.text('Дальше'));
+    await tester.tap(find.text('Начать'));
     await tester.pump();
     state.move(1, toWall: false);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    await pumpFrames(tester, 20);
+    expect(lessonOf(tester).step, 2);
+    // The buttons the lesson asks for glow, wherever the player put them.
+    expect(tester.widget<DPad>(find.byType(DPad).first).hint, contains(GameAction.rotateCW));
     await tester.tapAt(padButton(tester, 0, .5, 5 / 6));
     await tester.pump();
-    expect(find.text('✓ Дальше'), findsOneWidget);
-    expect(find.descendant(of: find.byType(TutorialPanel), matching: find.text('Левая')), findsOneWidget);
-    expect(tester.widget<TutorialPanel>(find.byType(TutorialPanel)).controls.first.keys, ['↓']);
+    expect(lessonOf(tester).performed, isTrue);
+    await pumpFrames(tester, 20);
+    expect(lessonOf(tester).step, 3);
   });
 
-  testWidgets('phone tutorial requires each action and resolves a real match', (tester) async {
+  testWidgets('phone tutorial teaches by doing, then lets the pieces fall', (tester) async {
     var done = false;
     final state = await pumpGame(
       tester,
@@ -374,34 +379,102 @@ void main() {
       session: CustomSession(defaultCustom.copyWith(extraGlasses: 0)),
       onTutorialDone: (played) => done = played,
     );
+    // Read top-down: the lesson, then the glass under it.
+    final field = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is FieldPainter);
+    expect(tester.getRect(find.byType(TutorialPanel)).bottom, lessThanOrEqualTo(tester.getRect(field).top + 1));
     final row = state.engine.activePiece!.row;
     await pumpFrames(tester, 80);
     expect(state.engine.activePiece!.row, row);
-    await tester.tap(find.text('Дальше'));
+    await tester.tap(find.text('Начать'));
     await tester.pump();
-    state.press(GameAction.hardDrop);
+    expect(lessonOf(tester).step, 1);
+    // A button the lesson does not take says which one does.
+    await tester.tapAt(padButton(tester, 0, .5, 5 / 6));
+    await tester.pump();
     expect(state.engine.phase, GamePhase.playing);
+    expect(lessonOf(tester).hint, 'Нажми подсвеченную кнопку');
+    expect(lessonOf(tester).urging, isTrue);
     state.move(1, toWall: false);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    await pumpFrames(tester, 20);
+    expect(lessonOf(tester).step, 2);
+    expect(lessonOf(tester).hint, isNull);
     state.press(GameAction.rotateCW);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    await pumpFrames(tester, 20);
+    expect(lessonOf(tester).step, 3);
     state.press(GameAction.hardDrop);
     await pumpFrames(tester, 50);
     expect(state.engine.state.matches, greaterThan(0));
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
-    await pumpFrames(tester, 25);
+    expect(lessonOf(tester).step, 4);
+    await pumpFrames(tester, 10);
+    expect(state.engine.sides, hasLength(2));
+    // Left and right only: with two glasses there is none opposite.
+    expect(tester.widget<DPad>(find.byType(DPad).last).hint, [GameAction.glassLeft, GameAction.glassRight]);
     state.press(GameAction.glassRight);
-    await tester.pump();
-    await tester.tap(find.text('✓ Дальше'));
-    await tester.pump();
+    await pumpFrames(tester, 20);
+    expect(lessonOf(tester).step, 5);
+
+    // The last screen is the game itself: the pieces fall by themselves.
+    final top = state.engine.activePiece!.row;
+    await pumpFrames(tester, 60);
+    expect(state.engine.activePiece!.row, greaterThan(top));
+    // A glass filled there empties instead of ending the game.
+    final before = state.engine;
+    for (var i = 0; i < 600 && identical(state.engine, before); i++) {
+      state.press(GameAction.hardDrop);
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(identical(state.engine, before), isFalse);
+    expect(find.text('Игра окончена'), findsNothing);
+    await pumpFrames(tester, 10);
+    expect(state.engine.sides, hasLength(2));
+    expect(lessonOf(tester).step, 5);
     await tester.tap(find.text('Играть'));
     await tester.pump();
     expect(done, isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a player who tries the basics before Start goes straight to turning the cross', (tester) async {
+    final state = await pumpGame(tester, tutorial: true, session: const CampaignSession(0));
+    state.move(1, toWall: false);
+    state.press(GameAction.rotateCW);
+    await tester.pump();
+    expect(lessonOf(tester).step, 0);
+    state.press(GameAction.hardDrop);
+    await pumpFrames(tester, 40);
+    expect(lessonOf(tester).step, 4);
+  });
+
+  testWidgets('a basic tried before Start skips its lesson', (tester) async {
+    final state = await pumpGame(tester, tutorial: true, session: const CampaignSession(0));
+    state.move(-1, toWall: false);
+    await tester.tap(find.text('Начать'));
+    await tester.pump();
+    expect(lessonOf(tester).step, 2);
+  });
+
+  testWidgets('a waiting lesson says again what to press', (tester) async {
+    await pumpGame(tester, tutorial: true, session: const CampaignSession(0));
+    await tester.tap(find.text('Начать'));
+    await pumpFrames(tester, 70);
+    expect(lessonOf(tester).hint, isNull);
+    await pumpFrames(tester, 15);
+    expect(lessonOf(tester).hint, 'Нажми подсвеченную кнопку');
+    expect(lessonOf(tester).urging, isTrue);
+  });
+
+  testWidgets('the free play of the tutorial completes no campaign level', (tester) async {
+    final state = await pumpGame(tester, tutorial: true, session: const CampaignSession(0));
+    state.move(1, toWall: false);
+    state.press(GameAction.rotateCW);
+    state.press(GameAction.hardDrop);
+    await pumpFrames(tester, 40);
+    state.press(GameAction.glassRight);
+    await pumpFrames(tester, 20);
+    expect(lessonOf(tester).step, 5);
+    state.engine.state.score = 5000;
+    await pumpFrames(tester, 10);
+    expect(find.textContaining('пройден'), findsNothing);
+    expect(lessonOf(tester).step, 5);
   });
 }

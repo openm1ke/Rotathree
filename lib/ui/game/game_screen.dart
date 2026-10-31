@@ -1,4 +1,5 @@
 import '../i18n/strings.dart';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import '../../game/model/color.dart';
 import '../../game/model/piece.dart';
 import '../../game/session.dart';
 import '../../game/state/game_state.dart';
+import '../audio/sound_effects.dart';
 import '../data/bindings.dart';
 import '../data/progress.dart';
 import '../data/settings.dart';
@@ -38,6 +40,38 @@ import 'tutorial.dart';
 enum _Status { playing, paused, over, done }
 
 const _slotNames = ['Верхний', 'Правый', 'Нижний', 'Левый'];
+
+/// A tutorial lesson, once its action is done, moves on after this long.
+const _tutorialNextDelay = Duration(milliseconds: 900);
+
+/// A lesson still waiting after this long says again what to press.
+const _tutorialIdle = Duration(seconds: 4);
+
+/// On the first screen the piece can be moved, turned and dropped already:
+/// a player who tries all three is taken straight to the cross.
+const _introActions = [
+  GameAction.moveLeft,
+  GameAction.moveRight,
+  GameAction.rotateCW,
+  GameAction.rotateCCW,
+  GameAction.hardDrop,
+];
+
+enum _Basic { move, rotate, drop }
+
+/// The basic each early lesson teaches: a lesson already tried is skipped.
+const _basicOfLesson = {1: _Basic.move, 2: _Basic.rotate, 3: _Basic.drop};
+
+/// What each tutorial lesson asks for; the first and the last ask for none.
+/// The cross is turned left or right: with two glasses there is none opposite
+/// yet, so that button would do nothing here.
+List<GameAction> _lessonActionsOf(int lesson) => switch (lesson) {
+  1 => const [GameAction.moveLeft, GameAction.moveRight],
+  2 => const [GameAction.rotateCW, GameAction.rotateCCW],
+  3 => const [GameAction.hardDrop],
+  4 => const [GameAction.glassLeft, GameAction.glassRight],
+  _ => const [],
+};
 
 /// A banner on the field and how long it still shows.
 class _BannerState {
@@ -163,6 +197,23 @@ class GameScreenState extends State<GameScreen>
   int _tutorialStep = 0;
   bool _tutorialPerformed = false;
   bool _tutorialMatch = false;
+
+  /// What to press, said again after a wrong button or a wait.
+  String? _tutorialHint;
+
+  /// The player has waited: the call to the pads beats faster.
+  bool _urging = false;
+
+  /// The basics the player tried on the first screen.
+  Set<_Basic> _tried = {};
+
+  /// The second glass comes once the field is still enough to build it.
+  bool _glassPending = false;
+  Timer? _autoNext;
+  Timer? _idle;
+
+  /// The combo of the match whose cells are bursting, for the pitch of the pop.
+  int _poppingCombo = 1;
   _BannerState? _banner;
   int _bannerId = 0;
   Callout? _callout;
@@ -248,8 +299,15 @@ class GameScreenState extends State<GameScreen>
       _pads.releaseAll();
       _checkpoint();
     }
-    // Keys go back to the game once the settings over it are closed.
+    // Keys go back to the game once the settings over it are closed, and a
+    // lesson done just before they opened goes on.
     if (oldWidget.blocked && !widget.blocked) {
+      if (_tutorialPerformed && _lessonActions.isNotEmpty) {
+        _autoNext?.cancel();
+        _autoNext = Timer(_tutorialNextDelay, () {
+          if (mounted && _tutorialPerformed) _tutorialNext();
+        });
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _focus.requestFocus();
       });
@@ -259,6 +317,8 @@ class GameScreenState extends State<GameScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _autoNext?.cancel();
+    _idle?.cancel();
     _focus.dispose();
     _ticker.dispose();
     _hud.dispose();
@@ -366,12 +426,14 @@ class GameScreenState extends State<GameScreen>
     _overSlot = RotationTransform.slotOfSide(_engine.activeSide, side).index;
     _recordRun(completed: false);
     _setStatus(_Status.over);
+    SoundEffects.instance.play(SoundGroup.over);
   }
 
   void _campaignDone() {
     _finished = true;
     _recordRun(completed: true);
     _setStatus(_Status.done);
+    SoundEffects.instance.play(SoundGroup.level);
   }
 
   /// A campaign level is finished: keep its best score, open the next one, and
@@ -388,6 +450,7 @@ class GameScreenState extends State<GameScreen>
     }
     final next = index + 1;
     _pendingLevel = next;
+    SoundEffects.instance.play(SoundGroup.level);
     final to = campaignLevels[next];
     _showBanner(
       kicker: 'Уровень ${index + 1} пройден',
@@ -462,10 +525,16 @@ class GameScreenState extends State<GameScreen>
       _pads.releaseAll();
       _engine = _newEngine(_plan);
       _fx.reset(_engine.activeSide);
+      _autoNext?.cancel();
+      _idle?.cancel();
+      _tried = {};
+      _glassPending = false;
       setState(() {
         _tutorialStep = 0;
         _tutorialPerformed = false;
         _tutorialMatch = false;
+        _tutorialHint = null;
+        _urging = false;
         _status = _Status.playing;
       });
       return;
@@ -518,44 +587,110 @@ class GameScreenState extends State<GameScreen>
   /// Back captures the exact field before returning to the menu.
   void handleBack() => _leave(widget.onExit);
 
+  /// The last screen is the game itself: pieces fall and every control
+  /// works, until the player chooses to play for real.
+  bool get _freePlay => widget.tutorial && _tutorialStep == tutorialLessons.length - 1;
+
   bool _tutorialAllows(GameAction action) =>
       !widget.tutorial ||
+      _freePlay ||
       (_engine.phase == GamePhase.playing &&
-          switch (_tutorialStep) {
-            1 => action == GameAction.moveLeft || action == GameAction.moveRight,
-            2 => action == GameAction.rotateCW || action == GameAction.rotateCCW,
-            3 => action == GameAction.hardDrop,
-            4 =>
-              action == GameAction.glassLeft || action == GameAction.glassRight || action == GameAction.glassOpposite,
-            _ => false,
-          });
-  void _performed() {
-    if (widget.tutorial && !_tutorialPerformed) {
-      setState(() => _tutorialPerformed = true);
-    }
+          (_tutorialStep == 0 ? _introActions : _lessonActionsOf(_tutorialStep)).contains(action));
+
+  void _tryBasic(_Basic basic) {
+    if (widget.tutorial && _tutorialStep == 0) _tried.add(basic);
   }
 
-  void _tutorialNext() {
-    if (widget.blocked || (_tutorialStep > 0 && _tutorialStep < tutorialLessons.length - 1 && !_tutorialPerformed)) {
-      return;
-    }
-    if (_tutorialStep == tutorialLessons.length - 1) {
-      widget.onTutorialDone?.call(true);
-      return;
-    }
-    _pads.releaseAll();
+  /// A button that this lesson does not take: say which one does.
+  void _wrongInput(GameAction action) {
+    final asked = _lessonActionsOf(_tutorialStep);
+    if (!widget.tutorial || _tutorialPerformed || asked.isEmpty || asked.contains(action)) return;
     setState(() {
-      _tutorialStep++;
-      _tutorialPerformed = false;
+      _tutorialHint = 'Нажми подсвеченную кнопку';
+      _urging = true;
     });
-    if (_tutorialStep == 3) {
+  }
+
+  /// A lesson's action is done: the next lesson follows by itself after a moment.
+  void _performed() {
+    if (!widget.tutorial || _tutorialPerformed || _lessonActionsOf(_tutorialStep).isEmpty) return;
+    _idle?.cancel();
+    setState(() {
+      _tutorialPerformed = true;
+      _urging = false;
+    });
+    final at = _tutorialStep;
+    _autoNext?.cancel();
+    _autoNext = Timer(_tutorialNextDelay, () {
+      if (mounted && _tutorialStep == at && _tutorialPerformed) _tutorialNext();
+    });
+  }
+
+  /// A lesson still waiting says again what to press, and the call beats faster.
+  void _armIdle() {
+    _idle?.cancel();
+    if (!widget.tutorial || _lessonActionsOf(_tutorialStep).isEmpty || _tutorialPerformed) return;
+    _idle = Timer(_tutorialIdle, () {
+      if (!mounted || _tutorialPerformed) return;
+      if (widget.blocked || !_appActive) return _armIdle();
+      setState(() {
+        _urging = true;
+        _tutorialHint ??= 'Нажми подсвеченную кнопку';
+      });
+    });
+  }
+
+  void _enterLesson(int next) {
+    _pads.releaseAll();
+    _autoNext?.cancel();
+    setState(() {
+      _tutorialStep = next;
+      _tutorialPerformed = false;
+      _tutorialHint = null;
+      _urging = false;
+    });
+    if (next == 3) {
       _engine = _newEngine(_plan);
       _fx.reset(_engine.activeSide);
       _engine.board.paintCenter(['. Y . . . . . . . .', 'B . . . . . . . . .', 'R R . . . . . . . .']);
       _engine.incoming.put(Side.top, Piece([BlockColor.red, BlockColor.blue, BlockColor.yellow]), column: 2);
-    } else if (_tutorialStep == 4) {
-      _engine.addGlass();
+    } else if (next == 4) {
+      _glassPending = true;
     }
+    _armIdle();
+  }
+
+  void _tutorialNext() {
+    final last = tutorialLessons.length - 1;
+    if (widget.blocked || _status != _Status.playing || (_tutorialStep > 0 && _tutorialStep < last && !_tutorialPerformed)) {
+      return;
+    }
+    if (_tutorialStep == last) {
+      widget.onTutorialDone?.call(true);
+      return;
+    }
+    var next = _tutorialStep + 1;
+    // A lesson whose action was already tried on the first screen is skipped.
+    while (_tried.contains(_basicOfLesson[next])) {
+      next++;
+    }
+    _enterLesson(next);
+  }
+
+  /// The tutorial has no lost game: a glass filled in its free play empties,
+  /// and the player goes on with both glasses.
+  void _refillTutorial() {
+    _pads.releaseAll();
+    _engine = _newEngine(_plan);
+    _fx.reset(_engine.activeSide);
+    if (_tutorialStep >= 4) _glassPending = true;
+  }
+
+  /// A pad button or a key: in a lesson, a button it does not take says
+  /// which one does.
+  void _inputDown(GameAction action) {
+    if (action != GameAction.none && _status == _Status.playing) _wrongInput(action);
+    _pads.down(action);
   }
 
   // ------------------------------------------------------------------ input
@@ -567,7 +702,10 @@ class GameScreenState extends State<GameScreen>
     }
     final before = _engine.activePiece?.column;
     _engine.moveActive(toWall ? direction * _engine.config.boardSize : direction);
-    if (_engine.activePiece?.column != before) _performed();
+    if (_engine.activePiece?.column != before) {
+      _tryBasic(_Basic.move);
+      _performed();
+    }
   }
 
   @override
@@ -610,8 +748,10 @@ class GameScreenState extends State<GameScreen>
         }
         if (_engine.activePiece?.piece != beforePiece &&
             (action == GameAction.rotateCW || action == GameAction.rotateCCW)) {
+          _tryBasic(_Basic.rotate);
           _performed();
         }
+        if (action == GameAction.hardDrop) _tryBasic(_Basic.drop);
         if (_engine.activeSide != beforeSide) _performed();
     }
   }
@@ -627,7 +767,7 @@ class GameScreenState extends State<GameScreen>
     if (action == null) return KeyEventResult.ignored;
     // Held keys repeat through the pad controller, not through the system.
     if (event is KeyDownEvent) {
-      _pads.down(action);
+      _inputDown(action);
     } else if (event is KeyUpEvent) {
       _pads.up(action);
     }
@@ -636,7 +776,7 @@ class GameScreenState extends State<GameScreen>
 
   /// Tapping a glass brings it to the top.
   void _onTapStage(TapUpDetails details, double side) {
-    if (!_acceptsInput || (widget.tutorial && _tutorialStep != 4)) return;
+    if (!_acceptsInput || !_tutorialAllows(GameAction.glassRight)) return;
     final before = _engine.activeSide;
     final zone = FieldGeometry(
       side,
@@ -676,7 +816,7 @@ class GameScreenState extends State<GameScreen>
 
     if (_status == _Status.playing && !holding) {
       _pads.update(seconds);
-      if (!widget.tutorial || _engine.phase != GamePhase.playing) {
+      if (!widget.tutorial || _engine.phase != GamePhase.playing || _freePlay) {
         _engine.update(seconds);
       }
     }
@@ -701,10 +841,26 @@ class GameScreenState extends State<GameScreen>
         case MatchScored(:final score, :final combo):
           if (widget.tutorial && _tutorialStep == 3) _tutorialMatch = true;
           setState(() => _callout = Callout.score(id: ++_calloutId, points: score, combo: combo));
+          _poppingCombo = combo;
+        case CellsPopped():
+          SoundEffects.instance.pop(_poppingCombo);
+        case PieceMoved(:final blocked):
+          if (!blocked) SoundEffects.instance.play(SoundGroup.move);
+        case PieceRotated(:final blocked):
+          if (!blocked) SoundEffects.instance.play(SoundGroup.rotate);
+        case SideSwitched():
+          SoundEffects.instance.play(SoundGroup.turn);
+        case PieceLanded():
+          SoundEffects.instance.play(SoundGroup.land);
         case SpeedUp(:final level):
           setState(() => _callout = Callout.speed(id: ++_calloutId, speed: level + 1));
+          SoundEffects.instance.play(SoundGroup.level);
         case GameEnded(:final side):
-          if (!_finished) _gameOver(side);
+          if (widget.tutorial) {
+            _refillTutorial();
+          } else if (!_finished) {
+            _gameOver(side);
+          }
         default:
           break;
       }
@@ -713,8 +869,19 @@ class GameScreenState extends State<GameScreen>
     if (widget.tutorial && _tutorialMatch && _tutorialStep == 3 && _engine.phase == GamePhase.playing) {
       _performed();
     }
+    // Moved, turned and dropped on the first screen already: on to the cross.
+    if (widget.tutorial &&
+        _tutorialStep == 0 &&
+        _tried.length == 3 &&
+        _status == _Status.playing &&
+        _engine.phase == GamePhase.playing) {
+      _enterLesson(4);
+    }
+    if (_glassPending && _engine.phase == GamePhase.playing && _engine.addGlass() != null) _glassPending = false;
 
+    // The tutorial's free play scores, but completes no level of the campaign.
     if (_isCampaign &&
+        !widget.tutorial &&
         !_finished &&
         !_completing &&
         _acceptsInput &&
@@ -744,25 +911,11 @@ class GameScreenState extends State<GameScreen>
     }
   }
 
-  List<GameAction> get _lessonActions => switch (_tutorialStep) {
-    1 => [GameAction.moveLeft, GameAction.moveRight],
-    2 => [GameAction.rotateCW, GameAction.rotateCCW],
-    3 => [GameAction.hardDrop],
-    4 => [GameAction.glassLeft, GameAction.glassRight, GameAction.glassOpposite],
-    _ => [],
-  };
-  List<TutorialControl> get _tutorialControls {
-    const symbols = ['↑', '←', '→', '↓', '●'];
-    final hints = <TutorialControl>[];
-    for (final right in [false, true]) {
-      final layout = right ? widget.settings.rightPad : widget.settings.leftPad;
-      final slots = PadSlot.values.where((slot) => _lessonActions.contains(layout[slot]));
-      if (slots.isNotEmpty) {
-        hints.add((label: right ? 'Правая' : 'Левая', keys: slots.map((slot) => symbols[slot.index]).toList()));
-      }
-    }
-    return hints;
-  }
+  List<GameAction> get _lessonActions => widget.tutorial ? _lessonActionsOf(_tutorialStep) : const [];
+
+  /// Whether a pad has a button for what the lesson asks.
+  bool get _lessonHasButton => [widget.settings.leftPad, widget.settings.rightPad]
+      .any((layout) => PadSlot.values.any((slot) => _lessonActions.contains(layout[slot])));
 
   // ------------------------------------------------------------------- build
 
@@ -815,6 +968,27 @@ class GameScreenState extends State<GameScreen>
                           ],
                         ),
                       ),
+                    // Read top-down: the lesson, then the glass, then the pads.
+                    if (widget.tutorial)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
+                        ),
+                        child: TutorialPanel(
+                          step: _tutorialStep,
+                          performed: _tutorialPerformed,
+                          hint: _tutorialHint,
+                          urging: _urging,
+                          onPractice: _lessonActions.isNotEmpty && !_lessonHasButton
+                              ? () {
+                                  _pads.down(_lessonActions.first);
+                                  _pads.up(_lessonActions.first);
+                                }
+                              : null,
+                          onNext: _tutorialNext,
+                          onSkip: () => widget.onTutorialDone?.call(false),
+                        ),
+                      ),
                     if (_isCampaign && !widget.tutorial)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
@@ -848,29 +1022,15 @@ class GameScreenState extends State<GameScreen>
                         },
                       ),
                     ),
-                    if (widget.tutorial)
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: math.min(constraints.maxHeight * 0.3, 190 * tabletScale(MediaQuery.sizeOf(context))),
-                        ),
-                        child: TutorialPanel(
-                          step: _tutorialStep,
-                          performed: _tutorialPerformed,
-                          controls: _tutorialControls,
-                          onPractice: _lessonActions.isNotEmpty && _tutorialControls.isEmpty
-                              ? () {
-                                  _pads.down(_lessonActions.first);
-                                  _pads.up(_lessonActions.first);
-                                }
-                              : null,
-                          onNext: _tutorialNext,
-                          onSkip: () => widget.onTutorialDone?.call(false),
-                        ),
-                      ),
                     RepaintBoundary(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                        child: PadSurface(settings: settings, onDown: _pads.down, onUp: _pads.up),
+                        child: PadSurface(
+                          settings: settings,
+                          onDown: _inputDown,
+                          onUp: _pads.up,
+                          hint: _tutorialPerformed ? const [] : _lessonActions,
+                        ),
                       ),
                     ),
                   ],
@@ -980,7 +1140,7 @@ class GameScreenState extends State<GameScreen>
   }
 
   Widget? get _soundButton => switch (widget.onToggleMusic) {
-    final toggle? => SoundButton(on: widget.settings.audio.music, onToggle: toggle),
+    final toggle? => SoundButton(on: widget.settings.audio.music || widget.settings.audio.sounds, onToggle: toggle),
     null => null,
   };
 

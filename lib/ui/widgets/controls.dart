@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../layout.dart';
 import '../style.dart';
+import '../audio/sound_effects.dart';
 
 /// One choice of an [OptionGroup].
 typedef Option<T> = ({T value, String label});
@@ -26,7 +27,7 @@ class GameIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IconButton.outlined(
     tooltip: context.tr(label),
-    onPressed: onPressed,
+    onPressed: clicking(onPressed),
     icon: Icon(icon, size: 22),
     style: IconButton.styleFrom(
       minimumSize: Size.square(size),
@@ -52,7 +53,7 @@ class SoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GameIconButton(
     icon: on ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-    label: on ? 'Выключить музыку' : 'Включить музыку',
+    label: on ? 'Выключить звук' : 'Включить звук',
     onPressed: onToggle,
     size: size,
     background: background,
@@ -84,7 +85,7 @@ class ScreenHeading extends StatelessWidget {
           if (onBack != null)
             IconButton(
               tooltip: context.tr('Назад'),
-              onPressed: onBack,
+              onPressed: clicking(onBack),
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Palette.text),
             ),
           const SizedBox(width: 4),
@@ -181,7 +182,7 @@ class GoButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(square ? 4 : 12),
-            onTap: onPressed,
+            onTap: clicking(onPressed),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
               child: LText(label, style: Type.display(17, spacing: 0.4), textAlign: TextAlign.center),
@@ -212,7 +213,7 @@ class OutlineButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
-      onPressed: onPressed,
+      onPressed: clicking(onPressed),
       style: OutlinedButton.styleFrom(
         foregroundColor: danger ? Palette.danger : Palette.text,
         side: BorderSide(color: danger ? Palette.danger.withValues(alpha: 0.6) : Palette.lineStrong),
@@ -261,7 +262,7 @@ class OptionChip extends StatelessWidget {
         shape: shape,
         child: InkWell(
           customBorder: shape,
-          onTap: onPressed,
+          onTap: clicking(onPressed),
           child: Container(
             constraints: square ? const BoxConstraints(minWidth: 44, minHeight: 44) : null,
             padding: EdgeInsets.symmetric(horizontal: numeric ? 10 : 14, vertical: 9),
@@ -502,7 +503,7 @@ class SwitchRow extends StatelessWidget {
             value: value,
             activeThumbColor: Palette.accent,
             activeTrackColor: Palette.accent.withValues(alpha: 0.35),
-            onChanged: onChanged,
+            onChanged: (value) => clicking(() => onChanged(value))!(),
           ),
         ],
       ),
@@ -537,7 +538,7 @@ class Keycap extends StatelessWidget {
     final color = waiting ? Palette.warning : (empty ? Palette.textFaint : Palette.text);
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: onPressed,
+      onTap: clicking(onPressed),
       child: Container(
         constraints: const BoxConstraints(minWidth: 44, minHeight: 36),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

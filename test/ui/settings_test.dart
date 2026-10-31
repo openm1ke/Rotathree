@@ -70,6 +70,23 @@ void main() {
     expect(Settings.fromJson({}).audio.musicVolume, 0.1);
   });
 
+  test('sound effects start at 30 % and persist with the music', () {
+    expect(Settings.fromJson({}).audio.sounds, isTrue);
+    expect(Settings.fromJson({}).audio.soundsVolume, 0.3);
+    final settings = Settings.defaults().copyWith(
+      audio: const AudioOptions(sounds: false, soundsVolume: 0.55),
+    );
+    final again = Settings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
+    expect(again.audio.sounds, isFalse);
+    expect(again.audio.soundsVolume, closeTo(0.55, 0.0001));
+    expect(again.audio.music, isTrue);
+    // Music saved before the effects existed keeps them on, at the default.
+    final older = Settings.fromJson({'audio': {'music': false, 'volume': 0.2}});
+    expect(older.audio.sounds, isTrue);
+    expect(older.audio.soundsVolume, 0.3);
+    expect(Settings.fromJson({'audio': {'soundsVolume': 7}}).audio.soundsVolume, 1);
+  });
+
   test('pad positions persist and stay separate inside a resized control area', () {
     final settings = Settings.defaults().copyWith(
       padPositions: const PadPositions(
@@ -197,6 +214,30 @@ void main() {
     });
     expect(bindings[GameAction.moveLeft], [PhysicalKeyboardKey.keyA]);
     expect(bindings[GameAction.moveRight], isEmpty);
+  });
+
+  test('Q and E turn the cross and X lowers the piece, in old saves too', () {
+    final defaults = defaultBindings();
+    expect(defaults[GameAction.glassLeft], [PhysicalKeyboardKey.arrowLeft, PhysicalKeyboardKey.keyQ]);
+    expect(defaults[GameAction.glassRight], [PhysicalKeyboardKey.arrowRight, PhysicalKeyboardKey.keyE]);
+    expect(defaults[GameAction.softDrop], [PhysicalKeyboardKey.keyX]);
+    final older = sanitizeBindings({
+      'glassLeft': [PhysicalKeyboardKey.arrowLeft.usbHidUsage],
+      'glassRight': [PhysicalKeyboardKey.arrowRight.usbHidUsage],
+      'softDrop': <int>[],
+    });
+    expect(older[GameAction.glassLeft], [PhysicalKeyboardKey.arrowLeft, PhysicalKeyboardKey.keyQ]);
+    expect(older[GameAction.glassRight], [PhysicalKeyboardKey.arrowRight, PhysicalKeyboardKey.keyE]);
+    expect(older[GameAction.softDrop], [PhysicalKeyboardKey.keyX]);
+    // A key the player put elsewhere, or an action they changed, stays theirs.
+    final changed = sanitizeBindings({
+      'moveLeft': [PhysicalKeyboardKey.keyQ.usbHidUsage],
+      'glassLeft': [PhysicalKeyboardKey.arrowLeft.usbHidUsage],
+      'glassRight': [PhysicalKeyboardKey.keyL.usbHidUsage],
+    });
+    expect(changed[GameAction.moveLeft], [PhysicalKeyboardKey.keyQ]);
+    expect(changed[GameAction.glassLeft], [PhysicalKeyboardKey.arrowLeft]);
+    expect(changed[GameAction.glassRight], [PhysicalKeyboardKey.keyL]);
   });
 
   test('binding a key takes it away from the action it was on', () {

@@ -52,7 +52,7 @@ void main() {
       await settle(tester);
       expect(tester.takeException(), isNull);
       expect(_fieldWidth(tester), lessThanOrEqualTo(math.min(size.width, size.height) + 0.5));
-      final lesson = find.textContaining('Фигуры падают сверху');
+      final lesson = find.text('Три клетки одного цвета исчезают');
       expect(MediaQuery.textScalerOf(tester.element(lesson)).scale(1), textScale);
 
       await tester.tap(find.byTooltip('Назад'));

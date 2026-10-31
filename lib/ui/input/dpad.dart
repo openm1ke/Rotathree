@@ -27,6 +27,7 @@ class DPad extends StatefulWidget {
     this.shape = PadShape.square,
     this.tweaks = const {},
     this.highlight,
+    this.hint = const [],
   });
 
   final PadLayout layout;
@@ -38,6 +39,10 @@ class DPad extends StatefulWidget {
 
   /// The button to outline while the layout is being edited.
   final PadSlot? highlight;
+
+  /// The actions a tutorial lesson asks for: their buttons glow and the
+  /// others step back.
+  final List<GameAction> hint;
   final ValueChanged<GameAction> onDown;
   final ValueChanged<GameAction> onUp;
 
@@ -45,9 +50,33 @@ class DPad extends StatefulWidget {
   State<DPad> createState() => _DPadState();
 }
 
-class _DPadState extends State<DPad> {
+class _DPadState extends State<DPad> with SingleTickerProviderStateMixin {
   /// The button each finger is on.
   final Map<int, PadSlot> _fingers = {};
+
+  /// The glow of the buttons a lesson asks for, beating.
+  late final AnimationController _call = AnimationController(vsync: this, duration: const Duration(milliseconds: 1300));
+
+  void _beat() {
+    if (widget.hint.isEmpty || MediaQuery.disableAnimationsOf(context)) {
+      _call.stop();
+      _call.value = 0.5;
+    } else if (!_call.isAnimating) {
+      _call.repeat();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _beat();
+  }
+
+  @override
+  void didUpdateWidget(DPad oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _beat();
+  }
 
   GameAction _actionOf(PadSlot slot) => widget.layout[slot] ?? GameAction.none;
 
@@ -89,6 +118,7 @@ class _DPadState extends State<DPad> {
     for (final slot in _fingers.values) {
       widget.onUp(_actionOf(slot));
     }
+    _call.dispose();
     super.dispose();
   }
 
@@ -98,6 +128,7 @@ class _DPadState extends State<DPad> {
     Widget button(PadSlot slot) {
       final rect = rects[slot]!;
       final action = _actionOf(slot);
+      final hinted = action != GameAction.none && widget.hint.contains(action);
       return Positioned.fromRect(
         rect: rect,
         child: Semantics(
@@ -111,14 +142,32 @@ class _DPadState extends State<DPad> {
                   widget.onDown(action);
                   widget.onUp(action);
                 },
-          child: _PadButton(
-            slot: slot,
-            action: action,
-            shape: widget.shape,
-            pressed: _isPressed(slot),
-            highlighted: widget.highlight == slot,
-            showLabel: widget.showLabels,
-            size: rect.width,
+          child: Opacity(
+            opacity: widget.hint.isNotEmpty && !hinted ? 0.35 : 1,
+            child: hinted
+                ? AnimatedBuilder(
+                    animation: _call,
+                    builder: (context, _) => _PadButton(
+                      slot: slot,
+                      action: action,
+                      shape: widget.shape,
+                      pressed: _isPressed(slot),
+                      highlighted: false,
+                      showLabel: widget.showLabels,
+                      size: rect.width,
+                      // Up and down once a beat, softly.
+                      call: 0.5 - 0.5 * math.cos(2 * math.pi * _call.value),
+                    ),
+                  )
+                : _PadButton(
+                    slot: slot,
+                    action: action,
+                    shape: widget.shape,
+                    pressed: _isPressed(slot),
+                    highlighted: widget.highlight == slot,
+                    showLabel: widget.showLabels,
+                    size: rect.width,
+                  ),
           ),
         ),
       );
@@ -158,6 +207,7 @@ class _PadButton extends StatelessWidget {
     required this.highlighted,
     required this.showLabel,
     required this.size,
+    this.call,
   });
 
   final PadSlot slot;
@@ -169,6 +219,10 @@ class _PadButton extends StatelessWidget {
 
   /// The width of the button, which is also its height.
   final double size;
+
+  /// How brightly a button the tutorial asks for glows, 0..1; null when it
+  /// does not ask for this one.
+  final double? call;
 
   @override
   Widget build(BuildContext context) {
@@ -184,15 +238,17 @@ class _PadButton extends StatelessWidget {
         painter: _KeyPainter(
           path: padButtonPath(shape, slot, Offset.zero & Size.square(size)),
           fill: pressed ? tint.withValues(alpha: 0.34) : Colors.white.withValues(alpha: empty ? 0.025 : 0.075),
-          stroke: highlighted
+          stroke: highlighted || call != null
               ? Palette.accent
               : pressed
               ? tint
               : empty
               ? Palette.line
               : Palette.lineStrong,
-          strokeWidth: highlighted ? 2.2 : 1.2,
-          glow: pressed ? tint : null,
+          strokeWidth: call != null ? 2.4 : highlighted ? 2.2 : 1.2,
+          glow: pressed ? tint : call != null ? Palette.accent : null,
+          glowStrength: pressed || call == null ? 0.5 : 0.55 + 0.3 * call!,
+          glowSpread: pressed || call == null ? 0.1 : 0.08 + 0.08 * call!,
         ),
         child: empty
             ? null
@@ -206,14 +262,14 @@ class _PadButton extends StatelessWidget {
                       Icon(
                         padActionIcon(action),
                         size: size * (showLabel ? 0.42 : 0.5),
-                        color: pressed ? Colors.white : Palette.text,
+                        color: pressed || call != null ? Colors.white : Palette.text,
                       ),
                       if (showLabel && slot != PadSlot.center)
                         Padding(
                           padding: EdgeInsets.only(top: size * 0.02),
                           child: _PadCaption(
                             text: padActionCaption(action),
-                            color: pressed ? Colors.white : Palette.textDim,
+                            color: pressed || call != null ? Colors.white : Palette.textDim,
                             room: size - 4,
                           ),
                         ),
@@ -235,12 +291,17 @@ class _KeyPainter extends CustomPainter {
     required this.stroke,
     required this.strokeWidth,
     this.glow,
+    this.glowStrength = 0.5,
+    this.glowSpread = 0.1,
   });
 
   final Path path;
   final Color fill, stroke;
   final double strokeWidth;
   final Color? glow;
+
+  /// The glow's opacity, and its blur as a share of the button's width.
+  final double glowStrength, glowSpread;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -249,8 +310,8 @@ class _KeyPainter extends CustomPainter {
       canvas.drawPath(
         path,
         Paint()
-          ..color = glowing.withValues(alpha: 0.5)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, size.width * 0.1),
+          ..color = glowing.withValues(alpha: glowStrength)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, size.width * glowSpread),
       );
     }
     canvas.drawPath(path, Paint()..color = fill);

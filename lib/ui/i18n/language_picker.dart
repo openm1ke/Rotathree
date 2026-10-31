@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../style.dart';
 import 'strings.dart';
+import '../audio/sound_effects.dart';
 
 class LanguagePicker extends StatelessWidget {
   const LanguagePicker({super.key, required this.value, required this.onChanged});
@@ -26,7 +27,7 @@ class LanguagePicker extends StatelessWidget {
               child: InkWell(
                 key: ValueKey('language-${choice.name}'),
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => onChanged(choice),
+                onTap: clicking(() => onChanged(choice)),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                   child: Column(
@@ -74,7 +75,7 @@ class LanguageSwitch extends StatelessWidget {
       child: InkWell(
         key: const ValueKey('language-switch'),
         customBorder: const StadiumBorder(),
-        onTap: () => onChanged(next),
+        onTap: clicking(() => onChanged(next)),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
           child: Row(

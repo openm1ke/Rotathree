@@ -11,8 +11,12 @@ class MusicService {
   /// On iOS the music mixes with audio that is already playing (a podcast or
   /// another app) instead of stopping it. Android keeps the default audio
   /// focus, so a phone call still takes over the sound.
+  /// The audio session is one for the whole app on iOS: the sound effects
+  /// set the same one.
+  static final audioContextIOS = AudioContextIOS(options: const {AVAudioSessionOptions.mixWithOthers});
+
   static final _audioContext = AudioContext(
-    iOS: AudioContextIOS(options: const {AVAudioSessionOptions.mixWithOthers}),
+    iOS: audioContextIOS,
     android: const AudioContextAndroid(),
   );
 
@@ -32,10 +36,12 @@ class MusicService {
   var _loaded = false;
   var _wanted = false;
   var _paused = false;
+  var _ducked = false;
+  Timer? _duckTimer;
   var _disposed = false;
 
   double get _volume =>
-      _options.music ? _options.musicVolume * (_paused ? 0.1 : 1) : 0;
+      _options.music ? _options.musicVolume * (_paused || _ducked ? 0.1 : 1) : 0;
 
   /// Serialize native commands so a slow source load cannot undo mute/volume.
   Future<void> _enqueue(Future<void> Function() command) {
@@ -66,6 +72,18 @@ class MusicService {
     return _enqueue(() async {
       await _player?.setVolume(_volume);
       if (!paused && _wanted) await _playCurrent();
+    });
+  }
+
+  /// Steps aside for a musical effect, such as the level jingle: as quiet as
+  /// under a pause for [seconds], so that two tunes do not clash.
+  void duck(double seconds) {
+    _duckTimer?.cancel();
+    _ducked = true;
+    unawaited(_enqueue(() async => _player?.setVolume(_volume)));
+    _duckTimer = Timer(Duration(milliseconds: (seconds * 1000).round()), () {
+      _ducked = false;
+      unawaited(_enqueue(() async => _player?.setVolume(_volume)));
     });
   }
 
@@ -100,6 +118,7 @@ class MusicService {
 
   Future<void> dispose() {
     _disposed = true;
+    _duckTimer?.cancel();
     _wanted = false;
     return _enqueue(() async {
       await _completeSubscription?.cancel();
