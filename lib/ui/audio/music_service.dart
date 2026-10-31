@@ -6,8 +6,20 @@ import 'package:flutter/foundation.dart';
 import '../data/settings.dart';
 
 /// The playback assets have equal loudness and two-second fades baked into
-/// both ends. One player runs them in order, without overlapping their volume.
+/// both ends. They play in order, round and round, one at a time.
+///
+/// Each track gets a player of its own. The platform still winds a player
+/// down after it reports the end of its track (iOS seeks it back and then
+/// releases it), and the next track given to that same player could be wiped
+/// by it. Music that should be playing but stands still, because an end went
+/// unreported, a track failed to load or the system took the sound, moves on
+/// to the next track instead of staying silent until the app restarts.
 class MusicService {
+  MusicService({this.watchEvery = const Duration(seconds: 3)});
+
+  /// How often playing music is checked to be moving.
+  final Duration watchEvery;
+
   /// On iOS the music mixes with audio that is already playing (a podcast or
   /// another app) instead of stopping it. Android keeps the default audio
   /// focus, so a phone call still takes over the sound.
@@ -38,6 +50,9 @@ class MusicService {
   var _paused = false;
   var _ducked = false;
   Timer? _duckTimer;
+  Timer? _watch;
+  Duration? _lastPosition;
+  var _stillChecks = 0;
   var _disposed = false;
 
   double get _volume =>
@@ -63,6 +78,7 @@ class MusicService {
   Future<void> start() {
     if (!_options.music || _disposed) return Future.value();
     _wanted = true;
+    _watch ??= Timer.periodic(watchEvery, (_) => unawaited(_enqueue(_check)));
     return _enqueue(_playCurrent);
   }
 
@@ -93,12 +109,7 @@ class MusicService {
       final player = AudioPlayer();
       _player = player;
       await player.setAudioContext(_audioContext);
-      _completeSubscription = player.onPlayerComplete.listen((_) {
-        if (_disposed) return;
-        _track = (_track + 1) % tracks.length;
-        _loaded = false;
-        if (_wanted) unawaited(_enqueue(_playCurrent));
-      });
+      _completeSubscription = player.onPlayerComplete.listen((_) => _next(player));
     }
     final player = _player!;
     if (!_loaded || player.source == null) {
@@ -111,13 +122,57 @@ class MusicService {
     if (_wanted && _options.music && !_disposed) await player.resume();
   }
 
+  /// [finished] is done with its track: it is let go, and the next track
+  /// starts on a new player.
+  void _next(AudioPlayer finished) {
+    if (_disposed || !identical(finished, _player)) return;
+    unawaited(_completeSubscription?.cancel());
+    _completeSubscription = null;
+    _player = null;
+    _loaded = false;
+    _lastPosition = null;
+    _stillChecks = 0;
+    _track = (_track + 1) % tracks.length;
+    unawaited(finished.dispose().catchError((Object error) {
+      debugPrint('Background music: $error');
+    }));
+    if (_wanted) unawaited(_enqueue(_playCurrent));
+  }
+
+  /// Music that should be playing is moving on; two checks in a row that find
+  /// it standing still go on with the next track.
+  Future<void> _check() async {
+    if (!_wanted || !_options.music || _disposed) return;
+    final player = _player;
+    if (player == null) return _playCurrent();
+    final position = await player.getCurrentPosition();
+    if (position != null && position != _lastPosition) {
+      _lastPosition = position;
+      _stillChecks = 0;
+      return;
+    }
+    _lastPosition = position;
+    if (++_stillChecks < 2) return;
+    debugPrint('Background music: track ${_track + 1} stood still, playing the next one');
+    _next(player);
+  }
+
   Future<void> stop() {
     _wanted = false;
+    _stopWatching();
     return _enqueue(() async => _player?.pause());
+  }
+
+  void _stopWatching() {
+    _watch?.cancel();
+    _watch = null;
+    _lastPosition = null;
+    _stillChecks = 0;
   }
 
   Future<void> dispose() {
     _disposed = true;
+    _stopWatching();
     _duckTimer?.cancel();
     _wanted = false;
     return _enqueue(() async {

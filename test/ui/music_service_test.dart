@@ -221,4 +221,127 @@ void main() {
       }
     },
   );
+
+  testWidgets('the playlist starts over after its last track, each track on a player of its own', (tester) async {
+    final native = _NativeMusic()..install();
+    final music = MusicService();
+    try {
+      await tester.runAsync(() async {
+        await music.start();
+        expect(native.playing.values, [MusicService.tracks[0]]);
+        for (var i = 1; i <= MusicService.tracks.length; i++) {
+          final finished = native.playing.keys.single;
+          native.complete(finished);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          // The finished player is let go, and a new one plays the next track.
+          expect(native.disposed, contains(finished));
+          expect(native.playing.keys.single, isNot(finished));
+          expect(native.playing.values.single, MusicService.tracks[i % MusicService.tracks.length]);
+        }
+        await music.dispose();
+      });
+    } finally {
+      native.uninstall();
+    }
+  });
+
+  testWidgets('music that stands still goes on with the next track', (tester) async {
+    final native = _NativeMusic()..install();
+    final music = MusicService(watchEvery: const Duration(milliseconds: 20));
+    try {
+      await tester.runAsync(() async {
+        await music.start();
+        final first = native.playing.keys.single;
+        // The end of the track never arrives: the position stops moving.
+        native.position = 5000;
+        for (var i = 0; i < 100 && !native.disposed.contains(first); i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+        // Music that moves is left alone.
+        native.moving = true;
+        expect(native.disposed, contains(first));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(native.playing.values.single, MusicService.tracks[1]);
+        final second = native.playing.keys.single;
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        expect(native.playing.keys.single, second);
+        await music.dispose();
+      });
+    } finally {
+      native.uninstall();
+    }
+  });
+}
+
+/// The native side of audioplayers, as far as the music uses it: which
+/// player plays which track, and which players were let go.
+class _NativeMusic {
+  static const _commands = MethodChannel('xyz.luan/audioplayers');
+  static const _global = MethodChannel('xyz.luan/audioplayers.global');
+  static const _globalEvents = MethodChannel('xyz.luan/audioplayers.global/events');
+  static const _codec = StandardMethodCodec();
+
+  final _messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  final _sources = <String, String>{};
+  final _events = <MethodChannel>[];
+
+  /// The players playing now, with their tracks.
+  final playing = <String, String>{};
+  final disposed = <String>[];
+  int position = 0;
+
+  /// Whether the position moves on at each look.
+  bool moving = false;
+
+  void install() {
+    _messenger.setMockMethodCallHandler(_global, (_) async => null);
+    _messenger.setMockMethodCallHandler(_globalEvents, (_) async => null);
+    _messenger.setMockMethodCallHandler(_commands, (call) async {
+      final id = (call.arguments as Map)['playerId'] as String;
+      switch (call.method) {
+        case 'create':
+          final events = MethodChannel('xyz.luan/audioplayers/events/$id');
+          _events.add(events);
+          _messenger.setMockMethodCallHandler(events, (_) async => null);
+        case 'setSourceUrl':
+          final url = (call.arguments as Map)['url'] as String;
+          _sources[id] = MusicService.tracks.firstWhere(url.contains);
+          _send(id, {'event': 'audio.onPrepared', 'value': true});
+        case 'resume':
+          playing[id] = _sources[id]!;
+        case 'pause' || 'stop' || 'release':
+          playing.remove(id);
+        case 'dispose':
+          playing.remove(id);
+          disposed.add(id);
+        case 'getCurrentPosition':
+          if (moving) position += 1000;
+          return position;
+        case 'getDuration':
+          return 0;
+      }
+      return null;
+    });
+    for (final track in MusicService.tracks) {
+      AudioCache.instance.loadedFiles[track] = File('assets/$track').absolute.uri;
+    }
+  }
+
+  /// The player [id] reached the end of its track.
+  void complete(String id) {
+    playing.remove(id);
+    _send(id, {'event': 'audio.onComplete'});
+  }
+
+  void _send(String id, Map<String, Object?> event) =>
+      _messenger.handlePlatformMessage('xyz.luan/audioplayers/events/$id', _codec.encodeSuccessEnvelope(event), (_) {});
+
+  void uninstall() {
+    for (final track in MusicService.tracks) {
+      AudioCache.instance.loadedFiles.remove(track);
+    }
+    for (final channel in [_commands, _global, _globalEvents, ..._events]) {
+      _messenger.setMockMethodCallHandler(channel, null);
+    }
+  }
 }
