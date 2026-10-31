@@ -25,6 +25,7 @@ import { Button, Chip, Choice, Screen, Slider, Toggle } from './ui';
 import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
 import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS, type PadSlot } from '../input/pads';
+import { USES_ESCAPE } from '../platform/target';
 
 type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound' | 'licenses';
 
@@ -88,6 +89,8 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   useEffect(() => {
     if (!capture || touch) return;
     const onKey = (event: KeyboardEvent) => {
+      // Where Esc belongs to the platform, the slot is let go by clicking it again.
+      if (event.code === 'Escape' && !USES_ESCAPE) return;
       event.preventDefault();
       event.stopPropagation();
       if (event.code === 'Escape') {
@@ -271,10 +274,14 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
             </>
           ) : (
             <>
-              <p className="hint"><T>
+              <p className="hint">{USES_ESCAPE ? <T>
                 Нажмите на действие, затем на новую клавишу. Esc — отмена, Backspace — очистить. Клавиша, занятая другим
                 действием, переходит к новому. Клавиша поворота против часовой и мягкий сброс по умолчанию не назначены.
-              </T></p>
+              </T> : <T>
+                Нажмите на действие, затем на новую клавишу. Повторное нажатие — отмена, Backspace — очистить. Клавиша,
+                занятая другим действием, переходит к новому. Клавиша поворота против часовой и мягкий сброс по умолчанию
+                не назначены.
+              </T>}</p>
               {GROUPS.map((group) => (
                 <section className="group" key={group}>
                   <h3><T>{GROUP_TITLES[group]}</T></h3>

@@ -20,6 +20,7 @@ node tool/playgama-covers.mjs
 | --- | --- |
 | Bridge инициализируется до всего остального; `game_ready` — через два кадра после того, как нарисовано меню | `src/main.tsx`, `src/platform/playgama.ts` |
 | Английский по умолчанию и как запасной; «Авто» берёт язык платформы | `src/platform/runtime.ts`, `src/i18n/context.ts` |
+| Esc не используется (требование 1.5.2: браузер оставляет его для выхода из полного экрана): пауза — P и кнопкой, Esc не назначается и вычищается из сохранённых клавиш; меню и окна на Esc не отвечают, назад — Backspace и кнопками | `USES_ESCAPE` в `src/platform/target.ts`, `src/input/bindings.ts`, `nav.ts`, `ui.tsx`, `SettingsScreen.tsx`, `MainMenu.tsx` |
 | Язык можно сменить, не понимая текущего: глобус в главном меню называет другой язык на нём самом | `src/platform/LanguageSwitch.tsx` |
 | Сохранения только через `bridge.storage`: все ключи читаются одним вызовом, записи одного такта уходят одним вызовом | `PlaygamaStorage` в `src/platform/playgama.ts` |
 | Пауза платформы и полноэкранная реклама останавливают время, ввод и музыку, в том числе реклама, открытая ещё до старта игры (`interstitialState`); выключенный звук платформы глушит музыку | `src/platform/lifecycle.ts`, `App.tsx`, `GameScreen.tsx` |
@@ -53,7 +54,7 @@ RotaThree is a falling-block puzzle with a twist: four glasses stand around one 
 
 **How to play**
 
-Keyboard: A and D move the stick, W rotates it, S or Space drops it. The arrow keys turn the cross: Left and Right bring the neighbouring glass to the top, Up or Down the opposite one; clicking a glass brings it up too. Esc or P pauses. On a phone or tablet two on-screen pads do the same. Match three cells of one colour in a row to clear them. A glass that fills to the end of its arm ends the game. The first game starts with a short tutorial, and every key and pad button can be changed in Settings.
+Keyboard: A and D move the stick, W rotates it, S or Space drops it. The arrow keys turn the cross: Left and Right bring the neighbouring glass to the top, Up or Down the opposite one; clicking a glass brings it up too. P or the pause button pauses. On a phone or tablet two on-screen pads do the same. Match three cells of one colour in a row to clear them. A glass that fills to the end of its arm ends the game. The first game starts with a short tutorial, and every key and pad button can be changed in Settings.
 
 **Story**
 

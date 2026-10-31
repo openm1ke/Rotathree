@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react';
+import { USES_ESCAPE } from '../platform/target';
 
 const NAV_ITEMS = 'button:not(:disabled):not([tabindex="-1"]), input[type="range"], input[type="checkbox"], input[type="color"]';
 
@@ -9,7 +10,7 @@ export function useScreenKeys(root: RefObject<HTMLElement | null>, active: boole
   useEffect(() => {
     if (!active) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || (event.code === 'Escape' && !USES_ESCAPE)) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest('select, textarea')) return;
       if (target instanceof HTMLInputElement && (target.type === 'text' || target.type === 'color')) {

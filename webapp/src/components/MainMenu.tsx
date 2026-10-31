@@ -6,6 +6,7 @@ import type { Progress } from '../services/storage';
 import { useScreenKeys } from './nav';
 import type { SavedRuns } from '../services/runSave';
 import { useTouchControls } from '../input/touch';
+import { USES_ESCAPE } from '../platform/target';
 
 export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
 
@@ -137,7 +138,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
           <footer className="home__foot">
             <span><T>↑ ↓ выбрать</T></span>
             <span><T>Enter открыть</T></span>
-            <span><T>Esc назад в меню</T></span>
+            <span>{USES_ESCAPE ? <T>Esc назад в меню</T> : <T>Backspace назад в меню</T>}</span>
           </footer>
         )}
       </div>

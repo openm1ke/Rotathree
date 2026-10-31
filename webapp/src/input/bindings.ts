@@ -1,3 +1,5 @@
+import { USES_ESCAPE } from '../platform/target';
+
 /** Everything the keyboard can do in the game. */
 export type Action =
   | 'moveLeft'
@@ -57,7 +59,7 @@ export const defaultBindings: Bindings = {
   glassLeft: ['ArrowLeft'],
   glassRight: ['ArrowRight'],
   glassOpposite: ['ArrowUp', 'ArrowDown'],
-  pause: ['Escape', 'KeyP'],
+  pause: USES_ESCAPE ? ['Escape', 'KeyP'] : ['KeyP'],
   restart: ['KeyN'],
 };
 
@@ -70,10 +72,14 @@ export function actionForCode(bindings: Bindings, code: string): Action | null {
   return null;
 }
 
+/** Whether the game may bind `code`: not Esc where the platform keeps it. */
+const usable = (code: string) => USES_ESCAPE || code !== 'Escape';
+
 /** Puts `code` into slot `slot` of `action`. A key can only do one thing:
  * it is removed from wherever else it was bound. Returns new bindings. */
 export function bindKey(bindings: Bindings, action: Action, slot: number, code: string): Bindings {
   const next = cloneBindings(bindings);
+  if (!usable(code)) return next;
   for (const { id } of ACTIONS) next[id] = next[id].filter((bound) => bound !== code);
   const keys = next[action];
   if (slot < keys.length) keys[slot] = code;
@@ -99,7 +105,7 @@ export function sanitizeBindings(raw: unknown): Bindings {
     const stored = (raw as Record<string, unknown>)[id];
     if (!Array.isArray(stored)) continue;
     result[id] = stored
-      .filter((code): code is string => typeof code === 'string' && code.length > 0)
+      .filter((code): code is string => typeof code === 'string' && code.length > 0 && usable(code))
       .slice(0, SLOTS_PER_ACTION);
   }
   for (const { id } of ACTIONS) {

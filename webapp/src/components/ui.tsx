@@ -3,6 +3,7 @@ import { T } from '../i18n/Text';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { PlayerHands } from '../platform/hands';
+import { USES_ESCAPE } from '../platform/target';
 
 /** The way back of every page: a small chevron, the same on every screen. The
  * label stays translated for keyboard users and screen readers. */
@@ -166,7 +167,7 @@ export function Overlay({
       }}
       onKeyDown={(event) => {
         if (event.defaultPrevented) return;
-        if (event.key === 'Escape' && onDismiss) {
+        if (event.key === 'Escape' && onDismiss && USES_ESCAPE) {
           event.preventDefault();
           event.stopPropagation();
           onDismiss();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTIONS,
   actionForCode,
@@ -67,6 +67,26 @@ describe('key bindings', () => {
     expect(keyLabel('ArrowLeft')).toBe('←');
     expect(keyLabel('Space')).toBe('Пробел');
     expect(keyLabel('F5')).toBe('F5');
+  });
+});
+
+describe('key bindings on Playgama', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('keep Esc for the platform: not bound by default, dropped from saves, refused', async () => {
+    vi.stubEnv('MODE', 'playgama');
+    vi.resetModules();
+    const playgama = await import('../input/bindings');
+    expect(playgama.defaultBindings.pause).toEqual(['KeyP']);
+    expect(playgama.sanitizeBindings({ pause: ['Escape', 'KeyP'], restart: ['Escape'] }).pause).toEqual(['KeyP']);
+    expect(playgama.sanitizeBindings({ restart: ['Escape'] }).restart).toEqual([]);
+    const bound = playgama.bindKey(playgama.defaultBindings, 'restart', 0, 'Escape');
+    expect(playgama.actionForCode(bound, 'Escape')).toBeNull();
+    // The site keeps Esc for pause.
+    expect(defaultBindings.pause).toEqual(['Escape', 'KeyP']);
   });
 });
 
