@@ -1607,9 +1607,14 @@ input:focus-visible {
   .navitem__title,
   .stage,
   .banner,
-  .banner__sweep,
+  .banner__card,
   .banner__title {
     animation: none;
+  }
+  /* The card would otherwise end its shortened animation faded out, and a
+     sweep that does not move is only a stripe across the field. */
+  .banner__sweep {
+    display: none;
   }
 }
 
