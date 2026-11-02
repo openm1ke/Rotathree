@@ -463,9 +463,10 @@ const dataIn = (q, v) => {
 };
 
 /** Turns the hub a quarter turn about a scene axis: about the line of sight
- * as the 2D cross turns (the number keys of the side glasses), or about the
- * screen's horizontal (↑/↓), so that the glass behind or in front comes over
- * the top and the new picture settles and pops. The glass on top is steered. */
+ * as the 2D cross turns (← →, the number keys of the side glasses), or about
+ * the screen's horizontal (↑/↓), so that the glass behind or in front comes
+ * over the top and the new picture settles and pops. The glass on top is
+ * steered. */
 function turnHub(axis, quarters) {
   turnFrom.copy(turned);
   turn.t = 0;
@@ -544,6 +545,10 @@ function press(code, { repeat = false } = {}) {
   else if (code === 'KeyE') turnStick(true);
   else if (code === 'Space') {
     if (!repeat) game.dropActive();
+  } else if (code === 'ArrowLeft' || code === 'ArrowRight') {
+    // The cross turns in the screen, as in 2D: the glass on the left or
+    // right comes to the top, and nothing falls.
+    if (!repeat && !preview) turnHub(SCENE_TOWARD, code === 'ArrowLeft' ? -1 : 1);
   } else if (code === 'ArrowUp' || code === 'ArrowDown') {
     if (!repeat && !preview) startPreview(code);
   } else if (code === 'Escape') cancelPreview();
@@ -844,6 +849,7 @@ function renderKeys() {
     '<b>S</b> — вниз на клетку · <b>Пробел</b> — сбросить',
     '<b>Q E</b> — повернуть против / по часовой',
     '<b>1–6</b> — взять стакан: боковой повернуть наверх, передний/задний вести на месте',
+    '<b>← →</b> — повернуть крест, как в 2D: левый / правый стакан наверх',
     '<b>↑ ↓</b> (держать) — показать, как ляжет хаб, если задний / передний стакан опрокинуть наверх; отпустить — опрокинуть; <b>Esc</b> — отмена',
     '<b>V</b> (держать) — заглянуть в объём',
     '<b>F</b> — набросать блоков · <b>P</b> — пауза',

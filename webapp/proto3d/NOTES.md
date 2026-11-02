@@ -96,11 +96,13 @@ After review the rules follow what the screen shows.
   - Space drops, for every glass.
   - Q/E turn.
   - 1–6 take a glass: a side one is turned to the top as in 2D.
+  - ← → turn the cross in the screen as in 2D; nothing falls.
   - ↑/↓ tip the hub.
 
   W and S are read when they are applied, so a press made while the board
-  resolves counts for the glass steered then. ← → are gone: the number keys
-  of the side glasses do the same. 15 keys, plus V to look and Esc.
+  resolves counts for the glass steered then. ← → were taken out for a
+  moment in favour of the number keys and put back on review: the user turns
+  the cross with them. 17 keys, plus V to look and Esc.
 - **Settings panel** (bottom right, kept between visits):
   - show the front and back sticks that are not steered (T), off (`06` with
     them on);

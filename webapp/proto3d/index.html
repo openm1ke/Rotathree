@@ -51,6 +51,12 @@
     #settings label { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; margin: 5px 0; color: var(--text); cursor: pointer; }
     #settings input { margin: 0; accent-color: var(--accent); }
     #settings kbd { font: inherit; font-size: 11px; color: var(--text-dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+    /* On a narrow screen the keys and the settings share the bottom edge. */
+    @media (max-width: 1100px) {
+      #keys { max-width: calc(50% - 30px); columns: 1; font-size: 11px; }
+      #settings { width: calc(50% - 30px); font-size: 11px; }
+      #side { width: 180px; }
+    }
     #banner { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 16px; padding: 18px 26px; background: rgba(18, 18, 30, 0.92); }
     #banner[hidden] { display: none; }
     #banner strong { display: block; font-size: 26px; font-weight: 900; font-style: italic; margin-bottom: 4px; }
