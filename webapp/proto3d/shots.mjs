@@ -52,7 +52,7 @@ try {
   };
 
   // A busy bottom, one to three blocks deep in every cell: only the nearest
-  // of each is seen.
+  // of each is seen, and a mark in its corner gives the colour behind it.
   await key('KeyF');
   await wait(300);
   await shot('01-start');
@@ -65,15 +65,17 @@ try {
   await shot('02-top-aimed');
   await drop();
 
-  // The glass in front (4), steered in place: an outline over the picture;
-  // the panel says how deep it will land and whether it will be seen.
+  // The glass in front (4), steered in place: an outline over the picture,
+  // a mark in each square saying whether it will be seen where it lands.
   await key('Digit4');
   await key('KeyA');
   await key('KeyS');
   await wait(250);
   await shot('03-front-steered');
   await drop();
+  // The glass behind (3), over the stack: its squares would hide.
   await key('Digit3');
+  await key('KeyS', 4);
   await wait(250);
   await shot('04-back-steered');
 
@@ -108,18 +110,33 @@ try {
   await key('Digit1');
   await wait(200);
   await shot('07-columns-before-tip');
-  await key('ArrowUp');
+  // Holding ↑: the hub turns and shows how it would lie, what would pop
+  // blinking; letting go tips it.
+  await page.keyboard.down('ArrowUp');
   await wait(150);
   await key('KeyP');
   await shot('08-tipping', { midTurn: true });
+  await wait(500);
+  await shot('09-tip-preview');
+  await page.keyboard.up('ArrowUp');
   await atRest();
-  await shot('09-after-tip');
+  await shot('10-after-tip');
   await key('KeyI');
+
+  // A busy board looked at tipped over: what would pop blinks, and the panel
+  // counts it. Esc puts it back.
+  await key('KeyN');
+  await key('KeyF');
+  await wait(200);
+  await page.keyboard.down('ArrowDown');
+  await wait(700);
+  await shot('11-tip-preview-pops');
+  await key('Escape');
+  await page.keyboard.up('ArrowDown');
+  await settled();
 
   // Drop here and there, with every glass taking turns, until something
   // matches; freeze on the flash.
-  await key('KeyN');
-  await key('KeyF');
   let matched = false;
   const glasses = ['Digit1', 'Digit3', 'Digit4'];
   for (let i = 0; i < 60 && !matched; i++) {
@@ -142,7 +159,7 @@ try {
     if (await page.evaluate(() => window.__proto3d.game.isGameOver)) break;
     if (!matched) await atRest();
   }
-  if (matched) await shot('10-match');
+  if (matched) await shot('12-match');
 
   // Play on carelessly until a glass is full.
   for (let i = 0; i < 150; i++) {
@@ -151,7 +168,7 @@ try {
     await settled();
     await drop();
   }
-  await shot('11-game-over');
+  await shot('13-game-over');
 } finally {
   await browser.close();
   await server.close();

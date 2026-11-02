@@ -66,71 +66,68 @@ the game there with no warning.
 After review the rules follow what the screen shows.
 
 - **The picture.** The hub seen along the line of sight: each cell shows the
-  nearest block behind it, drawn solid as in 2D. Nothing is see-through
-  (`01`).
+  nearest block behind it, drawn solid as in 2D. Nothing is see-through. A
+  small square in a corner of a cell gives the colour of the block behind it:
+  what a pop there would show (`01`).
 - **Sticks of the side glasses** live in the middle layer and stop on whatever
-  the picture shows, at any depth. The 2D keys: A/D, W turns, S or Space drops
-  (`02`).
+  the picture shows, at any depth (`02`).
 - **Lines pop in the picture**: three or more of a colour across or up the
   screen, whatever their depths. Popping a block shows what was behind it.
 - **Falling is in the picture too.** In the glass on top, a cell that shows
   something falls down the screen to the next one that does, taking
   everything behind it along. The other glasses never move, as in 2D.
-- **Front and back glasses** (4 and 3 at the start) are steered in
-  place. A/D/W/S move the stick over the screen, Q/E turn it, Space drops it.
-  It flies along the line of sight onto whatever is in its cells: the front
-  one lands in front and is seen, the back one hides behind. The steered stick
-  is an outline over the picture. The panel says where it will land: «сядет
-  в слой +2, будет видна» (`03`, `04`).
-- **Tipping the hub over (↑/↓)** shows it from another side. What was depth
-  becomes up or across, and the new picture settles and pops. Columns built
-  from the top become, after ↑, the bottom line made of their top blocks
-  (`07` → `08` → `09`). ← → turn the cross in the screen as in 2D: nothing
-  falls.
+- **Front and back glasses** (4 and 3 at the start) are steered in place and
+  wait until they are. A stick flies along the line of sight onto whatever is
+  in its cells: the front one lands in front and is seen, the back one hides
+  behind. The steered stick is an outline over the picture with a mark in each
+  square: its colour if that square will be seen, a dark hole if it will hide.
+  The panel says the layer: «сядет в слой −3, видно 1 из 3» (`03`, `04`).
+- **Tipping the hub over (↑/↓).** Holding the key turns the hub and shows the
+  picture as it would settle, with what would pop blinking; the panel counts
+  it (`09`, `11`). Letting go tips it; Esc puts it back. What was depth
+  becomes up or across: columns built from the top become, after ↑, the
+  bottom line made of their top blocks (`07` → `08` → `09` → `10`).
 - **V (held)** opens the depth up to look at (`05`); so does every tumble,
   half-way (`08`).
+- **Keys, one meaning each.**
+  - A/D move left and right.
+  - W turns the stick on top, as in 2D, and moves a front or back stick up.
+  - S moves any stick one cell down; it never drops.
+  - Space drops, for every glass.
+  - Q/E turn.
+  - 1–6 take a glass: a side one is turned to the top as in 2D.
+  - ↑/↓ tip the hub.
+
+  W and S are read when they are applied, so a press made while the board
+  resolves counts for the glass steered then. ← → are gone: the number keys
+  of the side glasses do the same. 15 keys, plus V to look and Esc.
 - **Settings panel** (bottom right, kept between visits):
-  - the sticks in front and behind that are not steered (T): off by default
-    (`06` with them on);
-  - the other glasses dropping on their own (I);
-  - the aiming lane (G).
+  - show the front and back sticks that are not steered (T), off (`06` with
+    them on);
+  - let those glasses fall on their own, every 6 s (Y), off;
+  - the other glasses dropping on their own (I), on;
+  - the colour-behind marks (B), on;
+  - the aiming lane (G), on.
 
 What reads well:
 
 - **It is the 2D game while nothing tips.** A clean board, the same keys,
-  lines that pop where you see them (`10`).
-- **A tumble does what one expects.** The tops of the old stacks come down as
-  the bottom line, and a pop shows the colour that was waiting behind. Holding
-  V answers "what is behind this?" without cluttering the board.
-- **Careless scripted play lasted 34 sticks** (`11`).
+  lines that pop where you see them (`12`).
+- **Depth shows only as marks and on request.** The colour-behind mark says
+  what a pop will reveal. The landing marks say whether a front or back stick
+  will be seen. Holding ↑/↓ says what a tip will do, and V shows the whole
+  thing — all without see-through blocks.
+- **A tumble does what one expects**, and can now be planned: the preview of
+  a busy board shows the six blocks a tip would pop (`11`).
+- **Careless scripted play lasted 34 sticks** (`13`).
 
-What is still hard:
+What is still open:
 
-- **A front or back stick is aimed half blind.** Its landing spot covers the
-  cells it is over, so only the panel line says how deep it lands and whether
-  it will be seen. The outline tints the blocks under it.
-- **Popping is not seeing.** A popped cell may show another colour at once,
-  from behind, and set off a cascade the player did not plan. Fun, but hard to
-  read; V helps.
+- **A preview costs a moment.** A tap of ↑/↓ still tips at once, but holding
+  it to look lets the stick on top keep falling.
 - **Lines along the depth never pop until a tumble turns them across the
-  screen.** Then they pop at once, which can surprise.
-- **W/S depend on the glass.** They turn and drop for the top one, move for
-  the front or back one.
-- **Keys: 17**, a minimal set 13 (A, D, W, S, Space, 1–6, ↑↓), plus V to look.
-
-## What would make it comfortable
-
-1. **Keep the game on the picture.** The 2D board stays readable, and the
-   depth matters only when tipping and popping reveal it.
-2. **Show the front or back stick's landing in the picture.** Mark the cells
-   it will cover with a small corner badge: seen, or hidden behind. That would
-   replace the panel line.
-3. **Preview a tumble.** While ↑/↓ is held, show the picture as it will be,
-   so that what pops after it can be planned.
-4. **Mark cells with more behind them.** A small dot for "something is
-   behind" would tell where a pop will reveal a colour, with no see-through
-   blocks.
-5. **Slow the front and back glasses,** or make them step only when steered,
-   so that the centre does not fill from six sides at once.
-6. **One meaning per key.** Keep Space as the only drop for every glass and
-   read W/S when the input is applied; drop ← → in favour of 1–6.
+  screen.** The preview shows them coming now, but not before ↑/↓ is held.
+- **Marks.** The colour-behind mark is one level deep: what lies further back
+  is seen only with V.
+- **Size.** A centre of 7 with arms of 8 was not compared with 5 or 9 by hand
+  (`?centre=5`).

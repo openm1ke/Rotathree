@@ -4,8 +4,9 @@
 // seen falls (rules.js). The third dimension shows when the hub is tipped
 // over (↑/↓) and while V is held, and as a faint tunnel at the centre: the
 // glasses in front of and behind the screen, whose sticks fly along the line
-// of sight. Drawn the way the game draws its cross (src/render). Dev server
-// only: /proto3d/.
+// of sight. Holding ↑/↓ shows how the hub would lie before it is tipped.
+// Drawn the way the game draws its cross (src/render). Dev server only:
+// /proto3d/.
 //
 // URL: ?centre=7&arm=8&colors=4&seed=1
 import * as THREE from 'three';
@@ -59,8 +60,10 @@ const REACH = H + ARM;
 /** Settings: each has a key and a box in the settings panel, and is kept
  * between visits. */
 const SETTINGS = [
-  { id: 'depthSticks', key: 'KeyT', label: 'Фигуры спереди и сзади, которыми не управляешь', initial: false },
+  { id: 'depthSticks', key: 'KeyT', label: 'Показывать фигуры спереди и сзади, которыми не управляешь', initial: false },
+  { id: 'depthFalls', key: 'KeyY', label: 'Передний и задний стаканы падают сами (медленно)', initial: false },
   { id: 'inactiveFalls', key: 'KeyI', label: 'Фигуры падают и в других стаканах', initial: true },
+  { id: 'behind', key: 'KeyB', label: 'Метка: цвет блока за клеткой', initial: true },
   { id: 'lane', key: 'KeyG', label: 'Дорожка до места посадки', initial: true },
 ];
 const STORE = 'rotathree-proto3d-settings';
@@ -88,6 +91,7 @@ const makeGame = () => new Game({
   numberOfColors: COLOR_COUNT,
   seed: SEED,
   inactiveFalls: options.inactiveFalls,
+  depthFalls: options.depthFalls,
 });
 let game = makeGame();
 
@@ -343,14 +347,21 @@ const clear = cubeLayer(new THREE.ShaderMaterial({
 
 /** `at` is in the hub's frame. `lift` moves a cube towards the eye (or away)
  * while the picture is flat: the sticks in front of and behind the screen
- * are drawn over and under it. */
-function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91, lift = 0 } = {}) {
-  solid.items.push({ at: at.clone(), size: [size, size, size], lift, tone: TONES[color], brightness, flash });
+ * are drawn over and under it. `nudge` shifts it on the screen, for the
+ * small marks in the corners of cells. */
+function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91, lift = 0, nudge = null } = {}) {
+  solid.items.push({ at: at.clone(), size: [size, size, size], lift, nudge, tone: TONES[color], brightness, flash });
 }
 
-function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0 } = {}) {
-  clear.items.push({ at: at.clone(), size, lift, color, alpha, fill, edge, depth: 0 });
+function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0, nudge = null } = {}) {
+  clear.items.push({ at: at.clone(), size, lift, nudge, color, alpha, fill, edge, depth: 0 });
 }
+
+/** A mark in a corner of a cell, over the picture: `x`, `y` say which. */
+const corner = (x, y) => new THREE.Vector3(0.27 * x, 0.27 * y, 0.5);
+const MARK = 0.3;
+/** The mark of a square that would hide: a dark hole. */
+const HOLE = new THREE.Color('#05050a');
 
 const matrix = new THREE.Matrix4();
 const scaleVector = new THREE.Vector3();
@@ -362,6 +373,7 @@ let depthShown = FLAT;
 function place(item) {
   const at = item.at.applyQuaternion(hubGroup.quaternion);
   at.z = at.z * depthShown + item.lift * (1 - depthShown);
+  if (item.nudge) at.add(item.nudge);
   return at;
 }
 
@@ -435,20 +447,66 @@ const toScene = (d) => new THREE.Vector3(...d).applyQuaternion(targetQ).round();
 
 const topGlass = () => sideOfNormal(toData(SCENE_UP));
 
-/** Turns the hub a quarter turn about a scene axis: ←/→ in the plane of the
- * screen, as the 2D cross turns; ↑/↓ about its horizontal, so the glass
- * behind or in front comes over the top, and the new picture settles and
- * pops. The glass on top is steered. */
+/** `targetQ` after a quarter turn about a scene axis, snapped so that the
+ * rounding drift of many turns never builds up. */
+function quarterTurned(axis, quarters) {
+  const q = new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2).multiply(targetQ);
+  const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+  m.elements.forEach((e, i) => { m.elements[i] = Math.round(e); });
+  return q.setFromRotationMatrix(m);
+}
+
+/** A scene direction in the data frame of a turn `q`. */
+const dataIn = (q, v) => {
+  const w = v.clone().applyQuaternion(q.clone().invert());
+  return [Math.round(w.x), Math.round(w.y), Math.round(w.z)];
+};
+
+/** Turns the hub a quarter turn about a scene axis: about the line of sight
+ * as the 2D cross turns (the number keys of the side glasses), or about the
+ * screen's horizontal (↑/↓), so that the glass behind or in front comes over
+ * the top and the new picture settles and pops. The glass on top is steered. */
 function turnHub(axis, quarters) {
   turnFrom.copy(turned);
   turn.t = 0;
-  targetQ.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2));
-  // Snap away the rounding drift of many turns.
-  const m = new THREE.Matrix4().makeRotationFromQuaternion(targetQ);
-  m.elements.forEach((e, i) => { m.elements[i] = Math.round(e); });
-  targetQ.setFromRotationMatrix(m);
+  targetQ.copy(quarterTurned(axis, quarters));
   const tipped = axis !== SCENE_TOWARD;
   game.turn(topGlass(), toData(SCENE_TOWARD), { right: toData(SCENE_RIGHT), up: toData(SCENE_UP) }, tipped);
+}
+
+/** A tip of the hub looked at before it is made, while ↑/↓ is held: the
+ * hub turns, and shows how it would settle and what would pop. Letting go
+ * tips it; Esc puts it back. */
+let preview = null;
+
+function startPreview(code) {
+  const quarters = code === 'ArrowUp' ? 1 : -1;
+  preview = { code, quarters, q: quarterTurned(SCENE_RIGHT, quarters), version: -1, result: null };
+  turnFrom.copy(turned);
+  turn.t = 0;
+  refreshPreview();
+}
+
+/** Works the preview out again when the board has changed under it. */
+function refreshPreview() {
+  if (!preview || preview.version === game.hub.version) return;
+  preview.version = game.hub.version;
+  const { q } = preview;
+  preview.result = game.previewTurn(dataIn(q, SCENE_TOWARD), { right: dataIn(q, SCENE_RIGHT), up: dataIn(q, SCENE_UP) });
+}
+
+function commitPreview(code) {
+  if (preview?.code !== code) return;
+  const { quarters } = preview;
+  preview = null;
+  turnHub(SCENE_RIGHT, quarters);
+}
+
+function cancelPreview() {
+  if (!preview) return;
+  preview = null;
+  turnFrom.copy(turned);
+  turn.t = 0;
 }
 
 /** A number key: a glass around the cross is turned to the top, as in the
@@ -464,17 +522,12 @@ function takeGlass(side) {
 
 // ------------------------------------------------------------------ input
 
-/** The stick of the glass in front or behind moves in all four directions
- * of the screen; the one on top only left and right, and W/S keep their 2D
- * meaning for it: turn and drop. */
-const steeringDepth = () => !game.inPlane(game.active);
-
 /** How often each key was pressed, for the notes on how many are needed. */
 const keyCount = {};
 
 function toggle(id) {
   options[id] = !options[id];
-  if (id === 'inactiveFalls') game.config.inactiveFalls = options.inactiveFalls;
+  if (id === 'inactiveFalls' || id === 'depthFalls') game.config[id] = options[id];
   saveSettings();
   renderSettings();
 }
@@ -485,21 +538,16 @@ function press(code, { repeat = false } = {}) {
   const setting = SETTINGS.find((s) => s.key === code);
   if (code === 'KeyA') move(SCENE_RIGHT.clone().negate());
   else if (code === 'KeyD') move(SCENE_RIGHT);
-  else if (code === 'KeyW') {
-    if (steeringDepth()) move(SCENE_UP);
-    else turnStick(true);
-  } else if (code === 'KeyS') {
-    if (steeringDepth()) move(SCENE_UP.clone().negate());
-    else if (!repeat) game.dropActive();
-  } else if (code === 'KeyQ') turnStick(false);
+  else if (code === 'KeyW') game.screenUp();
+  else if (code === 'KeyS') game.screenDown();
+  else if (code === 'KeyQ') turnStick(false);
   else if (code === 'KeyE') turnStick(true);
   else if (code === 'Space') {
     if (!repeat) game.dropActive();
-  } else if (code === 'ArrowLeft' || code === 'ArrowRight') {
-    if (!repeat) turnHub(SCENE_TOWARD, code === 'ArrowLeft' ? -1 : 1);
   } else if (code === 'ArrowUp' || code === 'ArrowDown') {
-    if (!repeat) turnHub(SCENE_RIGHT, code === 'ArrowUp' ? 1 : -1);
-  } else if (/^Digit[1-6]$/.test(code)) {
+    if (!repeat && !preview) startPreview(code);
+  } else if (code === 'Escape') cancelPreview();
+  else if (/^Digit[1-6]$/.test(code)) {
     if (!repeat) takeGlass(SIDES.findIndex((s) => s.label === code.slice(5)));
   } else if (code === 'KeyV') options.peek = true;
   else if (setting) toggle(setting.id);
@@ -514,6 +562,10 @@ function press(code, { repeat = false } = {}) {
 }
 
 function release(code) {
+  if (code === 'ArrowUp' || code === 'ArrowDown') {
+    commitPreview(code);
+    return true;
+  }
   if (code !== 'KeyV') return false;
   options.peek = false;
   return true;
@@ -526,9 +578,13 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
   if (release(event.code)) event.preventDefault();
 });
-window.addEventListener('blur', () => release('KeyV'));
+window.addEventListener('blur', () => {
+  release('KeyV');
+  cancelPreview();
+});
 
 function restart() {
+  preview = null;
   game = makeGame();
   targetQ.identity();
   turned.identity();
@@ -561,7 +617,43 @@ function consumeEvents() {
   game.events.length = 0;
 }
 
+/** The picture is flat enough for marks in the corners of cells. */
+const flat = () => depthShown < FLAT + 0.01;
+
+/** In a corner of every cell that hides another block, a small square of
+ * that block's colour: what a pop there would show. Worked out once per
+ * board and view. */
+const behindCache = { key: '', marks: [] };
+function pushBehindMarks(view, key) {
+  if (!options.behind || !flat()) return;
+  if (behindCache.key !== key) {
+    behindCache.key = key;
+    behindCache.marks = [];
+    for (let sx = -view.middle; sx <= view.middle; sx++) {
+      for (let sy = -view.middle; sy <= view.middle; sy++) {
+        const stack = view.stackAt(sx, sy);
+        if (stack.length > 1) behindCache.marks.push({ at: local(stack[0]), color: view.hub.at(stack[1]) });
+      }
+    }
+  }
+  for (const { at, color } of behindCache.marks) pushSolid(at, color, { size: MARK, nudge: corner(1, -1) });
+}
+
+/** While ↑/↓ is held and the hub has turned: the board as it would settle,
+ * what would pop first blinking. No sticks. */
+function buildPreview() {
+  const { view, match } = preview.result;
+  const blink = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(performance.now() / 110));
+  view.hub.forEachBlock((p, color, index) => pushSolid(local(p), color, { flash: match.cells.has(index) ? blink : 0 }));
+  pushBehindMarks(view, `preview:${preview.code}:${preview.version}`);
+  flushLayers();
+}
+
 function buildBlocks(dt) {
+  if (preview?.result && turn.t >= 1) {
+    buildPreview();
+    return;
+  }
   const hub = game.hub;
   const phase = game.phase;
   const progress = game.phaseDuration > 0 ? Math.min(1, game.phaseElapsed / game.phaseDuration) : 1;
@@ -625,10 +717,21 @@ function buildBlocks(dt) {
     }
     if (!steered && !options.depthSticks) continue;
     const lift = toScene(normalOf(piece.side)).z * 0.6;
+    // The steered one says, square by square, how it will land: filled and
+    // with a mark of its colour if it will be seen, an empty outline and a
+    // dark hole if it will hide behind what is there.
+    const landing = steered ? game.landing(piece.side) : null;
     piece.colors.forEach((color, i) => {
       const cell = at.clone().addScaledVector(dir, i - 1);
-      if (steered) pushClear(cell, TONES[color].light, 1, 0.38, 1, { lift });
-      else pushClear(cell, TONES[color].base, 0.8, 0.06, 0.5, { lift });
+      if (!steered) {
+        pushClear(cell, TONES[color].base, 0.8, 0.06, 0.5, { lift });
+        return;
+      }
+      const seen = landing?.seen[i] ?? true;
+      pushClear(cell, TONES[color].light, 1, seen ? 0.42 : 0, 1, { lift });
+      if (!flat()) return;
+      if (seen) pushSolid(cell, color, { size: MARK, lift: 0.6, nudge: corner(-1, 1) });
+      else pushClear(cell, HOLE, 1, 0.8, 1, { size: [MARK, MARK, MARK], lift: 0.6, nudge: corner(-1, 1) });
     });
   }
 
@@ -643,6 +746,7 @@ function buildBlocks(dt) {
       if (options.lane) pushLanes(piece, ghost);
     }
   }
+  pushBehindMarks(game, `game:${hub.version}:${targetQ.toArray().join()}`);
   flushLayers();
 }
 
@@ -694,11 +798,18 @@ function renderHud() {
     const landing = game.landing();
     if (landing) {
       const layer = landing.layer > 0 ? `+${landing.layer}` : landing.layer;
-      const seen = landing.seen === landing.of ? 'будет видна' : landing.seen === 0 ? 'спрячется за блоками' : `видно ${landing.seen} из ${landing.of}`;
+      const of = landing.seen.length;
+      const seen = landing.count === of ? 'будет видна' : landing.count === 0 ? 'спрячется за блоками' : `видно ${landing.count} из ${of}`;
       depth = ` · сядет в слой ${layer}, ${seen}`;
     }
   }
-  $('phase').textContent = `${options.paused ? 'пауза · ' : ''}стакан ${SIDES[game.active].label} ${where.slice(2)}${depth}`;
+  let line = `стакан ${SIDES[game.active].label} ${where.slice(2)}${depth}`;
+  if (preview?.result) {
+    const { popped, rounds } = preview.result;
+    const pops = popped === 0 ? 'ничего не лопнет' : `лопнет ${popped}${rounds > 1 ? `, каскад ×${rounds}` : ''}`;
+    line = `опрокинуть: отпусти ${preview.code === 'ArrowUp' ? '↑' : '↓'}, Esc — отмена · ${pops}`;
+  }
+  $('phase').textContent = `${options.paused ? 'пауза · ' : ''}${line}`;
   const next = game.nextColors.join();
   if (next !== nextKey) {
     nextKey = next;
@@ -729,12 +840,11 @@ function renderKeys() {
   $('keys').hidden = !options.help;
   $('keys').innerHTML = [
     '<b>A D</b> — влево, вправо',
-    '<b>W</b> — повернуть · <b>S</b>, <b>Пробел</b> — сбросить',
+    '<b>W</b> — повернуть (передний/задний — вверх)',
+    '<b>S</b> — вниз на клетку · <b>Пробел</b> — сбросить',
     '<b>Q E</b> — повернуть против / по часовой',
     '<b>1–6</b> — взять стакан: боковой повернуть наверх, передний/задний вести на месте',
-    '<b>W S</b> у переднего/заднего — вверх, вниз',
-    '<b>← →</b> — повернуть крест, как в 2D',
-    '<b>↑ ↓</b> — опрокинуть хаб: задний / передний стакан наверх; картинка оседает и лопается',
+    '<b>↑ ↓</b> (держать) — показать, как ляжет хаб, если задний / передний стакан опрокинуть наверх; отпустить — опрокинуть; <b>Esc</b> — отмена',
     '<b>V</b> (держать) — заглянуть в объём',
     '<b>F</b> — набросать блоков · <b>P</b> — пауза',
     '<b>N</b> — заново · <b>H</b> — спрятать подсказку',
@@ -766,8 +876,10 @@ function frame(now) {
   consumeEvents();
   // A pause stops the turn too, so that it can be looked at half-way.
   if (turn.t < 1 && !options.paused) turn.t = Math.min(1, turn.t + dt / TURN_SECONDS);
-  if (turn.t < 1) turned.slerpQuaternions(turnFrom, targetQ, ease(turn.t));
-  else turned.copy(targetQ);
+  refreshPreview();
+  const goal = preview ? preview.q : targetQ;
+  if (turn.t < 1) turned.slerpQuaternions(turnFrom, goal, ease(turn.t));
+  else turned.copy(goal);
   peek += ((options.peek ? 1 : 0) - peek) * (1 - Math.exp(-dt * 10));
   hubGroup.quaternion.slerpQuaternions(new THREE.Quaternion(), PEEK, ease(peek)).multiply(turned);
   // Depth shows mid-turn and while peeking; the cross of the screen fades

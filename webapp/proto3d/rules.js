@@ -12,7 +12,8 @@
 // 2D game. The sticks of the four glasses around the screen live in the
 // middle layer of the cube and stop on whatever the screen shows. The
 // glasses in front of and behind the screen drop their sticks along the line
-// of sight, into any layer, and are steered in place. Tipping the hub over
+// of sight, into any layer, and are steered in place; unless `depthFalls`,
+// their sticks wait until they are steered. Tipping the hub over
 // (↑/↓) shows it from another side: what was depth becomes up or across, and
 // the new picture settles and pops.
 //
@@ -61,6 +62,10 @@ export const defaultConfig = {
   inactiveStepSeconds: 3,
   /** Sticks in the five other glasses step too (slowly) — the 2D rule. */
   inactiveFalls: true,
+  /** …including the glasses in front of and behind the screen, more slowly
+   * still. Off: those sticks wait until they are steered. */
+  depthFalls: false,
+  depthStepSeconds: 6,
   monoPieceKeepChance: 0.4,
   pauseIncomingDuringCascade: true,
   dropBaseSeconds: 0.06,
@@ -204,6 +209,12 @@ export class Hub {
       }
     }
     return free;
+  }
+
+  clone() {
+    const other = new Hub(this.centre, this.arm);
+    other.cells.set(this.cells);
+    return other;
   }
 
   forEachBlock(visit) {
@@ -488,17 +499,44 @@ export class Game {
     return pieceCells({ ...piece, pivot: this.restRow(piece) });
   }
 
-  /** For a stick in front or behind: the layer it would land in, and how
-   * many of its squares would be seen there rather than hidden. */
+  /** For a stick in front or behind: the layer it would land in, and for
+   * each square whether it would be seen there or hidden behind blocks. */
   landing(side = this.active) {
     const cells = this.ghost(side);
     if (!cells) return null;
-    const seen = cells.filter(({ p }) => {
+    const seen = cells.map(({ p }) => {
       const [sx, sy] = this.screenOf(p);
       const front = this.seenAt(sx, sy);
       return front === null || this.depthOf(front) < this.depthOf(p);
-    }).length;
-    return { layer: this.depthOf(cells[0].p), seen, of: cells.length };
+    });
+    return { layer: this.depthOf(cells[0].p), seen, count: seen.filter(Boolean).length };
+  }
+
+  /** The same hub seen from another side, on a copy: a view that can be
+   * settled and searched without touching the game. */
+  lookFrom(plane, viewFrame, hub = this.hub.clone()) {
+    return Object.assign(Object.create(Game.prototype), { config: this.config, hub, plane, viewFrame });
+  }
+
+  /** What tipping the hub over to look along `plane` would give: the
+   * settled picture, what pops in it first, and how many blocks the whole
+   * cascade would pop in how many rounds. */
+  previewTurn(plane, viewFrame) {
+    const view = this.lookFrom(plane, viewFrame);
+    view.settle();
+    const settled = this.lookFrom(plane, viewFrame, view.hub.clone());
+    const first = view.findMatches();
+    let match = first;
+    let rounds = 0;
+    let popped = 0;
+    while (match.runs.length > 0) {
+      rounds++;
+      popped += match.cells.size;
+      for (const i of match.cells) view.hub.set(view.hub.cellOf(i), EMPTY);
+      view.settle();
+      match = view.findMatches();
+    }
+    return { view: settled, match: first, rounds, popped };
   }
 
   // --------------------------------------------------------------- input
@@ -526,6 +564,19 @@ export class Game {
 
   dropActive() {
     this.submit({ kind: 'drop' });
+  }
+
+  /** W: up the screen for a stick in front or behind; for the one on top,
+   * which cannot go up, a clockwise turn as in 2D. Read when applied, so a
+   * press made while the board resolves counts for the glass steered then. */
+  screenUp() {
+    this.submit({ kind: 'up' });
+  }
+
+  /** S: down the screen — a step down for the stick on top, a cell down for
+   * one in front or behind. Never a drop: that is Space. */
+  screenDown() {
+    this.submit({ kind: 'down' });
   }
 
   /** The hub has been turned: `down` is the glass now on top, and the one
@@ -605,6 +656,27 @@ export class Game {
       case 'drop':
         this.beginDrop();
         return;
+      case 'up':
+        if (!piece) return;
+        if (this.inPlane(piece.side)) this.apply({ kind: 'rotate', axis: scale(this.plane, -1) });
+        else this.apply({ kind: 'move', vector: this.viewFrame.up });
+        return;
+      case 'down': {
+        if (!piece) return;
+        if (!this.inPlane(piece.side)) {
+          this.apply({ kind: 'move', vector: scale(this.viewFrame.up, -1) });
+          return;
+        }
+        // A step down that does not lock: a stick that has landed keeps its
+        // full step to be slid or turned, as with the 2D soft drop.
+        const to = add(piece.pivot, fallOf(piece.side));
+        if (this.fits(piece.side, to, piece.dir)) {
+          piece.pivot = to;
+          piece.progress = 0;
+          this.events.push({ type: 'stepped', side: piece.side });
+        }
+        return;
+      }
     }
   }
 
@@ -649,12 +721,20 @@ export class Game {
   // ---------------------------------------------------------------- time
 
   stepSeconds(piece) {
-    return piece.side === this.active ? this.config.activeStepSeconds : this.config.inactiveStepSeconds;
+    if (piece.side === this.active) return this.config.activeStepSeconds;
+    return this.inPlane(piece.side) ? this.config.inactiveStepSeconds : this.config.depthStepSeconds;
+  }
+
+  /** Whether a stick nobody steers falls by itself. */
+  fallsAlone(piece) {
+    if (piece.side === this.active) return true;
+    if (!this.config.inactiveFalls) return false;
+    return this.inPlane(piece.side) || this.config.depthFalls;
   }
 
   advancePieces(seconds) {
     for (const piece of this.pieces.values()) {
-      if (piece.side !== this.active && !this.config.inactiveFalls) continue;
+      if (!this.fallsAlone(piece)) continue;
       piece.progress = Math.min(1, piece.progress + seconds / this.stepSeconds(piece));
     }
   }
