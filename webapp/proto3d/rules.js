@@ -1,14 +1,20 @@
-// The rules of a 3D RotaThree, mirrored from webapp/src/game where they carry
-// over: six glasses (arms) along ±x, ±y, ±z share a cube of a centre, a stick
-// of three falls down each glass one whole cell per step, the active glass
-// steps fast, a stick that cannot step locks, lines of three or more of a
-// colour along x, y or z pop, the blocks of the active glass fall towards its
-// floor (the far wall of the centre), cascades repeat, and a glass whose far
-// end is full when a new stick is due ends the game.
+// The rules of a 3D mode of RotaThree, mirrored from webapp/src/game where
+// they carry over: six glasses (arms) along ±x, ±y, ±z share a cube of a
+// centre, a stick of three falls down each glass one whole cell per step, the
+// steered glass steps fast and the others slowly, a stick that cannot step
+// locks, lines of three or more of a colour along x, y or z pop, the blocks
+// fall down the screen (towards the floor of the glass on top), cascades
+// repeat, and a glass whose far end is full when a new stick is due ends the
+// game.
+//
+// The screen shows the cross as the 2D game does: the four glasses around it
+// lie in the middle layer of the cube, and their sticks move and turn only
+// in it. The glasses in front of and behind the screen drop their sticks
+// along the line of sight, into any layer; they are steered in place.
 //
 // Everything here is in the fixed data frame: cells are integer [x, y, z] in
 // an N³ grid, N = centre + 2·arm. Turning the hub only changes which glass is
-// active; the renderer turns the picture.
+// on top and which way the eye looks; the renderer turns the picture.
 
 export const EMPTY = -1;
 
@@ -39,18 +45,18 @@ export const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const isZero = (a) => a[0] === 0 && a[1] === 0 && a[2] === 0;
 
 export const defaultConfig = {
-  /** Side of the shared centre cube, and the cross-section of every arm. */
-  centre: 4,
+  /** Side of the shared centre cube, and the cross-section of every arm.
+   * Odd, so that the cube has a middle layer whichever way it is turned. */
+  centre: 7,
   /** Length of each arm, in cells. A glass is one arm plus the centre. */
-  arm: 6,
+  arm: 8,
   pieceLength: 3,
   numberOfColors: 4,
   minMatchLength: 3,
   activeStepSeconds: 1,
   inactiveStepSeconds: 3,
-  /** Sticks in the five other glasses step too (slowly) — the 2D rule. Off
-   * by default here: they wait where they are. */
-  inactiveFalls: false,
+  /** Sticks in the five other glasses step too (slowly) — the 2D rule. */
+  inactiveFalls: true,
   monoPieceKeepChance: 0.4,
   pauseIncomingDuringCascade: true,
   dropBaseSeconds: 0.06,
@@ -279,7 +285,18 @@ export class Game {
     this.seed = this.config.seed ?? Math.floor(Math.random() * 0xffffffff);
     this.random = mulberry32(this.seed);
     this.hub = new Hub(this.config.centre, this.config.arm);
+    /** The glass on top of the screen: its fall is "down", and blocks fall
+     * that way after a match, as in the 2D game. */
+    this.down = 0;
+    /** The glass whose stick the player steers and that steps fast: the one
+     * on top, or the one in front of or behind the screen. */
     this.active = 0;
+    /** The data direction towards the eye. Sticks of the four glasses
+     * around the screen live in the middle layer across it. */
+    this.plane = [0, 0, 1];
+    /** Data directions of the screen's right and up, set by the view; a new
+     * stick lies along whichever crosses its glass. */
+    this.viewFrame = { right: [1, 0, 0], up: [0, 1, 0] };
     /** side → { side, colors, pivot, dir, progress } */
     this.pieces = new Map();
     this.queue = [];
@@ -298,9 +315,6 @@ export class Game {
     this.inputs = [];
     this.events = [];
     this.gameOverSide = null;
-    /** Data-frame vectors of the screen's right and far directions, set by
-     * the view; a new stick lies along whichever crosses its glass. */
-    this.viewFrame = { right: [1, 0, 0], far: [0, 0, -1] };
     for (let i = 0; i < 2; i++) this.queue.push(this.roll());
     for (const s of SIDES) this.spawn(s.id);
   }
@@ -311,6 +325,23 @@ export class Game {
 
   get isGameOver() {
     return this.phase === 'gameOver';
+  }
+
+  /** Index of the middle layer of the centre along any axis. */
+  get middle() {
+    return this.hub.arm + Math.floor(this.config.centre / 2);
+  }
+
+  /** Whether the glass lies across the screen (top, left, right, bottom)
+   * rather than along the line of sight. */
+  inPlane(side) {
+    return dot(normalOf(side), this.plane) === 0;
+  }
+
+  /** The depth of a cell, in layers from the middle one: + towards the eye. */
+  depthOf(p) {
+    const k = this.plane.findIndex((v) => v !== 0);
+    return (p[k] - this.middle) * this.plane[k];
   }
 
   roll() {
@@ -335,12 +366,19 @@ export class Game {
     return pieceCells({ pivot, dir, colors }).every(({ p }) => this.hub.isFreeIn(side, p));
   }
 
-  /** The axis a new stick of `side` lies along: the screen's right if it
-   * crosses the glass, else the screen's far direction. */
+  /** A new stick lies across its glass along the screen's right, or along
+   * its up when right is the way the glass falls. */
   spawnDir(side) {
     const n = normalOf(side);
-    const { right, far } = this.viewFrame;
-    return dot(right, n) === 0 ? [...right] : [...far];
+    const { right, up } = this.viewFrame;
+    return dot(right, n) === 0 ? [...right] : [...up];
+  }
+
+  /** Where a new stick of `side` appears: the far end of its glass, in the
+   * middle of it — so in the middle layer, for the glasses across the screen. */
+  spawnPivot(side) {
+    const lane = Math.floor(this.config.centre / 2);
+    return this.hub.toWorld(side, 0, lane, lane);
   }
 
   /** Puts a new stick at the far end of the glass. False when it does not
@@ -349,14 +387,8 @@ export class Game {
     const colors = this.queue.shift();
     this.queue.push(this.roll());
     const dir = this.spawnDir(side);
-    const lane = Math.floor((this.config.centre - 1) / 2);
-    let pivot = this.hub.toWorld(side, 0, lane, lane);
-    // A stick lying along the second cross axis keeps its lane centred too.
-    if (!this.fits(side, pivot, dir)) {
-      const other = this.hub.toWorld(side, 0, lane + 1, lane + 1);
-      if (this.fits(side, other, dir)) pivot = other;
-      else return false;
-    }
+    const pivot = this.spawnPivot(side);
+    if (!this.fits(side, pivot, dir)) return false;
     this.pieces.set(side, { side, colors, pivot, dir, progress: 0 });
     return true;
   }
@@ -368,7 +400,7 @@ export class Game {
     return pivot;
   }
 
-  /** Where the active stick would land: its cells, or null. */
+  /** Where the stick of `side` would land: its cells, or null. */
   ghost(side = this.active) {
     const piece = this.pieces.get(side);
     if (!piece) return null;
@@ -383,9 +415,10 @@ export class Game {
       this.apply(input);
       return;
     }
-    // Hard drops are never buffered; everything else is replayed after.
+    // Hard drops are never buffered; everything else is replayed after. A
+    // turn always is, or the picture and the rules would disagree.
     if (input.kind === 'drop') return;
-    if (this.inputs.length < this.config.maxQueuedInputs) this.inputs.push(input);
+    if (input.kind === 'turn' || this.inputs.length < this.config.maxQueuedInputs) this.inputs.push(input);
   }
 
   move(vector) {
@@ -401,15 +434,38 @@ export class Game {
     this.submit({ kind: 'drop' });
   }
 
-  /** Makes another glass the active one (the hub has been turned). */
-  switchTo(side) {
-    this.submit({ kind: 'switch', side });
+  /** The hub has been turned: `down` is the glass now on top, and the one
+   * the player steers. */
+  turn(down, plane, viewFrame) {
+    this.submit({ kind: 'turn', down, plane, viewFrame });
+  }
+
+  /** Steers the stick of another glass without turning anything. */
+  control(side) {
+    this.submit({ kind: 'control', side });
+  }
+
+  /** Whether a stick of `side` may be at `pivot`/`dir`: free cells, and for
+   * a glass across the screen, flat in its middle layer. */
+  allowed(side, pivot, dir) {
+    if (this.inPlane(side) && (dot(dir, this.plane) !== 0 || this.depthOf(pivot) !== 0)) return false;
+    return this.fits(side, pivot, dir);
   }
 
   apply(input) {
     const piece = this.activePiece;
     switch (input.kind) {
-      case 'switch':
+      case 'turn': {
+        const from = this.active;
+        this.down = input.down;
+        this.active = input.down;
+        this.plane = input.plane;
+        this.viewFrame = input.viewFrame;
+        this.reseat();
+        this.events.push({ type: 'switched', from, to: input.down });
+        return;
+      }
+      case 'control':
         if (input.side !== this.active) {
           const from = this.active;
           this.active = input.side;
@@ -419,7 +475,7 @@ export class Game {
       case 'move': {
         if (!piece) return;
         const to = add(piece.pivot, input.vector);
-        const ok = dot(input.vector, normalOf(piece.side)) === 0 && this.fits(piece.side, to, piece.dir);
+        const ok = dot(input.vector, normalOf(piece.side)) === 0 && this.allowed(piece.side, to, piece.dir);
         if (ok) piece.pivot = to;
         this.events.push({ type: 'moved', blocked: !ok });
         return;
@@ -428,25 +484,26 @@ export class Game {
         if (!piece) return;
         const dir = cross(input.axis, piece.dir);
         if (isZero(dir)) {
-          // A turn about the stick's own length changes nothing.
           this.events.push({ type: 'rotated', blocked: true });
           return;
         }
         // Nudges tried when the turn does not fit, gentlest first: across the
-        // glass, then back towards its far end, then down.
-        const [u, v] = this.hub.crossAxes(piece.side).map((k) => {
+        // glass, back towards its far end, down. A stick of a glass across the
+        // screen is only nudged within the screen.
+        const n = normalOf(piece.side);
+        const across = this.hub.crossAxes(piece.side).map((k) => {
           const e = [0, 0, 0];
           e[k] = 1;
           return e;
         });
-        const up = normalOf(piece.side);
-        const kicks = [
-          [0, 0, 0], scale(u, -1), u, scale(v, -1), v, up, scale(up, -1),
-          scale(u, -2), scale(u, 2), scale(v, -2), scale(v, 2), scale(up, 2),
-        ];
+        const kicks = [[0, 0, 0]];
+        for (const step of [1, 2]) {
+          for (const e of across) kicks.push(scale(e, -step), scale(e, step));
+          kicks.push(scale(n, step), scale(n, -step));
+        }
         for (const kick of kicks) {
           const pivot = add(piece.pivot, kick);
-          if (this.fits(piece.side, pivot, dir)) {
+          if (this.allowed(piece.side, pivot, dir)) {
             piece.pivot = pivot;
             piece.dir = dir;
             this.events.push({ type: 'rotated', blocked: false });
@@ -462,6 +519,40 @@ export class Game {
     }
   }
 
+  /** After a turn about a screen axis some sticks in flight point at the eye
+   * or have left the middle layer. Each is laid flat again — in the middle
+   * layer for a glass across the screen, across the line of sight for the
+   * one in front or behind — and backs off towards its far end if it no
+   * longer fits; failing that it starts again from there. */
+  reseat() {
+    const k = this.plane.findIndex((v) => v !== 0);
+    for (const piece of this.pieces.values()) {
+      const n = normalOf(piece.side);
+      let dir = piece.dir;
+      const pivot = [...piece.pivot];
+      if (this.inPlane(piece.side)) {
+        if (dot(dir, this.plane) !== 0) dir = cross(n, this.plane);
+        pivot[k] = this.middle;
+      } else if (dot(dir, n) !== 0) {
+        dir = [...this.viewFrame.up];
+      }
+      let at = pivot;
+      while (this.hub.inGlass(piece.side, at) && !this.allowed(piece.side, at, dir)) at = add(at, n);
+      if (this.allowed(piece.side, at, dir)) {
+        piece.pivot = at;
+        piece.dir = dir;
+        continue;
+      }
+      const start = this.spawnPivot(piece.side);
+      const flat = this.spawnDir(piece.side);
+      if (this.allowed(piece.side, start, flat)) {
+        piece.pivot = start;
+        piece.dir = flat;
+        piece.progress = 0;
+      }
+    }
+  }
+
   flushInputs() {
     while (this.inputs.length > 0 && this.phase === 'playing') this.apply(this.inputs.shift());
   }
@@ -472,22 +563,21 @@ export class Game {
     return piece.side === this.active ? this.config.activeStepSeconds : this.config.inactiveStepSeconds;
   }
 
+  advancePieces(seconds) {
+    for (const piece of this.pieces.values()) {
+      if (piece.side !== this.active && !this.config.inactiveFalls) continue;
+      piece.progress = Math.min(1, piece.progress + seconds / this.stepSeconds(piece));
+    }
+  }
+
   update(seconds) {
     if (this.isGameOver || seconds <= 0) return;
     if (this.phase === 'playing') {
-      for (const piece of this.pieces.values()) {
-        if (piece.side !== this.active && !this.config.inactiveFalls) continue;
-        piece.progress = Math.min(1, piece.progress + seconds / this.stepSeconds(piece));
-      }
+      this.advancePieces(seconds);
       this.stepDuePieces();
       return;
     }
-    if (!this.config.pauseIncomingDuringCascade) {
-      for (const piece of this.pieces.values()) {
-        if (piece.side !== this.active && !this.config.inactiveFalls) continue;
-        piece.progress = Math.min(1, piece.progress + seconds / this.stepSeconds(piece));
-      }
-    }
+    if (!this.config.pauseIncomingDuringCascade) this.advancePieces(seconds);
     this.phaseElapsed += seconds;
     if (this.phaseElapsed >= this.phaseDuration) this.completePhase();
   }
@@ -590,7 +680,8 @@ export class Game {
         });
         for (const i of match.cells) this.hub.set(this.hub.cellOf(i), EMPTY);
         this.activeMatch = null;
-        const moves = settle(this.hub, this.active);
+        // Down the screen, whichever stick made the match.
+        const moves = settle(this.hub, this.down);
         if (moves.length === 0) {
           this.checkMatches();
         } else {
@@ -638,10 +729,9 @@ export class Game {
     this.events.push({ type: 'gameEnded', side });
   }
 
-  /** Fills the lower part of the centre (seen from the active glass) with
-   * random blocks that make no line, to try x-ray and depth on a busy
-   * board. */
-  fillForTesting(layers = this.config.centre - 1) {
+  /** Fills the bottom of the centre, every layer of it, with random blocks
+   * that make no line: a busy board to try the hints of depth on. */
+  fillForTesting(rows = 3) {
     const hub = this.hub;
     const depth = hub.depth();
     const palette = this.config.numberOfColors;
@@ -660,15 +750,14 @@ export class Game {
       }
       return false;
     };
-    for (let row = depth - 1; row >= depth - layers; row--) {
+    for (let row = depth - 1; row >= depth - rows; row--) {
       for (let a = 0; a < hub.centre; a++) {
         for (let b = 0; b < hub.centre; b++) {
-          const p = hub.toWorld(this.active, row, a, b);
+          const p = hub.toWorld(this.down, row, a, b);
           if (hub.at(p) !== EMPTY) continue;
-          const below = hub.toWorld(this.active, row + 1, a, b);
+          const below = hub.toWorld(this.down, row + 1, a, b);
           if (row < depth - 1 && hub.at(below) === EMPTY) continue;
-          // Leave some holes so the stack has a shape to aim at.
-          if (row === depth - layers && this.random() < 0.45) continue;
+          if (this.random() < (row === depth - rows ? 0.6 : 0.2)) continue;
           const start = Math.floor(this.random() * palette);
           for (let k = 0; k < palette; k++) {
             const color = (start + k) % palette;

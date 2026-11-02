@@ -1,5 +1,7 @@
-// Plays the 3D prototype with real key presses and photographs it at the
-// moments NOTES.md talks about, into proto3d/shots.
+// Plays the prototype with real key presses and photographs it at the
+// moments NOTES.md talks about, into proto3d/shots/2d. (shots/3d holds the
+// photographs of the first, perspective version, made by this script as it
+// was in that commit.)
 //
 // usage, in webapp/: node proto3d/shots.mjs
 import { mkdirSync } from 'node:fs';
@@ -8,7 +10,7 @@ import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const out = fileURLToPath(new URL('./shots/3d/', import.meta.url));
+const out = fileURLToPath(new URL('./shots/2d/', import.meta.url));
 mkdirSync(out, { recursive: true });
 
 const server = await createServer({ root, logLevel: 'error', server: { port: 0 } });
@@ -24,64 +26,85 @@ try {
   await page.goto(`${base}proto3d/?seed=11`);
   await page.waitForFunction(() => window.__proto3d?.ready === true, null, { timeout: 30_000 });
 
-  const key = (code, times = 1) => page.keyboard.press(code).then(() => (times > 1 ? key(code, times - 1) : undefined));
+  const key = async (code, times = 1) => {
+    for (let i = 0; i < times; i++) await page.keyboard.press(code);
+  };
   const wait = (ms) => page.waitForTimeout(ms);
-  const state = () => page.evaluate(() => ({ phase: window.__proto3d.game.phase, paused: window.__proto3d.options.paused }));
-  /** Photographs the frozen game, then lets it run on. */
-  const shot = async (name) => {
-    if (!(await state()).paused) await key('KeyP');
+  const paused = () => page.evaluate(() => window.__proto3d.options.paused);
+  const settled = () => page.waitForFunction(() => !window.__proto3d.turning, null, { timeout: 5_000 });
+  /** Photographs the frozen game, then lets it run on. A turn of the hub is
+   * let finish first, unless the picture is of the turn. */
+  const shot = async (name, { midTurn = false } = {}) => {
+    if (!midTurn) await settled();
+    if (!(await paused())) await key('KeyP');
     await wait(120);
     await page.screenshot({ path: `${out}${name}.jpg`, type: 'jpeg', quality: 86 });
     console.log(name);
     await key('KeyP');
   };
+  /** Drops the steered stick and waits until the board is at rest. */
+  const drop = async () => {
+    await key('Space');
+    await page.waitForFunction(() => ['playing', 'gameOver'].includes(window.__proto3d.game.phase), null, { timeout: 5_000 });
+    await wait(80);
+  };
 
-  // A busy centre to aim at, the stick still at the rim.
+  // A busy bottom of the centre, every layer of it; the stick still on top.
   await key('KeyF');
   await wait(300);
   await shot('01-start');
   await key('KeyH');
 
-  // Slid to the far right corner of the glass: the ghost and the lane.
+  // The stick on top, aimed: the landing outline and the lane.
   await key('KeyD', 2);
+  await key('KeyW');
+  await wait(250);
+  await shot('02-top-aimed');
+  await drop();
+
+  // The glass in front (4): its stick flies at the screen; the squares show
+  // where it is and where it will land.
+  await key('Digit4');
+  await key('KeyA');
+  await key('KeyS');
+  await wait(250);
+  await shot('03-front-steered');
+  await drop();
+  await key('Digit4');
+  await wait(250);
+  await shot('04-front-landed-behind');
+
+  // And the glass behind (3).
+  await key('Digit3');
   await key('KeyW', 2);
   await wait(250);
-  await shot('02-aim-lying');
+  await shot('05-back-steered');
+  await drop();
 
-  // Spun flat to lie far–near, then stood up: from above the two look alike.
-  await key('KeyR');
-  await key('KeyA');
-  await wait(250);
-  await shot('03a-aim-far-near');
-  await key('KeyE');
-  await wait(250);
-  await shot('03b-aim-standing');
-  await key('Space');
-  await wait(700);
-
-  // Half-way through a turn of the hub, and once it is over.
-  await key('ArrowLeft');
-  await wait(140);
+  // Tumble the hub: the glass behind comes over the top. Half-way, and after.
+  await key('Digit1');
+  await key('ArrowUp');
+  await wait(150);
   await key('KeyP');
-  await shot('04-turning');
+  await shot('06-tumbling', { midTurn: true });
   await wait(600);
-  await shot('05-after-left-turn');
-  await key('KeyT');
-  await shot('05b-after-left-turn-others-solid');
-  await key('KeyT');
+  await shot('07-after-tumble');
 
+  // The same board with every layer shown, and with none.
   await key('KeyX');
-  await shot('06-xray-shell');
-  await key('KeyX');
-  await shot('07-xray-slice');
+  await shot('08a-all-layers');
+  await key('KeyX', 2);
+  await shot('08b-no-layers');
   await key('KeyX');
 
-  // Drop sticks here and there until something matches; freeze on the
-  // flash.
+  // Drop here and there, with every glass taking turns, until something
+  // matches; freeze on the flash.
   let matched = false;
-  for (let i = 0; i < 40 && !matched; i++) {
-    const moves = ['KeyA', 'KeyD', 'KeyW', 'KeyS', 'KeyQ', 'KeyE'];
-    for (let m = 0; m < 2; m++) await key(moves[(i * 7 + m * 3) % moves.length]);
+  const glasses = ['Digit1', 'Digit3', 'Digit4'];
+  for (let i = 0; i < 60 && !matched; i++) {
+    await key(glasses[i % glasses.length]);
+    await settled();
+    for (const code of [['KeyA', 'KeyD', 'KeyW'][i % 3], ['KeyD', 'KeyQ', 'KeyA', 'KeyS'][i % 4]]) await key(code);
     await key('Space');
     matched = await page.evaluate(() => new Promise((resolve) => {
       const started = performance.now();
@@ -90,36 +113,24 @@ try {
         if (p.game.phase === 'matching') {
           p.press('KeyP');
           resolve(true);
-        } else if (p.game.isGameOver || performance.now() - started > 900) resolve(false);
+        } else if (p.game.isGameOver || performance.now() - started > 700) resolve(false);
         else requestAnimationFrame(look);
       };
       look();
     }));
-    if (!matched) await wait(150);
-    if ((await page.evaluate(() => window.__proto3d.game.isGameOver))) break;
-  }
-  if (matched) await shot('08-match');
-
-  // The same board from straight above and from 60°.
-  await key('KeyP');
-  await key('KeyV', 2);
-  await wait(900);
-  await shot('09-tilt-60');
-  await key('KeyP');
-  await key('KeyV');
-  await wait(900);
-  await shot('10-tilt-0');
-  await key('KeyP');
-  await key('KeyV');
-  await key('KeyP');
-
-  // Fill the glass up to its far end.
-  for (let i = 0; i < 60; i++) {
     if (await page.evaluate(() => window.__proto3d.game.isGameOver)) break;
-    await key('Space');
-    await wait(260);
+    if (!matched) await page.waitForFunction(() => ['playing', 'gameOver'].includes(window.__proto3d.game.phase), null, { timeout: 5_000 });
   }
-  await shot('11-game-over');
+  if (matched) await shot('09-match');
+
+  // Play on carelessly until a glass is full.
+  for (let i = 0; i < 120; i++) {
+    if (await page.evaluate(() => window.__proto3d.game.isGameOver)) break;
+    await key(glasses[i % glasses.length]);
+    await settled();
+    await drop();
+  }
+  await shot('10-game-over');
 } finally {
   await browser.close();
   await server.close();

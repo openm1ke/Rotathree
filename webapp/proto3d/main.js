@@ -1,12 +1,13 @@
-// A throwaway prototype of a 3D RotaThree, to find out by hand whether it is
-// playable: six glasses around a small cube of a centre. It is drawn the way
-// the game draws its cross (src/render): faint glass with thin lines, solid
-// blocks with a bevel lit from the top of the screen, the landing spot as an
-// outline in the stick's colours. The eye stands above the rim of the active
-// glass and looks down into it about 30° off its axis, so aiming is a 2D grid
-// and depth is the direction of the fall. Dev server only: /proto3d/.
+// A throwaway prototype of a 3D mode of RotaThree. The screen shows the cross
+// as the 2D game does — the glass on top, its neighbours left, right and
+// below, all in the middle layer of a cube of a centre — and only hints at
+// the third dimension: a glass in front of the screen and one behind it whose
+// sticks fly at the cross along the line of sight, blocks in the other layers
+// seen through the middle one, and the whole hub tumbling when ↑/↓ bring the
+// glass behind or in front up to the top. Drawn the way the game draws its
+// cross (src/render). Dev server only: /proto3d/.
 //
-// URL: ?centre=4&arm=6&colors=4&seed=1&tilt=30
+// URL: ?centre=7&arm=8&colors=4&seed=1
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
@@ -19,46 +20,44 @@ import { Game, SIDES, dot, normalOf, pieceCells, sideOfNormal } from './rules.js
 const query = new URLSearchParams(location.search);
 const num = (key, fallback) => (query.has(key) ? Number(query.get(key)) : fallback);
 
-/** Side of the shared centre cube; every arm has this cross-section. */
-const CENTRE = num('centre', 4);
+/** Side of the shared centre cube; odd, so that it has a middle layer. */
+const CENTRE = num('centre', 7) | 1;
 /** Length of each arm. */
-const ARM = num('arm', 6);
+const ARM = num('arm', 8);
 const COLOR_COUNT = num('colors', 4);
 const SEED = query.has('seed') ? Number(query.get('seed')) : null;
 
 /** The classic set of the game and the tones of its bevel
  * (src/render/theme.ts `toneOf`). */
 const PALETTE = ['#ff3d5e', '#3b82ff', '#ffc531', '#2fd985', '#a65cff'];
-const TONES = PALETTE.map((hex) => {
+const channels = (hex) => {
   const n = parseInt(hex.slice(1), 16);
-  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  const colour = (channels) => new THREE.Color().setRGB(...channels.map((c) => c / 255), THREE.SRGBColorSpace);
-  return {
-    hex,
-    base: colour(rgb),
-    light: colour(rgb.map((c) => c + (255 - c) * 0.45)),
-    dark: colour(rgb.map((c) => c * (1 - 0.35))),
-  };
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const lighter = (rgb) => rgb.map((c) => c + (255 - c) * 0.45);
+const darker = (rgb) => rgb.map((c) => c * (1 - 0.35));
+const TONES = PALETTE.map((hex) => {
+  const colour = (rgb) => new THREE.Color().setRGB(...rgb.map((c) => c / 255), THREE.SRGBColorSpace);
+  const rgb = channels(hex);
+  return { hex, base: colour(rgb), light: colour(lighter(rgb)), dark: colour(darker(rgb)) };
 });
 const WHITE = new THREE.Color('#ffffff');
 /** Accent of the active glass (THEME.accent). */
 const ACCENT = new THREE.Color('#78cdff');
-const TURN_SECONDS = 0.34;
-/** Degrees between the eye and the axis of the active glass; V cycles. */
-const TILTS = [30, 45, 60, 0];
-const XRAY = ['выкл', 'оболочка центра', 'срез у тени'];
+const TURN_SECONDS = 0.36;
+/** What is shown of the layers off the middle one; X cycles. */
+const HINTS = ['ближайшие', 'все слои', 'только сзади', 'нет'];
 
 const N = CENTRE + 2 * ARM;
 const HALF = N / 2;
 const H = CENTRE / 2;
+const REACH = H + ARM;
 
 const options = {
-  xray: 0,
-  inactiveFalls: false,
+  hints: 0,
+  inactiveFalls: true,
   rings: true,
   lane: true,
-  othersClear: true,
-  tilt: Math.max(0, TILTS.indexOf(num('tilt', 30))),
   help: true,
   paused: false,
 };
@@ -82,13 +81,20 @@ renderer.setPixelRatio(dpr);
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 200);
-// Screen-up is the far side of the hub for every tilt, straight down included.
-camera.up.set(0, 0, -1);
+// Far away and narrow: the middle layer looks flat, as in the 2D game, while
+// what is nearer or further is a little larger or smaller.
+const DISTANCE = 4.2 * REACH;
+const camera = new THREE.PerspectiveCamera(30, 1, 1, DISTANCE * 3);
+camera.position.set(0, 0, DISTANCE);
+camera.lookAt(0, 0, 0);
 
 /** Turned as a whole; the data never turns. */
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
+/** The cross of the 2D game, fixed to the screen: it fades while the hub
+ * turns, as the grid of the 2D game does. */
+const crossGroup = new THREE.Group();
+scene.add(crossGroup);
 
 /** Centre of a data cell in the hub's own frame. */
 const local = (p, out = new THREE.Vector3()) => out.set(p[0] + 0.5 - HALF, p[1] + 0.5 - HALF, p[2] + 0.5 - HALF);
@@ -99,24 +105,54 @@ const makeLines = (positions, { color = WHITE, opacity = 1, width = 1, parent = 
   const geometry = new LineSegmentsGeometry();
   geometry.setPositions(positions);
   const material = new LineMaterial({ color, opacity, linewidth: width * dpr, transparent: true, depthWrite: false });
+  material.userData.opacity = opacity;
   lineMaterials.push(material);
   const mesh = new LineSegments2(geometry, material);
   parent.add(mesh);
   return mesh;
 };
 
-/** A faint pane, like the fill of an arm in the game. */
-const makePane = (width, height, opacity) => {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, height),
-    new THREE.MeshBasicMaterial({ color: WHITE, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  hubGroup.add(mesh);
+const makePane = (x, y, width, height, opacity, parent) => {
+  const material = new THREE.MeshBasicMaterial({ color: WHITE, transparent: true, opacity, depthWrite: false });
+  material.userData.opacity = opacity;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+  mesh.position.set(x, y, -0.5);
+  parent.add(mesh);
   return mesh;
 };
 
-/** A point of the arm of `side`: `t` cells out from the centre's face, at
- * (a, b) across it, both in −H..H. */
+// --- The cross (src/render/renderer.ts drawField): a faint fill and grid for
+// each arm and for the centre, outlines a little brighter, the glass on top
+// in the accent. Behind the middle layer, so blocks there sit on it.
+const cross = (() => {
+  const z = -0.5;
+  const arms = [0, 1, 2, 3].map((quarter) => {
+    // Drawn for the arm on top, then turned a quarter at a time.
+    const group = new THREE.Group();
+    group.rotation.z = (-quarter * Math.PI) / 2;
+    crossGroup.add(group);
+    makePane(0, H + ARM / 2, CENTRE, ARM, 0.022, group);
+    const grid = [];
+    for (let i = 1; i < CENTRE; i++) grid.push(-H + i, H, z, -H + i, REACH, z);
+    for (let j = 1; j < ARM; j++) grid.push(-H, H + j, z, H, H + j, z);
+    makeLines(grid, { opacity: 0.045, parent: group });
+    const outline = [-H, H, z, -H, REACH, z, -H, REACH, z, H, REACH, z, H, REACH, z, H, H, z];
+    return makeLines(outline, { opacity: 0.16, width: 1.5, parent: group });
+  });
+  makePane(0, 0, CENTRE, CENTRE, 0.05, crossGroup);
+  const grid = [];
+  for (let i = 1; i < CENTRE; i++) grid.push(-H + i, -H, z, -H + i, H, z, -H, -H + i, z, H, -H + i, z);
+  makeLines(grid, { opacity: 0.07, parent: crossGroup });
+  makeLines([-H, -H, z, H, -H, z, H, -H, z, H, H, z, H, H, z, -H, H, z, -H, H, z, -H, -H, z], { opacity: 0.22, width: 1.5, parent: crossGroup });
+  // The glass on top: its outline in the accent.
+  arms[0].material.color.copy(ACCENT);
+  arms[0].material.userData.opacity = arms[0].material.opacity = 0.6;
+  return crossGroup;
+})();
+
+// --- The hub itself, faintly: the edges of all six glasses and of the
+// centre cube. Seen straight on, the glasses in front and behind are a short
+// tunnel at the centre — the hint that there is more than the cross.
 const armPoint = (side, t, a, b) => {
   const { axis, sign } = SIDES[side];
   const [k1, k2] = [0, 1, 2].filter((i) => i !== axis);
@@ -127,131 +163,61 @@ const armPoint = (side, t, a, b) => {
   return p;
 };
 const CORNERS = [[-H, -H], [H, -H], [H, H], [-H, H]];
-
-/** Per glass: its outline, the cells on its walls, its walls, the grid of
- * its floor and its number. */
-const glasses = SIDES.map((s) => {
-  const outline = [];
-  const cells = [];
+const hubLines = SIDES.map((s) => {
+  const p = [];
   CORNERS.forEach(([a, b], i) => {
     const [na, nb] = CORNERS[(i + 1) % 4];
-    outline.push(...armPoint(s.id, 0, a, b), ...armPoint(s.id, ARM, a, b));
-    outline.push(...armPoint(s.id, ARM, a, b), ...armPoint(s.id, ARM, na, nb));
-    for (let t = 1; t < ARM; t++) cells.push(...armPoint(s.id, t, a, b), ...armPoint(s.id, t, na, nb));
+    p.push(...armPoint(s.id, 0, a, b), ...armPoint(s.id, ARM, a, b));
+    p.push(...armPoint(s.id, ARM, a, b), ...armPoint(s.id, ARM, na, nb));
   });
-  for (let j = 1; j < CENTRE; j++) {
-    const v = -H + j;
-    for (const w of [-H, H]) {
-      cells.push(...armPoint(s.id, 0, v, w), ...armPoint(s.id, ARM, v, w));
-      cells.push(...armPoint(s.id, 0, w, v), ...armPoint(s.id, ARM, w, v));
-    }
-  }
+  return makeLines(p, { opacity: 0.1 });
+});
+{
+  const p = [];
+  for (const a of [-H, H]) for (const b of [-H, H]) p.push(-H, a, b, H, a, b, a, -H, b, a, H, b, a, b, -H, a, b, H);
+  makeLines(p, { opacity: 0.12 });
+}
 
-  const walls = CORNERS.map(([a, b], i) => {
-    const [na, nb] = CORNERS[(i + 1) % 4];
-    const pane = makePane(CENTRE, ARM, 0.022);
-    // Centre of the wall, and its two directions: across, and along the arm.
-    const centre = new THREE.Vector3(...armPoint(s.id, ARM / 2, (a + na) / 2, (b + nb) / 2));
-    const across = new THREE.Vector3(...armPoint(s.id, 0, na, nb)).sub(new THREE.Vector3(...armPoint(s.id, 0, a, b))).normalize();
-    const along = new THREE.Vector3(...normalOf(s.id));
-    pane.position.copy(centre);
-    pane.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, along, across.clone().cross(along)));
-    return pane;
-  });
-
-  // The floor of this glass is the far face of the centre.
-  const floor = [];
-  const at = (a, b) => armPoint(s.id, -CENTRE, a, b);
-  for (let j = 0; j <= CENTRE; j++) {
-    const v = -H + j;
-    floor.push(...at(v, -H), ...at(v, H), ...at(-H, v), ...at(H, v));
-  }
-
+/** The glasses' numbers, beside a corner of each rim. */
+const labels = SIDES.map((s) => {
   const label = document.createElement('canvas');
   label.width = label.height = 128;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(label), depthWrite: false, transparent: true }));
-  // Beside a corner of the rim, so that from straight above it does not
-  // stand over the glass.
-  sprite.position.set(...armPoint(s.id, ARM + 0.4, -H - 0.8, -H - 0.8));
-  sprite.scale.set(1.1, 1.1, 1);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(label), depthTest: false, transparent: true }));
+  sprite.position.set(...armPoint(s.id, ARM - 0.2, H + 0.75, H + 0.75));
+  sprite.scale.set(1.15, 1.15, 1);
   sprite.renderOrder = 20;
   hubGroup.add(sprite);
-
-  return {
-    outline: makeLines(outline, { width: 1.5 }),
-    cells: makeLines(cells),
-    walls,
-    floor: makeLines(floor, { color: ACCENT, opacity: 0.32, width: 1.2 }),
-    sprite,
-    label,
-  };
+  return { sprite, canvas: label };
 });
-
-const drawLabels = () => glasses.forEach((glass, side) => {
-  const g = glass.label.getContext('2d');
+const drawLabels = () => labels.forEach(({ sprite, canvas: label }, side) => {
+  const g = label.getContext('2d');
   g.clearRect(0, 0, 128, 128);
   g.font = '900 italic 88px "Exo 2", system-ui';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillStyle = '#eceff9';
   g.fillText(SIDES[side].label, 64, 68);
-  glass.sprite.material.map.needsUpdate = true;
+  sprite.material.map.needsUpdate = true;
 });
 
-// The centre: a faint box, its outline and the cells on its faces.
-{
-  const box = new THREE.Mesh(
-    new THREE.BoxGeometry(CENTRE, CENTRE, CENTRE),
-    new THREE.MeshBasicMaterial({ color: WHITE, transparent: true, opacity: 0.03, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  hubGroup.add(box);
-  const outline = [];
-  for (const a of [-H, H]) for (const b of [-H, H]) outline.push(-H, a, b, H, a, b, a, -H, b, a, H, b, a, b, -H, a, b, H);
-  makeLines(outline, { opacity: 0.3, width: 1.5 });
-  const grid = [];
-  for (let axis = 0; axis < 3; axis++) {
-    for (const face of [-H, H]) {
-      for (let j = 1; j < CENTRE; j++) {
-        const t = -H + j;
-        for (const [from, to] of [[[t, -H], [t, H]], [[-H, t], [H, t]]]) {
-          const a = [0, 0, 0];
-          const b = [0, 0, 0];
-          a[axis] = b[axis] = face;
-          [a[(axis + 1) % 3], a[(axis + 2) % 3]] = from;
-          [b[(axis + 1) % 3], b[(axis + 2) % 3]] = to;
-          grid.push(...a, ...b);
-        }
-      }
-    }
-  }
-  makeLines(grid, { opacity: 0.08 });
-}
-
-/** A square around the active glass at a given depth: under the stick, and
- * under where it will land. One per axis, moved along it. */
-const makeRing = (color, opacity) => [0, 1, 2].map((axis) => {
+/** A square around the centre at a depth along the line of sight: where the
+ * stick of the glass in front or behind is, and where it will land. */
+const makeRing = (color, opacity) => {
   const p = [];
   CORNERS.forEach(([a, b], i) => {
     const [na, nb] = CORNERS[(i + 1) % 4];
-    const at = (x, y) => {
-      const v = [0, 0, 0];
-      v[(axis + 1) % 3] = x;
-      v[(axis + 2) % 3] = y;
-      return v;
-    };
-    p.push(...at(a, b), ...at(na, nb));
+    p.push(a, b, 0, na, nb, 0);
   });
-  const ring = makeLines(p, { color, opacity, width: 1.5 });
+  const ring = makeLines(p, { color, opacity, width: 1.5, parent: scene });
   ring.visible = false;
   return ring;
-});
-const pieceRing = makeRing(WHITE, 0.4);
-const ghostRing = makeRing(ACCENT, 0.75);
+};
+const pieceRing = makeRing(WHITE, 0.45);
+const ghostRing = makeRing(ACCENT, 0.8);
 
 // --- Blocks. Solid ones are drawn like the game's sprite: a bevel going
 // from light at the top of the screen to dark at the bottom, around a flat
-// face with a soft shine across its top; faces turned from the light are a
-// little darker so the cube reads as one.
+// face with a soft shine across its top.
 const MAX_CUBES = N * N * N + 64;
 
 function cubeLayer(material, attributes, renderOrder) {
@@ -271,8 +237,8 @@ function cubeLayer(material, attributes, renderOrder) {
 }
 
 const sharedUniforms = {
-  screenUp: { value: new THREE.Vector3(0, 0, -1) },
-  light: { value: new THREE.Vector3(0.25, 1, 0.4).normalize() },
+  screenUp: { value: new THREE.Vector3(0, 1, 0) },
+  light: { value: new THREE.Vector3(0.2, 0.45, 1).normalize() },
 };
 
 const solid = cubeLayer(new THREE.ShaderMaterial({
@@ -324,12 +290,12 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
       float aa = fwidth(sdf) + 1e-4;
       float face = 1.0 - smoothstep(-aa, aa, sdf);
       // 0 at the top of the block on screen, 1 at its bottom.
-      float y = clamp(0.5 - vUp * 0.62, 0.0, 1.0);
+      float y = clamp(0.5 - vUp * 0.98, 0.0, 1.0);
       vec3 bevel = y < 0.3 ? mix(vLight, vBase, y / 0.3) : mix(vBase, vDark, (y - 0.3) / 0.7);
       float fy = clamp((y - inset) / (1.0 - 2.0 * inset), 0.0, 1.0);
       vec3 plain = mix(vBase, vec3(1.0), 0.3 * max(0.0, 1.0 - fy * 2.0));
       vec3 colour = mix(bevel, plain, face);
-      colour *= (0.68 + 0.32 * max(dot(normalize(vNormal), light), 0.0)) * vLook.x;
+      colour *= (0.7 + 0.3 * max(dot(normalize(vNormal), light), 0.0)) * vLook.x;
       colour = mix(colour, vec3(1.0), vLook.y);
       gl_FragColor = vec4(colour, 1.0);
       #include <tonemapping_fragment>
@@ -337,8 +303,8 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
     }`,
 }), { aBase: 3, aLight: 3, aDark: 3, aLook: 2 }, 1);
 
-/** Outlines and see-through cubes: the landing spot, x-rayed blocks, the
- * lane down to the landing spot. Drawn far to near over the solid ones. */
+/** Outlines and see-through cubes: blocks in the other layers, sticks in
+ * front and behind, the landing spot, the aiming lane. Far to near. */
 const clear = cubeLayer(new THREE.ShaderMaterial({
   transparent: true,
   depthWrite: false,
@@ -370,11 +336,11 @@ const clear = cubeLayer(new THREE.ShaderMaterial({
     }`,
 }), { aColor: 3, aLook: 3 }, 6);
 
-function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.92 } = {}) {
+function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91 } = {}) {
   solid.items.push({ x: at.x, y: at.y, z: at.z, sx: size, sy: size, sz: size, tone: TONES[color], brightness, flash });
 }
 
-function pushClear(at, color, alpha, fill, edge, size = [0.92, 0.92, 0.92]) {
+function pushClear(at, color, alpha, fill, edge, size = [0.91, 0.91, 0.91]) {
   clear.items.push({ x: at.x, y: at.y, z: at.z, sx: size[0], sy: size[1], sz: size[2], color, alpha, fill, edge, depth: 0 });
 }
 
@@ -391,7 +357,6 @@ function flushLayers() {
     solid.buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
     solid.buffers.aLook.setXY(i, item.brightness, item.flash);
   });
-  // Far to near, so the see-through faces blend in order.
   hubGroup.updateMatrixWorld();
   for (const item of clear.items) {
     tmp.set(item.x, item.y, item.z).applyMatrix4(hubGroup.matrixWorld);
@@ -418,6 +383,10 @@ function resize() {
   renderer.setSize(width, height, false);
   lineMaterials.forEach((m) => m.resolution.set(width * dpr, height * dpr));
   camera.aspect = width / height;
+  // The whole cross and its numbers fit, whichever side of the screen is short.
+  const half = REACH + 1.4;
+  const tan = half / (DISTANCE - H) / Math.min(1, camera.aspect);
+  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tan));
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -429,8 +398,8 @@ window.addEventListener('resize', resize);
 const targetQ = new THREE.Quaternion();
 const turn = { from: new THREE.Quaternion(), t: 1 };
 const SCENE_RIGHT = new THREE.Vector3(1, 0, 0);
-const SCENE_FAR = new THREE.Vector3(0, 0, -1);
 const SCENE_UP = new THREE.Vector3(0, 1, 0);
+const SCENE_TOWARD = new THREE.Vector3(0, 0, 1);
 
 /** A scene direction in the data frame, as integers. */
 const toData = (v) => {
@@ -440,74 +409,67 @@ const toData = (v) => {
 /** A data direction in the scene, once the turn under way is over. */
 const toScene = (d) => new THREE.Vector3(...d).applyQuaternion(targetQ).round();
 
-const viewActive = () => sideOfNormal(toData(SCENE_UP));
+const topGlass = () => sideOfNormal(toData(SCENE_UP));
 
-function syncView() {
-  game.viewFrame = { right: toData(SCENE_RIGHT), far: toData(SCENE_FAR) };
-  const active = viewActive();
-  glasses.forEach((glass, side) => {
-    const on = side === active;
-    glass.outline.material.color.copy(on ? ACCENT : WHITE);
-    glass.outline.material.opacity = on ? 0.75 : 0.2;
-    glass.cells.material.opacity = on ? 0.1 : 0.05;
-    glass.walls.forEach((wall) => { wall.material.opacity = on ? 0.035 : 0.022; });
-    glass.floor.visible = on;
-    glass.sprite.material.opacity = on ? 0.8 : 0.35;
-  });
-}
-
-/** Turns the hub a quarter turn about a scene axis, so that a neighbouring
- * glass comes up to the top. */
-function turnHub(axis, quarter) {
+/** Turns the hub a quarter turn about a scene axis: ←/→ in the plane of the
+ * screen, as the 2D cross turns; ↑/↓ about its horizontal, so the glass
+ * behind or in front comes over the top. The glass on top is steered. */
+function turnHub(axis, quarters) {
   turn.from.copy(hubGroup.quaternion);
   turn.t = 0;
-  targetQ.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, (quarter * Math.PI) / 2));
+  targetQ.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2));
   // Snap away the rounding drift of many turns.
   const m = new THREE.Matrix4().makeRotationFromQuaternion(targetQ);
   m.elements.forEach((e, i) => { m.elements[i] = Math.round(e); });
   targetQ.setFromRotationMatrix(m);
-  game.switchTo(viewActive());
-  syncView();
+  game.turn(topGlass(), toData(SCENE_TOWARD), { right: toData(SCENE_RIGHT), up: toData(SCENE_UP) });
+}
+
+/** A number key: a glass around the cross is turned to the top, as in the
+ * 2D game; the one in front or behind is steered where it is. */
+function takeGlass(side) {
+  const at = toScene(normalOf(side));
+  if (at.z !== 0) game.control(side);
+  else if (at.x === -1) turnHub(SCENE_TOWARD, -1);
+  else if (at.x === 1) turnHub(SCENE_TOWARD, 1);
+  else if (at.y === -1) turnHub(SCENE_TOWARD, 2);
+  else game.control(side);
 }
 
 // ------------------------------------------------------------------ input
 
-const KEYS = {
-  KeyW: () => game.move(toData(SCENE_FAR)),
-  KeyS: () => game.move(toData(SCENE_FAR.clone().negate())),
-  KeyA: () => game.move(toData(SCENE_RIGHT.clone().negate())),
-  KeyD: () => game.move(toData(SCENE_RIGHT)),
-};
-// Quarter turns of the stick about a scene axis; Shift turns the other way.
-// Q rolls (left–right ↔ standing), E pitches (far–near ↔ standing), R spins
-// it flat (left–right ↔ far–near).
-const ROTATIONS = { KeyQ: SCENE_FAR, KeyE: SCENE_RIGHT, KeyR: SCENE_UP };
-const TURNS = {
-  ArrowLeft: [new THREE.Vector3(0, 0, 1), -1],
-  ArrowRight: [new THREE.Vector3(0, 0, 1), 1],
-  ArrowUp: [new THREE.Vector3(1, 0, 0), 1],
-  ArrowDown: [new THREE.Vector3(1, 0, 0), -1],
-};
-/** How often each key was pressed, for the notes on how many are needed. */
-const keyCount = {};
+/** The stick of the glass in front or behind moves in all four directions
+ * of the screen; the one on top only left and right, and W/S keep their 2D
+ * meaning for it: turn and drop. */
+const steeringDepth = () => !game.inPlane(game.active);
 
-function press(code, { shift = false, repeat = false } = {}) {
-  if (KEYS[code]) KEYS[code]();
-  else if (ROTATIONS[code]) {
-    const axis = toData(ROTATIONS[code]);
-    game.rotate(shift ? axis.map((v) => -v) : axis);
-  } else if (TURNS[code]) {
-    if (!repeat) turnHub(...TURNS[code]);
-  } else if (code === 'Space') {
+function press(code, { repeat = false } = {}) {
+  const move = (v) => game.move(toData(v));
+  const turnStick = (clockwise) => game.rotate(toData(clockwise ? SCENE_TOWARD.clone().negate() : SCENE_TOWARD));
+  if (code === 'KeyA') move(SCENE_RIGHT.clone().negate());
+  else if (code === 'KeyD') move(SCENE_RIGHT);
+  else if (code === 'KeyW') {
+    if (steeringDepth()) move(SCENE_UP);
+    else turnStick(true);
+  } else if (code === 'KeyS') {
+    if (steeringDepth()) move(SCENE_UP.clone().negate());
+    else if (!repeat) game.dropActive();
+  } else if (code === 'KeyQ') turnStick(false);
+  else if (code === 'KeyE') turnStick(true);
+  else if (code === 'Space') {
     if (!repeat) game.dropActive();
-  } else if (code === 'KeyX') options.xray = (options.xray + 1) % XRAY.length;
+  } else if (code === 'ArrowLeft' || code === 'ArrowRight') {
+    if (!repeat) turnHub(SCENE_TOWARD, code === 'ArrowLeft' ? -1 : 1);
+  } else if (code === 'ArrowUp' || code === 'ArrowDown') {
+    if (!repeat) turnHub(SCENE_RIGHT, code === 'ArrowUp' ? 1 : -1);
+  } else if (/^Digit[1-6]$/.test(code)) {
+    if (!repeat) takeGlass(SIDES.findIndex((s) => s.label === code.slice(5)));
+  } else if (code === 'KeyX') options.hints = (options.hints + 1) % HINTS.length;
   else if (code === 'KeyI') {
     options.inactiveFalls = !options.inactiveFalls;
     game.config.inactiveFalls = options.inactiveFalls;
-  } else if (code === 'KeyV') options.tilt = (options.tilt + 1) % TILTS.length;
-  else if (code === 'KeyO') options.rings = !options.rings;
+  } else if (code === 'KeyO') options.rings = !options.rings;
   else if (code === 'KeyG') options.lane = !options.lane;
-  else if (code === 'KeyT') options.othersClear = !options.othersClear;
   else if (code === 'KeyF') game.fillForTesting();
   else if (code === 'KeyP') options.paused = !options.paused;
   else if (code === 'KeyH') options.help = !options.help;
@@ -517,17 +479,21 @@ function press(code, { shift = false, repeat = false } = {}) {
   renderKeys();
   return true;
 }
+/** How often each key was pressed, for the notes on how many are needed. */
+const keyCount = {};
 
 window.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
-  if (press(event.code, { shift: event.shiftKey, repeat: event.repeat })) event.preventDefault();
+  if (press(event.code, { repeat: event.repeat })) event.preventDefault();
 });
 
 function restart() {
   game = makeGame();
+  targetQ.identity();
+  hubGroup.quaternion.identity();
+  turn.t = 1;
   pieceViews.clear();
   flashes.clear();
-  syncView();
   document.getElementById('banner').hidden = true;
 }
 
@@ -538,21 +504,6 @@ const pieceViews = new Map();
 /** Cells that have just landed flash white for a moment. */
 const flashes = new Map();
 let clock = 0;
-
-const tilt = { deg: TILTS[options.tilt] };
-const target = new THREE.Vector3(0, ARM / 2 - 0.5, 0);
-const DISTANCE = 1.5 * (ARM + CENTRE);
-
-function placeCamera(dt) {
-  const goal = TILTS[options.tilt];
-  tilt.deg += (goal - tilt.deg) * (1 - Math.exp(-dt * 8));
-  const a = THREE.MathUtils.degToRad(tilt.deg);
-  const distance = DISTANCE * (camera.aspect < 1 ? 1.45 : 1);
-  camera.position.set(0, target.y + distance * Math.cos(a), distance * Math.sin(a));
-  camera.lookAt(target);
-  camera.updateMatrixWorld();
-  sharedUniforms.screenUp.value.set(0, 1, 0).applyQuaternion(camera.quaternion);
-}
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -569,57 +520,64 @@ function consumeEvents() {
   game.events.length = 0;
 }
 
+/** The cell of the screen a block is seen in, whatever its depth. */
+const columnOf = (p) => {
+  const k = game.plane.findIndex((v) => v !== 0);
+  return p.filter((_, i) => i !== k).join();
+};
+
+/** For each cell of the screen, the depth of the nearest block behind the
+ * middle layer and of the nearest in front of it. */
+function nearestLayers() {
+  const nearest = new Map();
+  game.hub.forEachBlock((p) => {
+    const depth = game.depthOf(p);
+    if (depth === 0) return;
+    const key = columnOf(p);
+    const known = nearest.get(key) ?? { behind: -Infinity, front: Infinity };
+    if (depth < 0) known.behind = Math.max(known.behind, depth);
+    else known.front = Math.min(known.front, depth);
+    nearest.set(key, known);
+  });
+  return nearest;
+}
+
+/** How a block off the middle layer is hinted at, by its depth: + is in
+ * front of the screen, − behind. Null hides it. */
+function hint(p, depth, nearest) {
+  const mode = HINTS[options.hints];
+  if (mode === 'нет' || (mode === 'только сзади' && depth > 0)) return null;
+  if (mode === 'ближайшие') {
+    const known = nearest.get(columnOf(p));
+    if (depth !== (depth < 0 ? known.behind : known.front)) return null;
+  }
+  // Fainter the further from the middle. Behind: a dim block. In front: an
+  // outline, so that the middle shows through.
+  const fade = 0.62 ** (Math.abs(depth) - 1);
+  return depth < 0
+    ? { alpha: 0.9 * fade, fill: 0.34, edge: 0.75 }
+    : { alpha: 0.85 * fade, fill: 0.08, edge: 0.75 };
+}
+
 function buildBlocks(dt) {
   const hub = game.hub;
-  const active = game.active;
   const phase = game.phase;
   const progress = game.phaseDuration > 0 ? Math.min(1, game.phaseElapsed / game.phaseDuration) : 1;
-
-  const ghost = game.ghost();
-  // Rows of the active glass that the slice keeps: the ghost's and the one
-  // it rests on.
-  let sliceTop = 0;
-  let sliceBottom = hub.depth() - 1;
-  if (ghost) {
-    const rows = ghost.map(({ p }) => hub.fromWorld(active, p).row);
-    sliceTop = Math.min(...rows);
-    sliceBottom = Math.max(...rows) + 1;
-  }
-  const xrayed = (p) => {
-    if (options.xray === 1) return hub.isCentreShell(p);
-    if (options.xray === 2) {
-      const at = hub.fromWorld(active, p);
-      return !at || at.row < sliceTop || at.row > sliceBottom;
-    }
-    return false;
-  };
-
   const matched = game.activeMatch?.cells;
   const falling = new Set();
   if (phase === 'settling') for (const move of game.moves) falling.add(hub.index(move.to));
+  const nearest = nearestLayers();
 
-  hub.forEachBlock((p, color, index) => {
-    if (falling.has(index)) return;
-    const at = local(p, tmp);
-    if (xrayed(p)) {
-      pushClear(at, TONES[color].base, 1, 0.07, 0.4);
-      return;
-    }
-    // Blocks out of the active glass are see-through: the far glass lies
-    // right behind the active one on screen, and solid blocks there look as
-    // if they were inside it.
-    if (options.othersClear && !hub.inGlass(active, p) && !matched?.has(index)) {
-      pushClear(at, TONES[color].base, 1, 0.3, 0.75);
-      return;
-    }
-    const brightness = hub.inGlass(active, p) ? 1 : 0.78;
+  const block = (p, color, { index = -1, offset = null } = {}) => {
+    const at = offset ?? local(p, tmp);
+    const depth = game.depthOf(p);
     let flash = 0;
-    let size = 0.92;
-    if (matched?.has(index)) {
+    let size = 0.91;
+    if (index >= 0 && matched?.has(index)) {
       if (phase === 'matching') flash = 0.25 + 0.4 * Math.sin(progress * Math.PI);
       if (phase === 'clearing') {
         flash = 0.6;
-        size = 0.92 * (1 - progress);
+        size = 0.91 * (1 - progress);
       }
     }
     const landed = flashes.get(index);
@@ -628,9 +586,19 @@ function buildBlocks(dt) {
       if (age > 0.25) flashes.delete(index);
       else flash = Math.max(flash, 0.45 * (1 - age / 0.25));
     }
-    if (size > 0.02) pushSolid(at, color, { brightness, flash, size });
-  });
+    if (size < 0.02) return;
+    if (depth === 0) {
+      pushSolid(at, color, { flash, size });
+      return;
+    }
+    // A match off the middle layer is always shown, so that it is noticed.
+    const look = flash > 0 ? { alpha: 0.9, fill: 0.34, edge: 0.75 } : hint(p, depth, nearest);
+    if (look) pushClear(at, flash > 0 ? WHITE : TONES[color].base, look.alpha, Math.max(look.fill, flash), look.edge, [size, size, size]);
+  };
 
+  hub.forEachBlock((p, color, index) => {
+    if (!falling.has(index)) block(p, color, { index });
+  });
   if (phase === 'settling') {
     const t = Math.min(1, game.phaseElapsed / Math.max(0.01, game.phaseDuration - game.config.fallBounceSeconds));
     const from = new THREE.Vector3();
@@ -638,14 +606,15 @@ function buildBlocks(dt) {
     for (const move of game.moves) {
       local(move.from, from);
       local(move.to, to);
-      pushSolid(from.lerp(to, t * t), move.color);
+      block(move.to, move.color, { offset: from.lerp(to, t * t) });
     }
   }
 
-  // Falling sticks ease into their cells; the ones nobody steers are dim.
+  // Falling sticks ease into their cells. Those of the glasses in front and
+  // behind are see-through: they fly at the cross from out of the screen.
   const k = 1 - Math.exp(-dt * 24);
   for (const [side, view] of pieceViews) if (game.pieces.get(side) !== view.piece) pieceViews.delete(side);
-  for (const piece of game.pieces.values()) {
+  const sticks = [...game.pieces.values()].map((piece) => {
     let view = pieceViews.get(piece.side);
     const goal = local(piece.pivot, new THREE.Vector3());
     if (!view) {
@@ -653,29 +622,29 @@ function buildBlocks(dt) {
       pieceViews.set(piece.side, view);
     }
     view.at.lerp(goal, k);
-    const dir = new THREE.Vector3(...piece.dir);
-    piece.colors.forEach((color, i) => {
-      const at = view.at.clone().addScaledVector(dir, i - 1);
-      if (piece.side === active) pushSolid(at, color);
-      else if (options.othersClear) pushClear(at, TONES[color].base, 1, 0.3, 0.75);
-      else pushSolid(at, color, { brightness: 0.55 });
-    });
-  }
+    return { piece, at: view.at };
+  });
   if (phase === 'dropping' && game.drop) {
     const { piece, from } = game.drop;
-    const at = local(from, new THREE.Vector3()).lerp(local(piece.pivot, new THREE.Vector3()), progress * progress);
+    sticks.push({ piece, at: local(from, new THREE.Vector3()).lerp(local(piece.pivot, new THREE.Vector3()), progress * progress) });
+  }
+  for (const { piece, at } of sticks) {
     const dir = new THREE.Vector3(...piece.dir);
-    piece.colors.forEach((color, i) => pushSolid(at.clone().addScaledVector(dir, i - 1), color));
+    const steered = piece.side === game.active;
+    piece.colors.forEach((color, i) => {
+      const cell = at.clone().addScaledVector(dir, i - 1);
+      if (game.inPlane(piece.side)) pushSolid(cell, color);
+      else pushClear(cell, TONES[color].base, 1, steered ? 0.5 : 0.22, steered ? 1 : 0.6);
+    });
   }
 
-  // Where the active stick will land, and the lane down to it.
+  // Where the steered stick will land, and the lane down to it.
   const piece = game.activePiece;
+  const ghost = game.ghost();
   const landed = !ghost || !piece || ghost.every(({ p }, i) => p.every((v, j) => v === pieceCells(piece)[i].p[j]));
   if (!landed) {
-    // The game's outline in the stick's colours, in a lighter tone so that
-    // it shows over blocks of the same colour.
     for (const { p, color } of ghost) pushClear(local(p, tmp), TONES[color].light, 1, 0.16, 1);
-    if (options.lane) pushLanes(piece, ghost);
+    if (options.lane && game.inPlane(piece.side)) pushLanes(piece, ghost);
   }
   placeRings(landed ? null : piece, ghost);
   flushLayers();
@@ -684,9 +653,8 @@ function buildBlocks(dt) {
 /** A faint column under each lane of the stick, down to the landing spot —
  * the game's aiming lane. */
 function pushLanes(piece, ghost) {
-  const side = piece.side;
-  const n = normalOf(side);
-  const { axis } = SIDES[side];
+  const n = normalOf(piece.side);
+  const { axis } = SIDES[piece.side];
   const lanes = new Map();
   pieceCells(piece).forEach(({ p }, i) => {
     const key = p.filter((_, j) => j !== axis).join();
@@ -695,41 +663,40 @@ function pushLanes(piece, ghost) {
     if (!low || height < low.height) lanes.set(key, { p, height, ghost: ghost[i].p });
   });
   for (const lane of lanes.values()) {
-    // From under the stick's lowest square to over the top of the ghost.
     const top = local(lane.p, new THREE.Vector3()).addScaledVector(new THREE.Vector3(...n), -0.5);
     const bottom = local(lane.ghost, new THREE.Vector3()).addScaledVector(new THREE.Vector3(...n), 0.5);
     const length = top.distanceTo(bottom);
     if (length < 0.05) continue;
-    const size = [0.92, 0.92, 0.92];
+    const size = [0.91, 0.91, 0.91];
     size[axis] = length;
     pushClear(top.add(bottom).multiplyScalar(0.5), WHITE, 1, 0.07, 0, size);
   }
 }
 
-/** The face of the lowest of `cells` that looks towards the floor, as a
- * coordinate along the glass's axis in the hub's frame. */
-function floorFace(cells, side) {
-  const { axis, sign } = SIDES[side];
-  const n = normalOf(side);
-  const lowest = cells.reduce((low, c) => (dot(c.p, n) < dot(low.p, n) ? c : low));
-  return lowest.p[axis] + 0.5 - HALF - 0.5 * sign;
-}
-
+/** For the stick in front or behind: a square around the centre at its
+ * leading face, and one where that face will be when it lands. Nearer
+ * squares are larger, so the gap between the two is how far it has to go. */
 function placeRings(piece, ghost) {
-  [pieceRing, ghostRing].forEach((rings) => rings.forEach((ring) => { ring.visible = false; }));
-  if (!options.rings || !piece || !ghost) return;
-  const { axis } = SIDES[piece.side];
-  pieceRing[axis].visible = true;
-  pieceRing[axis].position.set(0, 0, 0).setComponent(axis, floorFace(pieceCells(piece), piece.side));
-  ghostRing[axis].visible = true;
-  ghostRing[axis].position.set(0, 0, 0).setComponent(axis, floorFace(ghost, piece.side));
+  pieceRing.visible = false;
+  ghostRing.visible = false;
+  if (!options.rings || !piece || !ghost || game.inPlane(piece.side) || turn.t < 1) return;
+  const face = (cells) => {
+    const depths = cells.map(({ p }) => game.depthOf(p));
+    // The face towards the middle: the stick falls through the screen.
+    const toward = toScene(normalOf(piece.side)).z;
+    return toward > 0 ? Math.min(...depths) - 0.5 : Math.max(...depths) + 0.5;
+  };
+  pieceRing.visible = true;
+  pieceRing.position.z = face(pieceCells(piece));
+  ghostRing.visible = true;
+  ghostRing.position.z = face(ghost);
 }
 
 // ------------------------------------------------------------------- HUD
 
 const $ = (id) => document.getElementById(id);
-/** The arrow key that brings each glass to the top, by where it points. */
-const ARROWS = { '0,1,0': '●', '0,-1,0': '↑↑', '-1,0,0': '←', '1,0,0': '→', '0,0,-1': '↑', '0,0,1': '↓' };
+/** Where each glass is on the screen, by where it points. */
+const PLACES = { '0,1,0': '▲ сверху', '0,-1,0': '▼ снизу', '-1,0,0': '◀ слева', '1,0,0': '▶ справа', '0,0,1': '⊙ спереди', '0,0,-1': '⊗ сзади' };
 const glassRows = SIDES.map((s) => {
   const row = document.createElement('div');
   row.className = 'glass';
@@ -737,39 +704,44 @@ const glassRows = SIDES.map((s) => {
   return row;
 });
 [...glassRows].sort((a, b) => a.firstChild.textContent - b.firstChild.textContent).forEach((row) => $('glasses').append(row));
-let hudVersion = -1;
-let hudActive = -1;
+let hudKey = '';
 let nextKey = '';
 
 function renderHud() {
   $('score').textContent = game.score.toLocaleString('ru-RU');
   $('combo').textContent = game.combo > 1 ? `×${game.combo}` : game.bestCombo > 1 ? `лучшее ×${game.bestCombo}` : '—';
   $('placed').textContent = game.placed;
-  $('phase').textContent = options.paused ? 'пауза' : game.phase;
+  const piece = game.activePiece;
+  const where = PLACES[toScene(normalOf(game.active)).toArray().join()] ?? '';
+  let depth = '';
+  if (piece && !game.inPlane(game.active)) {
+    const ghost = game.ghost();
+    const layer = ghost ? game.depthOf(ghost[0].p) : null;
+    depth = layer === null ? '' : ` · сядет в слой ${layer > 0 ? `+${layer}` : layer}`;
+  }
+  $('phase').textContent = options.paused ? 'пауза' : `стакан ${SIDES[game.active].label} ${where.slice(2)}${depth}`;
   const next = game.nextColors.join();
   if (next !== nextKey) {
     nextKey = next;
+    const css = (rgb) => `rgb(${rgb.map(Math.round).join(' ')})`;
     $('next').innerHTML = game.nextColors.map((c) => {
-      const n = parseInt(TONES[c].hex.slice(1), 16);
-      const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-      const css = (channels) => `rgb(${channels.map(Math.round).join(' ')})`;
-      return `<i style="--base:${TONES[c].hex};--light:${css(rgb.map((v) => v + (255 - v) * 0.45))};--dark:${css(rgb.map((v) => v * 0.65))}"></i>`;
+      const rgb = channels(TONES[c].hex);
+      return `<i style="--base:${TONES[c].hex};--light:${css(lighter(rgb))};--dark:${css(darker(rgb))}"></i>`;
     }).join('');
   }
-  const active = viewActive();
-  if (game.hub.version === hudVersion && active === hudActive) return;
-  hudVersion = game.hub.version;
-  hudActive = active;
-  const depth = game.hub.depth();
+  const key = `${game.hub.version}:${game.active}:${targetQ.toArray().join()}`;
+  if (key === hudKey) return;
+  hudKey = key;
+  const depthOfGlass = game.hub.depth();
   SIDES.forEach((s, i) => {
     const row = glassRows[i];
     const room = game.hub.headroom(s.id);
-    row.classList.toggle('active', s.id === active);
+    row.classList.toggle('active', s.id === game.active);
     row.classList.toggle('crowded', room <= 2);
-    row.querySelector('.key').textContent = ARROWS[toScene(normalOf(s.id)).toArray().join()] ?? '?';
-    row.querySelector('.bar i').style.width = `${Math.round(((depth - room) / depth) * 100)}%`;
+    row.querySelector('.key').textContent = PLACES[toScene(normalOf(s.id)).toArray().join()]?.slice(0, 1) ?? '?';
+    row.querySelector('.bar i').style.width = `${Math.round(((depthOfGlass - room) / depthOfGlass) * 100)}%`;
     row.querySelector('.pct').textContent = `${room}`;
-    row.title = `свободных рядов у края: ${room}`;
+    row.title = `${PLACES[toScene(normalOf(s.id)).toArray().join()]?.slice(2)} · свободных рядов у края: ${room}`;
   });
 }
 
@@ -778,17 +750,16 @@ function renderKeys() {
   const yes = (flag) => on(flag, flag ? 'да' : 'нет');
   $('keys').hidden = !options.help;
   $('keys').innerHTML = [
-    '<b>W A S D</b> — двигать по сечению (как на экране)',
-    '<b>Q</b> — наклон влево-вправо ⇄ стоя',
-    '<b>E</b> — наклон вперёд-назад ⇄ стоя',
-    '<b>R</b> — поворот плашмя; <b>Shift</b> — в другую сторону',
-    '<b>Пробел</b> — сбросить',
-    '<b>← → ↑ ↓</b> — повернуть хаб: этот сосед наверх',
-    `<b>X</b> — рентген: ${on(options.xray > 0, XRAY[options.xray])}`,
-    `<b>I</b> — падают и в других: ${yes(options.inactiveFalls)}`,
-    `<b>V</b> — камера: ${TILTS[options.tilt]}° от оси`,
+    '<b>A D</b> — влево, вправо',
+    '<b>W</b> — повернуть · <b>S</b>, <b>Пробел</b> — сбросить',
+    '<b>Q E</b> — повернуть против / по часовой',
+    '<b>1–6</b> — взять стакан: боковой повернуть наверх, передний/задний вести на месте',
+    '<b>W S</b> у переднего/заднего — вверх, вниз',
+    '<b>← →</b> — повернуть крест, как в 2D',
+    '<b>↑ ↓</b> — опрокинуть хаб: задний / передний стакан наверх',
+    `<b>X</b> — другие слои: ${on(HINTS[options.hints] !== 'нет', HINTS[options.hints])}`,
+    `<b>I</b> — падают и в других стаканах: ${yes(options.inactiveFalls)}`,
     `<b>O</b> — рамки глубины: ${yes(options.rings)} · <b>G</b> — дорожка: ${yes(options.lane)}`,
-    `<b>T</b> — другие стаканы прозрачные: ${yes(options.othersClear)}`,
     '<b>F</b> — набросать блоков · <b>P</b> — пауза',
     '<b>N</b> — заново · <b>H</b> — спрятать подсказку',
   ].map((line) => `<div>${line}</div>`).join('');
@@ -812,7 +783,17 @@ function frame(now) {
   } else {
     hubGroup.quaternion.copy(targetQ);
   }
-  placeCamera(dt);
+  // The cross of the screen fades while the hub turns, and comes back.
+  const shown = turn.t < 1 ? Math.abs(Math.cos(Math.PI * turn.t)) ** 2 : 1;
+  cross.traverse((object) => {
+    if (object.material) object.material.opacity = object.material.userData.opacity * shown;
+  });
+  // The tunnel of the hub stands out while it turns.
+  const tunnel = turn.t < 1 ? 0.1 + 0.25 * Math.sin(Math.PI * turn.t) : 0.1;
+  hubLines.forEach((line) => { line.material.opacity = tunnel; });
+  labels.forEach(({ sprite }, side) => {
+    sprite.material.opacity = side === game.active ? 0.95 : 0.4;
+  });
   buildBlocks(dt);
   renderHud();
   renderer.render(scene, camera);
@@ -820,7 +801,6 @@ function frame(now) {
 }
 
 resize();
-syncView();
 renderKeys();
 await document.fonts.ready;
 drawLabels();
@@ -831,14 +811,10 @@ window.__proto3d = {
   get game() { return game; },
   press,
   keyCount,
-  /** A data direction as the scene shows it once the turn is over:
-   * +x is screen-right, −z is screen-up, +y is towards the eye. */
-  toScene: (d) => toScene(d).toArray(),
   options,
-  /** Lets `seconds` of game time pass at once. */
-  advance(seconds) {
-    for (let t = 0; t < seconds; t += 1 / 60) game.update(1 / 60);
-    consumeEvents();
-  },
+  /** A data direction as the screen shows it once the turn is over:
+   * +x right, +y up, +z towards the eye. */
+  toScene: (d) => toScene(d).toArray(),
+  get turning() { return turn.t < 1; },
   ready: true,
 };
