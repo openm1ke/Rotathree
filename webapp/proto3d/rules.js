@@ -2,15 +2,19 @@
 // they carry over: six glasses (arms) along ±x, ±y, ±z share a cube of a
 // centre, a stick of three falls down each glass one whole cell per step, the
 // steered glass steps fast and the others slowly, a stick that cannot step
-// locks, lines of three or more of a colour along x, y or z pop, the blocks
-// fall down the screen (towards the floor of the glass on top), cascades
-// repeat, and a glass whose far end is full when a new stick is due ends the
-// game.
+// locks, cascades repeat, and a glass whose far end is full when a new stick
+// is due ends the game.
 //
-// The screen shows the cross as the 2D game does: the four glasses around it
-// lie in the middle layer of the cube, and their sticks move and turn only
-// in it. The glasses in front of and behind the screen drop their sticks
-// along the line of sight, into any layer; they are steered in place.
+// The game is played on what the screen shows: the hub seen along the line
+// of sight, each cell of the screen showing the nearest block behind it.
+// Lines of three or more of a colour pop in that picture, and the cells of
+// the glass on top fall down it, each with everything behind it — as in the
+// 2D game. The sticks of the four glasses around the screen live in the
+// middle layer of the cube and stop on whatever the screen shows. The
+// glasses in front of and behind the screen drop their sticks along the line
+// of sight, into any layer, and are steered in place. Tipping the hub over
+// (↑/↓) shows it from another side: what was depth becomes up or across, and
+// the new picture settles and pops.
 //
 // Everything here is in the fixed data frame: cells are integer [x, y, z] in
 // an N³ grid, N = centre + 2·arm. Turning the hub only changes which glass is
@@ -209,68 +213,6 @@ export class Hub {
   }
 }
 
-/** Lines of `minLength`+ cells of one colour along x, y or z, anywhere in
- * the hub. Cells outside the hub are always empty, so they end a line. */
-export function findMatches(hub, minLength = 3) {
-  const runs = [];
-  const n = hub.size;
-  for (let axis = 0; axis < 3; axis++) {
-    const [k1, k2] = [0, 1, 2].filter((i) => i !== axis);
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const cell = (t) => {
-          const p = [0, 0, 0];
-          p[axis] = t;
-          p[k1] = i;
-          p[k2] = j;
-          return p;
-        };
-        let start = 0;
-        while (start < n) {
-          const color = hub.at(cell(start));
-          let end = start + 1;
-          if (color !== EMPTY) {
-            while (end < n && hub.at(cell(end)) === color) end++;
-            if (end - start >= minLength) {
-              const cells = [];
-              for (let t = start; t < end; t++) cells.push(hub.index(cell(t)));
-              runs.push({ color, cells, axis });
-            }
-          }
-          start = end;
-        }
-      }
-    }
-  }
-  return { runs, cells: new Set(runs.flatMap((run) => run.cells)) };
-}
-
-/** Plain gravity in the active glass: every block of it falls towards its
- * floor until it rests. Blocks in the other five arms never move. Mutates
- * `hub` and returns what moved. */
-export function settle(hub, active) {
-  const depth = hub.depth();
-  const moves = [];
-  for (let a = 0; a < hub.centre; a++) {
-    for (let b = 0; b < hub.centre; b++) {
-      let target = depth - 1;
-      for (let row = depth - 1; row >= 0; row--) {
-        const from = hub.toWorld(active, row, a, b);
-        const color = hub.at(from);
-        if (color === EMPTY) continue;
-        if (target !== row) {
-          const to = hub.toWorld(active, target, a, b);
-          hub.set(from, EMPTY);
-          hub.set(to, color);
-          moves.push({ from, to, color, distance: target - row });
-        }
-        target--;
-      }
-    }
-  }
-  return moves;
-}
-
 /** A stick: its middle square sits at `pivot`, square i at
  * pivot + (i − 1)·dir. `dir` is a unit axis vector; turning the stick turns
  * `dir`, so the colour order never changes. */
@@ -285,17 +227,14 @@ export class Game {
     this.seed = this.config.seed ?? Math.floor(Math.random() * 0xffffffff);
     this.random = mulberry32(this.seed);
     this.hub = new Hub(this.config.centre, this.config.arm);
-    /** The glass on top of the screen: its fall is "down", and blocks fall
-     * that way after a match, as in the 2D game. */
+    /** The glass on top of the screen: its fall is "down". */
     this.down = 0;
     /** The glass whose stick the player steers and that steps fast: the one
      * on top, or the one in front of or behind the screen. */
     this.active = 0;
-    /** The data direction towards the eye. Sticks of the four glasses
-     * around the screen live in the middle layer across it. */
+    /** The data direction towards the eye. */
     this.plane = [0, 0, 1];
-    /** Data directions of the screen's right and up, set by the view; a new
-     * stick lies along whichever crosses its glass. */
+    /** Data directions of the screen's right and up, set by the view. */
     this.viewFrame = { right: [1, 0, 0], up: [0, 1, 0] };
     /** side → { side, colors, pivot, dir, progress } */
     this.pieces = new Map();
@@ -327,9 +266,14 @@ export class Game {
     return this.phase === 'gameOver';
   }
 
-  /** Index of the middle layer of the centre along any axis. */
+  /** Index of the middle of the hub along any axis; also its middle layer. */
   get middle() {
-    return this.hub.arm + Math.floor(this.config.centre / 2);
+    return (this.hub.size - 1) / 2;
+  }
+
+  /** Half the side of the centre, in whole cells from its middle. */
+  get half() {
+    return Math.floor(this.config.centre / 2);
   }
 
   /** Whether the glass lies across the screen (top, left, right, bottom)
@@ -338,11 +282,141 @@ export class Game {
     return dot(normalOf(side), this.plane) === 0;
   }
 
+  // ------------------------------------------------------- what is seen
+
+  /** The cell of the screen a data cell is seen in: across and up from the
+   * middle of the hub. */
+  screenOf(p) {
+    const q = p.map((v) => v - this.middle);
+    return [dot(q, this.viewFrame.right), dot(q, this.viewFrame.up)];
+  }
+
   /** The depth of a cell, in layers from the middle one: + towards the eye. */
   depthOf(p) {
-    const k = this.plane.findIndex((v) => v !== 0);
-    return (p[k] - this.middle) * this.plane[k];
+    return dot(p.map((v) => v - this.middle), this.plane);
   }
+
+  /** The data cell seen at screen cell (`sx`, `sy`) at depth `d`. */
+  cellAt(sx, sy, d) {
+    const { right, up } = this.viewFrame;
+    return [0, 1, 2].map((i) => this.middle + sx * right[i] + sy * up[i] + d * this.plane[i]);
+  }
+
+  /** The blocks seen at a screen cell, nearest first. */
+  stackAt(sx, sy) {
+    const stack = [];
+    for (let d = this.middle; d >= -this.middle; d--) {
+      const p = this.cellAt(sx, sy, d);
+      if (this.hub.isInside(p) && this.hub.at(p) !== EMPTY) stack.push(p);
+    }
+    return stack;
+  }
+
+  /** The block the screen shows at a screen cell, or null. */
+  seenAt(sx, sy) {
+    for (let d = this.middle; d >= -this.middle; d--) {
+      const p = this.cellAt(sx, sy, d);
+      if (this.hub.isInside(p) && this.hub.at(p) !== EMPTY) return p;
+    }
+    return null;
+  }
+
+  /** Whether nothing at all is seen where `p` is, at any depth. */
+  clearOnScreen(p) {
+    const [sx, sy] = this.screenOf(p);
+    return this.seenAt(sx, sy) === null;
+  }
+
+  /** Whether a stick of `side` may cover `p`: inside its glass and, for a
+   * glass across the screen, where the screen shows nothing — sticks there
+   * stop on what is seen, whatever its depth. */
+  isFree(side, p) {
+    if (!this.hub.inGlass(side, p)) return false;
+    return this.inPlane(side) ? this.clearOnScreen(p) : this.hub.at(p) === EMPTY;
+  }
+
+  /** Lines of `minMatchLength`+ of one colour in the picture on the screen,
+   * across or up it — the 2D rule on what is seen. A line pops the blocks
+   * that are seen, and shows what was behind them. */
+  findMatches() {
+    const reach = this.middle;
+    const min = this.config.minMatchLength;
+    const seen = new Map();
+    const at = (sx, sy) => {
+      const key = `${sx},${sy}`;
+      if (!seen.has(key)) {
+        const p = this.seenAt(sx, sy);
+        seen.set(key, p && { index: this.hub.index(p), color: this.hub.at(p) });
+      }
+      return seen.get(key);
+    };
+    const runs = [];
+    for (const across of [true, false]) {
+      for (let line = -reach; line <= reach; line++) {
+        const cell = (k) => (across ? at(k, line) : at(line, k));
+        let start = -reach;
+        while (start <= reach) {
+          const first = cell(start);
+          let end = start + 1;
+          if (first) {
+            while (end <= reach && cell(end)?.color === first.color) end++;
+            if (end - start >= min) {
+              const cells = [];
+              for (let k = start; k < end; k++) cells.push(cell(k).index);
+              runs.push({ color: first.color, cells, across });
+            }
+          }
+          start = end;
+        }
+      }
+    }
+    return { runs, cells: new Set(runs.flatMap((run) => run.cells)) };
+  }
+
+  /** Gravity of the 2D game on the picture: in the glass on top, every cell
+   * of the screen that shows something falls down it to the next one that
+   * does, taking everything behind it along. Blocks in the other glasses
+   * never move. Mutates the hub and returns what moved. */
+  settle() {
+    const half = this.half;
+    const shift = (k) => scale(this.viewFrame.up, k);
+    const moves = [];
+    for (let sx = -half; sx <= half; sx++) {
+      let target = -half;
+      for (let sy = -half; sy <= this.middle; sy++) {
+        const stack = this.stackAt(sx, sy);
+        if (stack.length === 0) continue;
+        if (sy !== target) {
+          for (const from of stack) {
+            const color = this.hub.at(from);
+            const to = add(from, shift(target - sy));
+            this.hub.set(from, EMPTY);
+            this.hub.set(to, color);
+            moves.push({ from, to, color, distance: sy - target });
+          }
+        }
+        target++;
+      }
+    }
+    return moves;
+  }
+
+  /** Free rows at the far end of the glass, over all its lanes: how much
+   * room a new stick has. */
+  headroom(side) {
+    const hub = this.hub;
+    let free = hub.depth();
+    for (let a = 0; a < hub.centre; a++) {
+      for (let b = 0; b < hub.centre; b++) {
+        let row = 0;
+        while (row < hub.depth() && this.isFree(side, hub.toWorld(side, row, a, b))) row++;
+        free = Math.min(free, row);
+      }
+    }
+    return free;
+  }
+
+  // --------------------------------------------------------------- sticks
 
   roll() {
     const palette = this.config.numberOfColors;
@@ -362,8 +436,15 @@ export class Game {
     return this.queue[0];
   }
 
-  fits(side, pivot, dir, colors = [0, 0, 0]) {
-    return pieceCells({ pivot, dir, colors }).every(({ p }) => this.hub.isFreeIn(side, p));
+  fits(side, pivot, dir) {
+    return pieceCells({ pivot, dir, colors: [0, 0, 0] }).every(({ p }) => this.isFree(side, p));
+  }
+
+  /** Whether a stick of `side` may be at `pivot`/`dir`: free cells, and for
+   * a glass across the screen, flat in the middle layer. */
+  allowed(side, pivot, dir) {
+    if (this.inPlane(side) && (dot(dir, this.plane) !== 0 || this.depthOf(pivot) !== 0)) return false;
+    return this.fits(side, pivot, dir);
   }
 
   /** A new stick lies across its glass along the screen's right, or along
@@ -388,7 +469,7 @@ export class Game {
     this.queue.push(this.roll());
     const dir = this.spawnDir(side);
     const pivot = this.spawnPivot(side);
-    if (!this.fits(side, pivot, dir)) return false;
+    if (!this.allowed(side, pivot, dir)) return false;
     this.pieces.set(side, { side, colors, pivot, dir, progress: 0 });
     return true;
   }
@@ -405,6 +486,19 @@ export class Game {
     const piece = this.pieces.get(side);
     if (!piece) return null;
     return pieceCells({ ...piece, pivot: this.restRow(piece) });
+  }
+
+  /** For a stick in front or behind: the layer it would land in, and how
+   * many of its squares would be seen there rather than hidden. */
+  landing(side = this.active) {
+    const cells = this.ghost(side);
+    if (!cells) return null;
+    const seen = cells.filter(({ p }) => {
+      const [sx, sy] = this.screenOf(p);
+      const front = this.seenAt(sx, sy);
+      return front === null || this.depthOf(front) < this.depthOf(p);
+    }).length;
+    return { layer: this.depthOf(cells[0].p), seen, of: cells.length };
   }
 
   // --------------------------------------------------------------- input
@@ -435,21 +529,15 @@ export class Game {
   }
 
   /** The hub has been turned: `down` is the glass now on top, and the one
-   * the player steers. */
-  turn(down, plane, viewFrame) {
-    this.submit({ kind: 'turn', down, plane, viewFrame });
+   * the player steers. After tipping it over (`settle`) the new picture
+   * settles and pops. */
+  turn(down, plane, viewFrame, settle) {
+    this.submit({ kind: 'turn', down, plane, viewFrame, settle });
   }
 
   /** Steers the stick of another glass without turning anything. */
   control(side) {
     this.submit({ kind: 'control', side });
-  }
-
-  /** Whether a stick of `side` may be at `pivot`/`dir`: free cells, and for
-   * a glass across the screen, flat in its middle layer. */
-  allowed(side, pivot, dir) {
-    if (this.inPlane(side) && (dot(dir, this.plane) !== 0 || this.depthOf(pivot) !== 0)) return false;
-    return this.fits(side, pivot, dir);
   }
 
   apply(input) {
@@ -463,6 +551,7 @@ export class Game {
         this.viewFrame = input.viewFrame;
         this.reseat();
         this.events.push({ type: 'switched', from, to: input.down });
+        if (input.settle) this.resolve();
         return;
       }
       case 'control':
@@ -489,7 +578,7 @@ export class Game {
         }
         // Nudges tried when the turn does not fit, gentlest first: across the
         // glass, back towards its far end, down. A stick of a glass across the
-        // screen is only nudged within the screen.
+        // screen is only nudged within the screen (`allowed`).
         const n = normalOf(piece.side);
         const across = this.hub.crossAxes(piece.side).map((k) => {
           const e = [0, 0, 0];
@@ -519,8 +608,8 @@ export class Game {
     }
   }
 
-  /** After a turn about a screen axis some sticks in flight point at the eye
-   * or have left the middle layer. Each is laid flat again — in the middle
+  /** After tipping the hub over some sticks in flight point at the eye or
+   * have left the middle layer. Each is laid flat again — in the middle
    * layer for a glass across the screen, across the line of sight for the
    * one in front or behind — and backs off towards its far end if it no
    * longer fits; failing that it starts again from there. */
@@ -624,13 +713,13 @@ export class Game {
   }
 
   /** Sticks pass through each other while falling, so a block that has
-   * just appeared may sit inside one; it backs off towards its own far end.
+   * just appeared may cover one; it backs off towards its own far end.
    * False when one has nowhere to go: game over. */
   makeRoom() {
     for (const piece of this.pieces.values()) {
       const back = normalOf(piece.side);
       let pivot = piece.pivot;
-      while (!this.fits(piece.side, pivot, piece.dir)) {
+      while (!this.allowed(piece.side, pivot, piece.dir)) {
         pivot = add(pivot, back);
         if (!this.hub.inGlass(piece.side, pivot)) {
           this.endGame(piece.side);
@@ -642,8 +731,23 @@ export class Game {
     return true;
   }
 
+  /** Lets the picture settle, then pops what lines up (a tipped hub). */
+  resolve() {
+    const moves = this.settle();
+    if (moves.length > 0) this.startFalling(moves);
+    else this.checkMatches();
+  }
+
+  startFalling(moves) {
+    this.moves = moves;
+    const far = moves.reduce((m, move) => Math.max(m, move.distance), 0);
+    this.events.push({ type: 'fell', moves });
+    this.enterPhase('settling', this.config.fallBaseSeconds + this.config.fallSecondsPerRootCell * Math.sqrt(far) + this.config.fallBounceSeconds);
+    this.makeRoom();
+  }
+
   checkMatches() {
-    const match = findMatches(this.hub, this.config.minMatchLength);
+    const match = this.findMatches();
     if (match.runs.length === 0) {
       this.finishResolution();
       return;
@@ -680,17 +784,10 @@ export class Game {
         });
         for (const i of match.cells) this.hub.set(this.hub.cellOf(i), EMPTY);
         this.activeMatch = null;
-        // Down the screen, whichever stick made the match.
-        const moves = settle(this.hub, this.down);
-        if (moves.length === 0) {
-          this.checkMatches();
-        } else {
-          this.moves = moves;
-          const far = moves.reduce((m, move) => Math.max(m, move.distance), 0);
-          this.events.push({ type: 'fell', moves });
-          this.enterPhase('settling', this.config.fallBaseSeconds + this.config.fallSecondsPerRootCell * Math.sqrt(far) + this.config.fallBounceSeconds);
-          this.makeRoom();
-        }
+        // What was behind the popped blocks is seen now; the picture falls.
+        const moves = this.settle();
+        if (moves.length === 0) this.checkMatches();
+        else this.startFalling(moves);
         break;
       }
       case 'settling':
@@ -729,44 +826,37 @@ export class Game {
     this.events.push({ type: 'gameEnded', side });
   }
 
-  /** Fills the bottom of the centre, every layer of it, with random blocks
-   * that make no line: a busy board to try the hints of depth on. */
+  /** Fills the bottom rows of the picture, each cell with one to three
+   * blocks at random depths, so that something waits behind what is seen.
+   * The colours that are seen make no line. */
   fillForTesting(rows = 3) {
-    const hub = this.hub;
-    const depth = hub.depth();
+    const half = this.half;
     const palette = this.config.numberOfColors;
-    const makesLine = (p, color) => {
-      for (let axis = 0; axis < 3; axis++) {
-        let count = 1;
-        for (const sign of [-1, 1]) {
-          const q = [...p];
-          for (;;) {
-            q[axis] += sign;
-            if (!hub.isInside(q) || hub.at(q) !== color) break;
-            count++;
-          }
-        }
-        if (count >= this.config.minMatchLength) return true;
-      }
-      return false;
+    const pick = (count) => Math.floor(this.random() * count);
+    const seenColor = (sx, sy) => {
+      const p = this.seenAt(sx, sy);
+      return p ? this.hub.at(p) : EMPTY;
     };
-    for (let row = depth - 1; row >= depth - rows; row--) {
-      for (let a = 0; a < hub.centre; a++) {
-        for (let b = 0; b < hub.centre; b++) {
-          const p = hub.toWorld(this.down, row, a, b);
-          if (hub.at(p) !== EMPTY) continue;
-          const below = hub.toWorld(this.down, row + 1, a, b);
-          if (row < depth - 1 && hub.at(below) === EMPTY) continue;
-          if (this.random() < (row === depth - rows ? 0.6 : 0.2)) continue;
-          const start = Math.floor(this.random() * palette);
-          for (let k = 0; k < palette; k++) {
-            const color = (start + k) % palette;
-            if (!makesLine(p, color)) {
-              hub.set(p, color);
-              break;
-            }
+    for (let sy = -half; sy < -half + rows; sy++) {
+      for (let sx = -half; sx <= half; sx++) {
+        if (this.seenAt(sx, sy) !== null) continue;
+        if (sy > -half && this.seenAt(sx, sy - 1) === null) continue;
+        if (this.random() < (sy === -half + rows - 1 ? 0.5 : 0.12)) continue;
+        // Depths, nearest first; the nearest gets a colour that makes no line.
+        const depths = [...Array(2 * half + 1).keys()].map((d) => d - half).sort(() => this.random() - 0.5);
+        const count = 1 + pick(3);
+        const chosen = depths.slice(0, count).sort((a, b) => b - a);
+        const start = pick(palette);
+        let front = start;
+        for (let k = 0; k < palette; k++) {
+          const c = (start + k) % palette;
+          const line = (dx, dy) => seenColor(sx - dx, sy - dy) === c && seenColor(sx - 2 * dx, sy - 2 * dy) === c;
+          if (!line(1, 0) && !line(0, 1)) {
+            front = c;
+            break;
           }
         }
+        chosen.forEach((d, i) => this.hub.set(this.cellAt(sx, sy, d), i === 0 ? front : pick(palette)));
       }
     }
     this.makeRoom();

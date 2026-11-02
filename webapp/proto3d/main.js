@@ -1,11 +1,11 @@
 // A throwaway prototype of a 3D mode of RotaThree. The screen shows the cross
-// as the 2D game does — the glass on top, its neighbours left, right and
-// below, all in the middle layer of a cube of a centre — and only hints at
-// the third dimension: a glass in front of the screen and one behind it whose
-// sticks fly at the cross along the line of sight, blocks in the other layers
-// seen through the middle one, and the whole hub tumbling when ↑/↓ bring the
-// glass behind or in front up to the top. Drawn the way the game draws its
-// cross (src/render). Dev server only: /proto3d/.
+// as the 2D game does, and the game is played on that picture: each cell
+// shows the nearest block behind it, lines of what is seen pop, and what is
+// seen falls (rules.js). The third dimension shows when the hub is tipped
+// over (↑/↓) and while V is held, and as a faint tunnel at the centre: the
+// glasses in front of and behind the screen, whose sticks fly along the line
+// of sight. Drawn the way the game draws its cross (src/render). Dev server
+// only: /proto3d/.
 //
 // URL: ?centre=7&arm=8&colors=4&seed=1
 import * as THREE from 'three';
@@ -45,21 +45,41 @@ const WHITE = new THREE.Color('#ffffff');
 /** Accent of the active glass (THEME.accent). */
 const ACCENT = new THREE.Color('#78cdff');
 const TURN_SECONDS = 0.36;
-/** What is shown of the layers off the middle one; X cycles. */
-const HINTS = ['ближайшие', 'все слои', 'только сзади', 'нет'];
+/** How far the hub turns to be looked at while V is held. */
+const PEEK = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.45, -0.55, 0));
+/** Depth is squashed this flat when the picture is the game: the nearest
+ * block of every cell still wins, but nothing looks deeper than another. */
+const FLAT = 0.02;
 
 const N = CENTRE + 2 * ARM;
 const HALF = N / 2;
 const H = CENTRE / 2;
 const REACH = H + ARM;
 
-const options = {
-  hints: 0,
-  inactiveFalls: true,
-  rings: true,
-  lane: true,
-  help: true,
-  paused: false,
+/** Settings: each has a key and a box in the settings panel, and is kept
+ * between visits. */
+const SETTINGS = [
+  { id: 'depthSticks', key: 'KeyT', label: 'Фигуры спереди и сзади, которыми не управляешь', initial: false },
+  { id: 'inactiveFalls', key: 'KeyI', label: 'Фигуры падают и в других стаканах', initial: true },
+  { id: 'lane', key: 'KeyG', label: 'Дорожка до места посадки', initial: true },
+];
+const STORE = 'rotathree-proto3d-settings';
+const options = { help: true, paused: false, peek: false };
+{
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(STORE) ?? '{}');
+  } catch {
+    // A private window or blocked storage: the defaults will do.
+  }
+  for (const s of SETTINGS) options[s.id] = typeof saved[s.id] === 'boolean' ? saved[s.id] : s.initial;
+}
+const saveSettings = () => {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(Object.fromEntries(SETTINGS.map((s) => [s.id, options[s.id]]))));
+  } catch {
+    // Not kept, then.
+  }
 };
 
 const makeGame = () => new Game({
@@ -81,14 +101,13 @@ renderer.setPixelRatio(dpr);
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
-// Far away and narrow: the middle layer looks flat, as in the 2D game, while
-// what is nearer or further is a little larger or smaller.
+// Far away and narrow, so that the cross looks flat.
 const DISTANCE = 4.2 * REACH;
 const camera = new THREE.PerspectiveCamera(30, 1, 1, DISTANCE * 3);
 camera.position.set(0, 0, DISTANCE);
 camera.lookAt(0, 0, 0);
 
-/** Turned as a whole; the data never turns. */
+/** The hub's edges and numbers: turned as a whole; the data never turns. */
 const hubGroup = new THREE.Group();
 scene.add(hubGroup);
 /** The cross of the 2D game, fixed to the screen: it fades while the hub
@@ -123,7 +142,7 @@ const makePane = (x, y, width, height, opacity, parent) => {
 
 // --- The cross (src/render/renderer.ts drawField): a faint fill and grid for
 // each arm and for the centre, outlines a little brighter, the glass on top
-// in the accent. Behind the middle layer, so blocks there sit on it.
+// in the accent. Behind the blocks.
 const cross = (() => {
   const z = -0.5;
   const arms = [0, 1, 2, 3].map((quarter) => {
@@ -175,7 +194,7 @@ const hubLines = SIDES.map((s) => {
 {
   const p = [];
   for (const a of [-H, H]) for (const b of [-H, H]) p.push(-H, a, b, H, a, b, a, -H, b, a, H, b, a, b, -H, a, b, H);
-  makeLines(p, { opacity: 0.12 });
+  hubLines.push(makeLines(p, { opacity: 0.12 }));
 }
 
 /** The glasses' numbers, beside a corner of each rim. */
@@ -200,24 +219,10 @@ const drawLabels = () => labels.forEach(({ sprite, canvas: label }, side) => {
   sprite.material.map.needsUpdate = true;
 });
 
-/** A square around the centre at a depth along the line of sight: where the
- * stick of the glass in front or behind is, and where it will land. */
-const makeRing = (color, opacity) => {
-  const p = [];
-  CORNERS.forEach(([a, b], i) => {
-    const [na, nb] = CORNERS[(i + 1) % 4];
-    p.push(a, b, 0, na, nb, 0);
-  });
-  const ring = makeLines(p, { color, opacity, width: 1.5, parent: scene });
-  ring.visible = false;
-  return ring;
-};
-const pieceRing = makeRing(WHITE, 0.45);
-const ghostRing = makeRing(ACCENT, 0.8);
-
 // --- Blocks. Solid ones are drawn like the game's sprite: a bevel going
 // from light at the top of the screen to dark at the bottom, around a flat
-// face with a soft shine across its top.
+// face with a soft shine across its top. Placed in the scene by hand, so that
+// depth can be squashed flat.
 const MAX_CUBES = N * N * N + 64;
 
 function cubeLayer(material, attributes, renderOrder) {
@@ -232,7 +237,7 @@ function cubeLayer(material, attributes, renderOrder) {
   mesh.frustumCulled = false;
   mesh.renderOrder = renderOrder;
   mesh.count = 0;
-  hubGroup.add(mesh);
+  scene.add(mesh);
   return { mesh, buffers, items: [] };
 }
 
@@ -303,8 +308,8 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
     }`,
 }), { aBase: 3, aLight: 3, aDark: 3, aLook: 2 }, 1);
 
-/** Outlines and see-through cubes: blocks in the other layers, sticks in
- * front and behind, the landing spot, the aiming lane. Far to near. */
+/** Outlines and see-through cubes: the landing spot, the aiming lane, the
+ * sticks in front and behind. Far to near. */
 const clear = cubeLayer(new THREE.ShaderMaterial({
   transparent: true,
   depthWrite: false,
@@ -336,20 +341,35 @@ const clear = cubeLayer(new THREE.ShaderMaterial({
     }`,
 }), { aColor: 3, aLook: 3 }, 6);
 
-function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91 } = {}) {
-  solid.items.push({ x: at.x, y: at.y, z: at.z, sx: size, sy: size, sz: size, tone: TONES[color], brightness, flash });
+/** `at` is in the hub's frame. `lift` moves a cube towards the eye (or away)
+ * while the picture is flat: the sticks in front of and behind the screen
+ * are drawn over and under it. */
+function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91, lift = 0 } = {}) {
+  solid.items.push({ at: at.clone(), size: [size, size, size], lift, tone: TONES[color], brightness, flash });
 }
 
-function pushClear(at, color, alpha, fill, edge, size = [0.91, 0.91, 0.91]) {
-  clear.items.push({ x: at.x, y: at.y, z: at.z, sx: size[0], sy: size[1], sz: size[2], color, alpha, fill, edge, depth: 0 });
+function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0 } = {}) {
+  clear.items.push({ at: at.clone(), size, lift, color, alpha, fill, edge, depth: 0 });
 }
 
 const matrix = new THREE.Matrix4();
-const tmp = new THREE.Vector3();
+const scaleVector = new THREE.Vector3();
+/** How much of the depth is shown: FLAT while playing, 1 mid-turn and while
+ * V is held. */
+let depthShown = FLAT;
+
+/** Where a cube of the hub's frame is drawn in the scene. */
+function place(item) {
+  const at = item.at.applyQuaternion(hubGroup.quaternion);
+  at.z = at.z * depthShown + item.lift * (1 - depthShown);
+  return at;
+}
 
 function flushLayers() {
   solid.items.forEach((item, i) => {
-    matrix.makeScale(item.sx, item.sy, item.sz).setPosition(item.x, item.y, item.z);
+    // A size in the hub's frame: turn it the way the hub is turned.
+    scaleVector.set(...item.size);
+    matrix.compose(place(item), hubGroup.quaternion, scaleVector);
     solid.mesh.setMatrixAt(i, matrix);
     const { base, light, dark } = item.tone;
     solid.buffers.aBase.setXYZ(i, base.r, base.g, base.b);
@@ -357,14 +377,14 @@ function flushLayers() {
     solid.buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
     solid.buffers.aLook.setXY(i, item.brightness, item.flash);
   });
-  hubGroup.updateMatrixWorld();
   for (const item of clear.items) {
-    tmp.set(item.x, item.y, item.z).applyMatrix4(hubGroup.matrixWorld);
-    item.depth = tmp.distanceToSquared(camera.position);
+    place(item);
+    item.depth = item.at.distanceToSquared(camera.position);
   }
   clear.items.sort((a, b) => b.depth - a.depth);
   clear.items.forEach((item, i) => {
-    matrix.makeScale(item.sx, item.sy, item.sz).setPosition(item.x, item.y, item.z);
+    scaleVector.set(...item.size);
+    matrix.compose(item.at, hubGroup.quaternion, scaleVector);
     clear.mesh.setMatrixAt(i, matrix);
     clear.buffers.aColor.setXYZ(i, item.color.r, item.color.g, item.color.b);
     clear.buffers.aLook.setXYZ(i, item.alpha, item.fill, item.edge);
@@ -396,7 +416,11 @@ window.addEventListener('resize', resize);
 /** Where the hub is turned to; the picture eases towards it. Always a whole
  * number of quarter turns, so data axes map onto scene axes. */
 const targetQ = new THREE.Quaternion();
-const turn = { from: new THREE.Quaternion(), t: 1 };
+const turnFrom = new THREE.Quaternion();
+const turned = new THREE.Quaternion();
+const turn = { t: 1 };
+/** 0 when the picture is the game, 1 while V is held. */
+let peek = 0;
 const SCENE_RIGHT = new THREE.Vector3(1, 0, 0);
 const SCENE_UP = new THREE.Vector3(0, 1, 0);
 const SCENE_TOWARD = new THREE.Vector3(0, 0, 1);
@@ -413,16 +437,18 @@ const topGlass = () => sideOfNormal(toData(SCENE_UP));
 
 /** Turns the hub a quarter turn about a scene axis: ←/→ in the plane of the
  * screen, as the 2D cross turns; ↑/↓ about its horizontal, so the glass
- * behind or in front comes over the top. The glass on top is steered. */
+ * behind or in front comes over the top, and the new picture settles and
+ * pops. The glass on top is steered. */
 function turnHub(axis, quarters) {
-  turn.from.copy(hubGroup.quaternion);
+  turnFrom.copy(turned);
   turn.t = 0;
   targetQ.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2));
   // Snap away the rounding drift of many turns.
   const m = new THREE.Matrix4().makeRotationFromQuaternion(targetQ);
   m.elements.forEach((e, i) => { m.elements[i] = Math.round(e); });
   targetQ.setFromRotationMatrix(m);
-  game.turn(topGlass(), toData(SCENE_TOWARD), { right: toData(SCENE_RIGHT), up: toData(SCENE_UP) });
+  const tipped = axis !== SCENE_TOWARD;
+  game.turn(topGlass(), toData(SCENE_TOWARD), { right: toData(SCENE_RIGHT), up: toData(SCENE_UP) }, tipped);
 }
 
 /** A number key: a glass around the cross is turned to the top, as in the
@@ -443,9 +469,20 @@ function takeGlass(side) {
  * meaning for it: turn and drop. */
 const steeringDepth = () => !game.inPlane(game.active);
 
+/** How often each key was pressed, for the notes on how many are needed. */
+const keyCount = {};
+
+function toggle(id) {
+  options[id] = !options[id];
+  if (id === 'inactiveFalls') game.config.inactiveFalls = options.inactiveFalls;
+  saveSettings();
+  renderSettings();
+}
+
 function press(code, { repeat = false } = {}) {
   const move = (v) => game.move(toData(v));
   const turnStick = (clockwise) => game.rotate(toData(clockwise ? SCENE_TOWARD.clone().negate() : SCENE_TOWARD));
+  const setting = SETTINGS.find((s) => s.key === code);
   if (code === 'KeyA') move(SCENE_RIGHT.clone().negate());
   else if (code === 'KeyD') move(SCENE_RIGHT);
   else if (code === 'KeyW') {
@@ -464,33 +501,37 @@ function press(code, { repeat = false } = {}) {
     if (!repeat) turnHub(SCENE_RIGHT, code === 'ArrowUp' ? 1 : -1);
   } else if (/^Digit[1-6]$/.test(code)) {
     if (!repeat) takeGlass(SIDES.findIndex((s) => s.label === code.slice(5)));
-  } else if (code === 'KeyX') options.hints = (options.hints + 1) % HINTS.length;
-  else if (code === 'KeyI') {
-    options.inactiveFalls = !options.inactiveFalls;
-    game.config.inactiveFalls = options.inactiveFalls;
-  } else if (code === 'KeyO') options.rings = !options.rings;
-  else if (code === 'KeyG') options.lane = !options.lane;
+  } else if (code === 'KeyV') options.peek = true;
+  else if (setting) toggle(setting.id);
   else if (code === 'KeyF') game.fillForTesting();
   else if (code === 'KeyP') options.paused = !options.paused;
   else if (code === 'KeyH') options.help = !options.help;
   else if (code === 'KeyN') restart();
   else return false;
-  keyCount[code] = (keyCount[code] ?? 0) + 1;
+  if (!repeat) keyCount[code] = (keyCount[code] ?? 0) + 1;
   renderKeys();
   return true;
 }
-/** How often each key was pressed, for the notes on how many are needed. */
-const keyCount = {};
+
+function release(code) {
+  if (code !== 'KeyV') return false;
+  options.peek = false;
+  return true;
+}
 
 window.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (press(event.code, { repeat: event.repeat })) event.preventDefault();
 });
+window.addEventListener('keyup', (event) => {
+  if (release(event.code)) event.preventDefault();
+});
+window.addEventListener('blur', () => release('KeyV'));
 
 function restart() {
   game = makeGame();
   targetQ.identity();
-  hubGroup.quaternion.identity();
+  turned.identity();
   turn.t = 1;
   pieceViews.clear();
   flashes.clear();
@@ -520,45 +561,6 @@ function consumeEvents() {
   game.events.length = 0;
 }
 
-/** The cell of the screen a block is seen in, whatever its depth. */
-const columnOf = (p) => {
-  const k = game.plane.findIndex((v) => v !== 0);
-  return p.filter((_, i) => i !== k).join();
-};
-
-/** For each cell of the screen, the depth of the nearest block behind the
- * middle layer and of the nearest in front of it. */
-function nearestLayers() {
-  const nearest = new Map();
-  game.hub.forEachBlock((p) => {
-    const depth = game.depthOf(p);
-    if (depth === 0) return;
-    const key = columnOf(p);
-    const known = nearest.get(key) ?? { behind: -Infinity, front: Infinity };
-    if (depth < 0) known.behind = Math.max(known.behind, depth);
-    else known.front = Math.min(known.front, depth);
-    nearest.set(key, known);
-  });
-  return nearest;
-}
-
-/** How a block off the middle layer is hinted at, by its depth: + is in
- * front of the screen, − behind. Null hides it. */
-function hint(p, depth, nearest) {
-  const mode = HINTS[options.hints];
-  if (mode === 'нет' || (mode === 'только сзади' && depth > 0)) return null;
-  if (mode === 'ближайшие') {
-    const known = nearest.get(columnOf(p));
-    if (depth !== (depth < 0 ? known.behind : known.front)) return null;
-  }
-  // Fainter the further from the middle. Behind: a dim block. In front: an
-  // outline, so that the middle shows through.
-  const fade = 0.62 ** (Math.abs(depth) - 1);
-  return depth < 0
-    ? { alpha: 0.9 * fade, fill: 0.34, edge: 0.75 }
-    : { alpha: 0.85 * fade, fill: 0.08, edge: 0.75 };
-}
-
 function buildBlocks(dt) {
   const hub = game.hub;
   const phase = game.phase;
@@ -566,14 +568,14 @@ function buildBlocks(dt) {
   const matched = game.activeMatch?.cells;
   const falling = new Set();
   if (phase === 'settling') for (const move of game.moves) falling.add(hub.index(move.to));
-  const nearest = nearestLayers();
 
-  const block = (p, color, { index = -1, offset = null } = {}) => {
-    const at = offset ?? local(p, tmp);
-    const depth = game.depthOf(p);
+  // Every block, solid. While the picture is flat the nearest one of each
+  // cell hides the others; mid-turn and while V is held all of them show.
+  hub.forEachBlock((p, color, index) => {
+    if (falling.has(index)) return;
     let flash = 0;
     let size = 0.91;
-    if (index >= 0 && matched?.has(index)) {
+    if (matched?.has(index)) {
       if (phase === 'matching') flash = 0.25 + 0.4 * Math.sin(progress * Math.PI);
       if (phase === 'clearing') {
         flash = 0.6;
@@ -586,37 +588,23 @@ function buildBlocks(dt) {
       if (age > 0.25) flashes.delete(index);
       else flash = Math.max(flash, 0.45 * (1 - age / 0.25));
     }
-    if (size < 0.02) return;
-    if (depth === 0) {
-      pushSolid(at, color, { flash, size });
-      return;
-    }
-    // A match off the middle layer is always shown, so that it is noticed.
-    const look = flash > 0 ? { alpha: 0.9, fill: 0.34, edge: 0.75 } : hint(p, depth, nearest);
-    if (look) pushClear(at, flash > 0 ? WHITE : TONES[color].base, look.alpha, Math.max(look.fill, flash), look.edge, [size, size, size]);
-  };
-
-  hub.forEachBlock((p, color, index) => {
-    if (!falling.has(index)) block(p, color, { index });
+    if (size > 0.02) pushSolid(local(p), color, { flash, size });
   });
   if (phase === 'settling') {
     const t = Math.min(1, game.phaseElapsed / Math.max(0.01, game.phaseDuration - game.config.fallBounceSeconds));
-    const from = new THREE.Vector3();
     const to = new THREE.Vector3();
-    for (const move of game.moves) {
-      local(move.from, from);
-      local(move.to, to);
-      block(move.to, move.color, { offset: from.lerp(to, t * t) });
-    }
+    for (const move of game.moves) pushSolid(local(move.from).lerp(local(move.to, to), t * t), move.color);
   }
 
   // Falling sticks ease into their cells. Those of the glasses in front and
-  // behind are see-through: they fly at the cross from out of the screen.
+  // behind fly along the line of sight: drawn as outlines over the picture
+  // (in front) or under it (behind), and only the steered one unless the
+  // setting asks for all.
   const k = 1 - Math.exp(-dt * 24);
   for (const [side, view] of pieceViews) if (game.pieces.get(side) !== view.piece) pieceViews.delete(side);
   const sticks = [...game.pieces.values()].map((piece) => {
     let view = pieceViews.get(piece.side);
-    const goal = local(piece.pivot, new THREE.Vector3());
+    const goal = local(piece.pivot);
     if (!view) {
       view = { piece, at: goal.clone() };
       pieceViews.set(piece.side, view);
@@ -626,27 +614,35 @@ function buildBlocks(dt) {
   });
   if (phase === 'dropping' && game.drop) {
     const { piece, from } = game.drop;
-    sticks.push({ piece, at: local(from, new THREE.Vector3()).lerp(local(piece.pivot, new THREE.Vector3()), progress * progress) });
+    sticks.push({ piece, at: local(from).lerp(local(piece.pivot), progress * progress) });
   }
   for (const { piece, at } of sticks) {
     const dir = new THREE.Vector3(...piece.dir);
     const steered = piece.side === game.active;
+    if (game.inPlane(piece.side)) {
+      piece.colors.forEach((color, i) => pushSolid(at.clone().addScaledVector(dir, i - 1), color));
+      continue;
+    }
+    if (!steered && !options.depthSticks) continue;
+    const lift = toScene(normalOf(piece.side)).z * 0.6;
     piece.colors.forEach((color, i) => {
       const cell = at.clone().addScaledVector(dir, i - 1);
-      if (game.inPlane(piece.side)) pushSolid(cell, color);
-      else pushClear(cell, TONES[color].base, 1, steered ? 0.5 : 0.22, steered ? 1 : 0.6);
+      if (steered) pushClear(cell, TONES[color].light, 1, 0.38, 1, { lift });
+      else pushClear(cell, TONES[color].base, 0.8, 0.06, 0.5, { lift });
     });
   }
 
-  // Where the steered stick will land, and the lane down to it.
+  // Where the stick on top will land, and the lane down to it. A stick in
+  // front or behind lands in the cells it is over; the panel says how deep.
   const piece = game.activePiece;
-  const ghost = game.ghost();
-  const landed = !ghost || !piece || ghost.every(({ p }, i) => p.every((v, j) => v === pieceCells(piece)[i].p[j]));
-  if (!landed) {
-    for (const { p, color } of ghost) pushClear(local(p, tmp), TONES[color].light, 1, 0.16, 1);
-    if (options.lane && game.inPlane(piece.side)) pushLanes(piece, ghost);
+  if (piece && game.inPlane(piece.side)) {
+    const ghost = game.ghost();
+    const landed = ghost.every(({ p }, i) => p.every((v, j) => v === pieceCells(piece)[i].p[j]));
+    if (!landed) {
+      for (const { p, color } of ghost) pushClear(local(p), TONES[color].light, 1, 0.16, 1);
+      if (options.lane) pushLanes(piece, ghost);
+    }
   }
-  placeRings(landed ? null : piece, ghost);
   flushLayers();
 }
 
@@ -663,33 +659,14 @@ function pushLanes(piece, ghost) {
     if (!low || height < low.height) lanes.set(key, { p, height, ghost: ghost[i].p });
   });
   for (const lane of lanes.values()) {
-    const top = local(lane.p, new THREE.Vector3()).addScaledVector(new THREE.Vector3(...n), -0.5);
-    const bottom = local(lane.ghost, new THREE.Vector3()).addScaledVector(new THREE.Vector3(...n), 0.5);
+    const top = local(lane.p).addScaledVector(new THREE.Vector3(...n), -0.5);
+    const bottom = local(lane.ghost).addScaledVector(new THREE.Vector3(...n), 0.5);
     const length = top.distanceTo(bottom);
     if (length < 0.05) continue;
     const size = [0.91, 0.91, 0.91];
     size[axis] = length;
-    pushClear(top.add(bottom).multiplyScalar(0.5), WHITE, 1, 0.07, 0, size);
+    pushClear(top.add(bottom).multiplyScalar(0.5), WHITE, 1, 0.07, 0, { size });
   }
-}
-
-/** For the stick in front or behind: a square around the centre at its
- * leading face, and one where that face will be when it lands. Nearer
- * squares are larger, so the gap between the two is how far it has to go. */
-function placeRings(piece, ghost) {
-  pieceRing.visible = false;
-  ghostRing.visible = false;
-  if (!options.rings || !piece || !ghost || game.inPlane(piece.side) || turn.t < 1) return;
-  const face = (cells) => {
-    const depths = cells.map(({ p }) => game.depthOf(p));
-    // The face towards the middle: the stick falls through the screen.
-    const toward = toScene(normalOf(piece.side)).z;
-    return toward > 0 ? Math.min(...depths) - 0.5 : Math.max(...depths) + 0.5;
-  };
-  pieceRing.visible = true;
-  pieceRing.position.z = face(pieceCells(piece));
-  ghostRing.visible = true;
-  ghostRing.position.z = face(ghost);
 }
 
 // ------------------------------------------------------------------- HUD
@@ -711,15 +688,17 @@ function renderHud() {
   $('score').textContent = game.score.toLocaleString('ru-RU');
   $('combo').textContent = game.combo > 1 ? `×${game.combo}` : game.bestCombo > 1 ? `лучшее ×${game.bestCombo}` : '—';
   $('placed').textContent = game.placed;
-  const piece = game.activePiece;
   const where = PLACES[toScene(normalOf(game.active)).toArray().join()] ?? '';
   let depth = '';
-  if (piece && !game.inPlane(game.active)) {
-    const ghost = game.ghost();
-    const layer = ghost ? game.depthOf(ghost[0].p) : null;
-    depth = layer === null ? '' : ` · сядет в слой ${layer > 0 ? `+${layer}` : layer}`;
+  if (game.activePiece && !game.inPlane(game.active)) {
+    const landing = game.landing();
+    if (landing) {
+      const layer = landing.layer > 0 ? `+${landing.layer}` : landing.layer;
+      const seen = landing.seen === landing.of ? 'будет видна' : landing.seen === 0 ? 'спрячется за блоками' : `видно ${landing.seen} из ${landing.of}`;
+      depth = ` · сядет в слой ${layer}, ${seen}`;
+    }
   }
-  $('phase').textContent = options.paused ? 'пауза' : `стакан ${SIDES[game.active].label} ${where.slice(2)}${depth}`;
+  $('phase').textContent = `${options.paused ? 'пауза · ' : ''}стакан ${SIDES[game.active].label} ${where.slice(2)}${depth}`;
   const next = game.nextColors.join();
   if (next !== nextKey) {
     nextKey = next;
@@ -735,19 +714,18 @@ function renderHud() {
   const depthOfGlass = game.hub.depth();
   SIDES.forEach((s, i) => {
     const row = glassRows[i];
-    const room = game.hub.headroom(s.id);
+    const room = game.headroom(s.id);
+    const place = PLACES[toScene(normalOf(s.id)).toArray().join()] ?? '?';
     row.classList.toggle('active', s.id === game.active);
     row.classList.toggle('crowded', room <= 2);
-    row.querySelector('.key').textContent = PLACES[toScene(normalOf(s.id)).toArray().join()]?.slice(0, 1) ?? '?';
+    row.querySelector('.key').textContent = place.slice(0, 1);
     row.querySelector('.bar i').style.width = `${Math.round(((depthOfGlass - room) / depthOfGlass) * 100)}%`;
     row.querySelector('.pct').textContent = `${room}`;
-    row.title = `${PLACES[toScene(normalOf(s.id)).toArray().join()]?.slice(2)} · свободных рядов у края: ${room}`;
+    row.title = `${place.slice(2)} · свободных рядов у края: ${room}`;
   });
 }
 
 function renderKeys() {
-  const on = (flag, text) => `<span class="${flag ? 'on' : ''}">${text}</span>`;
-  const yes = (flag) => on(flag, flag ? 'да' : 'нет');
   $('keys').hidden = !options.help;
   $('keys').innerHTML = [
     '<b>A D</b> — влево, вправо',
@@ -756,14 +734,24 @@ function renderKeys() {
     '<b>1–6</b> — взять стакан: боковой повернуть наверх, передний/задний вести на месте',
     '<b>W S</b> у переднего/заднего — вверх, вниз',
     '<b>← →</b> — повернуть крест, как в 2D',
-    '<b>↑ ↓</b> — опрокинуть хаб: задний / передний стакан наверх',
-    `<b>X</b> — другие слои: ${on(HINTS[options.hints] !== 'нет', HINTS[options.hints])}`,
-    `<b>I</b> — падают и в других стаканах: ${yes(options.inactiveFalls)}`,
-    `<b>O</b> — рамки глубины: ${yes(options.rings)} · <b>G</b> — дорожка: ${yes(options.lane)}`,
+    '<b>↑ ↓</b> — опрокинуть хаб: задний / передний стакан наверх; картинка оседает и лопается',
+    '<b>V</b> (держать) — заглянуть в объём',
     '<b>F</b> — набросать блоков · <b>P</b> — пауза',
     '<b>N</b> — заново · <b>H</b> — спрятать подсказку',
   ].map((line) => `<div>${line}</div>`).join('');
 }
+
+/** The settings panel: a box per setting, its key beside it. */
+function renderSettings() {
+  $('settings-list').innerHTML = SETTINGS.map((s) => `
+    <label><input type="checkbox" data-id="${s.id}" ${options[s.id] ? 'checked' : ''} />
+    <span>${s.label}</span><kbd>${s.key.slice(3)}</kbd></label>`).join('');
+}
+$('settings-list').addEventListener('change', (event) => {
+  const id = event.target.dataset?.id;
+  if (id) toggle(id);
+  event.target.blur();
+});
 
 // ------------------------------------------------------------------ loop
 
@@ -776,21 +764,21 @@ function frame(now) {
     game.update(dt);
   }
   consumeEvents();
-  if (turn.t < 1) {
-    // A pause stops the turn too, so that it can be looked at half-way.
-    if (!options.paused) turn.t = Math.min(1, turn.t + dt / TURN_SECONDS);
-    hubGroup.quaternion.slerpQuaternions(turn.from, targetQ, ease(turn.t));
-  } else {
-    hubGroup.quaternion.copy(targetQ);
-  }
-  // The cross of the screen fades while the hub turns, and comes back.
-  const shown = turn.t < 1 ? Math.abs(Math.cos(Math.PI * turn.t)) ** 2 : 1;
+  // A pause stops the turn too, so that it can be looked at half-way.
+  if (turn.t < 1 && !options.paused) turn.t = Math.min(1, turn.t + dt / TURN_SECONDS);
+  if (turn.t < 1) turned.slerpQuaternions(turnFrom, targetQ, ease(turn.t));
+  else turned.copy(targetQ);
+  peek += ((options.peek ? 1 : 0) - peek) * (1 - Math.exp(-dt * 10));
+  hubGroup.quaternion.slerpQuaternions(new THREE.Quaternion(), PEEK, ease(peek)).multiply(turned);
+  // Depth shows mid-turn and while peeking; the cross of the screen fades
+  // meanwhile, and the edges of the hub stand out.
+  const opened = Math.max(turn.t < 1 ? Math.sin(Math.PI * turn.t) : 0, peek);
+  depthShown = FLAT + (1 - FLAT) * opened;
+  const shown = (1 - opened) ** 2;
   cross.traverse((object) => {
     if (object.material) object.material.opacity = object.material.userData.opacity * shown;
   });
-  // The tunnel of the hub stands out while it turns.
-  const tunnel = turn.t < 1 ? 0.1 + 0.25 * Math.sin(Math.PI * turn.t) : 0.1;
-  hubLines.forEach((line) => { line.material.opacity = tunnel; });
+  hubLines.forEach((line) => { line.material.opacity = 0.1 + 0.25 * opened; });
   labels.forEach(({ sprite }, side) => {
     sprite.material.opacity = side === game.active ? 0.95 : 0.4;
   });
@@ -802,6 +790,7 @@ function frame(now) {
 
 resize();
 renderKeys();
+renderSettings();
 await document.fonts.ready;
 drawLabels();
 requestAnimationFrame(frame);
@@ -810,6 +799,7 @@ requestAnimationFrame(frame);
 window.__proto3d = {
   get game() { return game; },
   press,
+  release,
   keyCount,
   options,
   /** A data direction as the screen shows it once the turn is over:

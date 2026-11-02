@@ -46,6 +46,11 @@
     #keys div { break-inside: avoid; }
     #keys b { color: var(--text); font-weight: 700; }
     #keys .on { color: var(--accent); }
+    #settings { right: 12px; bottom: 12px; width: 300px; }
+    #settings h2 { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+    #settings label { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; margin: 5px 0; color: var(--text); cursor: pointer; }
+    #settings input { margin: 0; accent-color: var(--accent); }
+    #settings kbd { font: inherit; font-size: 11px; color: var(--text-dim); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
     #banner { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 16px; padding: 18px 26px; background: rgba(18, 18, 30, 0.92); }
     #banner[hidden] { display: none; }
     #banner strong { display: block; font-size: 26px; font-weight: 900; font-style: italic; margin-bottom: 4px; }
@@ -67,6 +72,7 @@
     <div id="glasses"></div>
   </div>
   <div class="panel" id="keys"></div>
+  <div class="panel" id="settings"><h2>Настройки</h2><div id="settings-list"></div></div>
   <div class="panel" id="banner" hidden><strong>Конец игры</strong><span id="banner-text"></span><br />N — новая игра</div>
   <script type="module" src="./main.js"></script>
 </body>
