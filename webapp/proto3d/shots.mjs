@@ -44,6 +44,13 @@ try {
     console.log(name);
     await key('KeyP');
   };
+  /** Photographs the page as it is, paused or not. */
+  const snap = async (name) => {
+    await page.screenshot({ path: `${out}${name}.jpg`, type: 'jpeg', quality: 86 });
+    console.log(name);
+  };
+  /** Turns and rolls go at this share of their speed, to be caught half-way. */
+  const slow = (scale) => page.evaluate((s) => { window.__proto3d.options.transitionScale = s; }, scale);
   /** Drops the steered stick and waits until the board is at rest. */
   const drop = async () => {
     await key('Space');
@@ -110,13 +117,14 @@ try {
   await key('Digit1');
   await wait(200);
   await shot('07-columns-before-tip');
-  // Holding ↑: the hub turns and shows how it would lie, what would pop
-  // blinking; letting go tips it.
+  // Holding ↑: the cubes of the picture roll over in a wave to the new side,
+  // then show how it would lie, what would pop blinking; letting go tips it.
+  await slow(0.1);
   await page.keyboard.down('ArrowUp');
-  await wait(150);
-  await key('KeyP');
-  await shot('08-tipping', { midTurn: true });
-  await wait(500);
+  await wait(3600);
+  await snap('08-tip-roll');
+  await slow(1);
+  await settled();
   await shot('09-tip-preview');
   await page.keyboard.up('ArrowUp');
   await atRest();
@@ -134,6 +142,36 @@ try {
   await key('Escape');
   await page.keyboard.up('ArrowDown');
   await settled();
+
+  // Paused, the hub turns any way to be looked at: from the left (←), the
+  // blocks that make lines from there blinking.
+  await key('KeyP');
+  await key('ArrowLeft');
+  await settled();
+  await wait(200);
+  await snap('12-pause-look-from-left');
+  // The same in the open, V held, then from below and the left (S, A).
+  await page.keyboard.down('KeyV');
+  await wait(800);
+  await snap('13-pause-look-in-volume');
+  await key('KeyS');
+  await key('KeyA');
+  await wait(900);
+  await snap('14-volume-from-below-left');
+  await key('KeyW');
+  await key('KeyD');
+  await page.keyboard.up('KeyV');
+  await wait(500);
+  // Going on rolls it back to where the game is.
+  await key('KeyP');
+  await settled();
+
+  // The volume setting off: no edges of the hub, no numbers of the glasses
+  // in front and behind — it looks like the 2D game.
+  await key('KeyO');
+  await wait(200);
+  await shot('15-flat-2d');
+  await key('KeyO');
 
   // Drop here and there, with every glass taking turns, until something
   // matches; freeze on the flash.
@@ -159,7 +197,7 @@ try {
     if (await page.evaluate(() => window.__proto3d.game.isGameOver)) break;
     if (!matched) await atRest();
   }
-  if (matched) await shot('12-match');
+  if (matched) await shot('16-match');
 
   // Play on carelessly until a glass is full.
   for (let i = 0; i < 150; i++) {
@@ -168,7 +206,7 @@ try {
     await settled();
     await drop();
   }
-  await shot('13-game-over');
+  await shot('17-game-over');
 } finally {
   await browser.close();
   await server.close();

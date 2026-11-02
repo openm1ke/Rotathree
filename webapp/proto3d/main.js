@@ -1,10 +1,12 @@
 // A throwaway prototype of a 3D mode of RotaThree. The screen shows the cross
 // as the 2D game does, and the game is played on that picture: each cell
 // shows the nearest block behind it, lines of what is seen pop, and what is
-// seen falls (rules.js). The third dimension shows when the hub is tipped
-// over (↑/↓) and while V is held, and as a faint tunnel at the centre: the
-// glasses in front of and behind the screen, whose sticks fly along the line
-// of sight. Holding ↑/↓ shows how the hub would lie before it is tipped.
+// seen falls (rules.js). The third dimension shows as a faint tunnel at the
+// centre (the glasses in front of and behind the screen, whose sticks fly
+// along the line of sight), as the cubes of the board rolling over when the
+// hub is tipped (↑/↓), and in the open while V is held. Holding ↑/↓ shows how
+// the hub would lie before it is tipped; a pause lets it be turned any way to
+// look at.
 // Drawn the way the game draws its cross (src/render). Dev server only:
 // /proto3d/.
 //
@@ -46,8 +48,14 @@ const WHITE = new THREE.Color('#ffffff');
 /** Accent of the active glass (THEME.accent). */
 const ACCENT = new THREE.Color('#78cdff');
 const TURN_SECONDS = 0.36;
-/** How far the hub turns to be looked at while V is held. */
-const PEEK = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.45, -0.55, 0));
+/** How far the hub turns to be looked at while V is held: from above or
+ * below, from the right or the left (W/S, D/A with V held). */
+const PEEK_PITCH = 0.45;
+const PEEK_YAW = 0.55;
+/** A tip shown on the flat picture: each cube rolls over in this long, the
+ * last starting this share of it after the first. */
+const FLIP_SECONDS = 0.8;
+const FLIP_SPREAD = 0.45;
 /** Depth is squashed this flat when the picture is the game: the nearest
  * block of every cell still wins, but nothing looks deeper than another. */
 const FLAT = 0.02;
@@ -64,10 +72,20 @@ const SETTINGS = [
   { id: 'depthFalls', key: 'KeyY', label: 'Передний и задний стаканы падают сами (медленно)', initial: false },
   { id: 'inactiveFalls', key: 'KeyI', label: 'Фигуры падают и в других стаканах', initial: true },
   { id: 'behind', key: 'KeyB', label: 'Метка: цвет блока за клеткой', initial: true },
+  { id: 'volume', key: 'KeyO', label: 'Объём стаканов: рёбра хаба и номера переднего и заднего', initial: true },
   { id: 'lane', key: 'KeyG', label: 'Дорожка до места посадки', initial: true },
 ];
 const STORE = 'rotathree-proto3d-settings';
-const options = { help: true, paused: false, peek: false };
+const options = {
+  help: true,
+  paused: false,
+  peek: false,
+  /** From where V shows the hub: +1 above / right, −1 below / left. */
+  peekPitch: 1,
+  peekYaw: 1,
+  /** Slows every turn and roll down, to photograph them half-way. */
+  transitionScale: 1,
+};
 {
   let saved = {};
   try {
@@ -258,18 +276,32 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
     attribute vec3 aLight;
     attribute vec3 aDark;
     attribute vec2 aLook;
+    attribute vec3 aBase2;
+    attribute vec3 aLight2;
+    attribute vec3 aDark2;
+    attribute vec4 aFace;
     varying vec3 vLocal;
     varying vec3 vNormal;
+    varying vec3 vFaceNormal;
     varying float vUp;
     varying vec3 vBase;
     varying vec3 vLight;
     varying vec3 vDark;
+    varying vec3 vBase2;
+    varying vec3 vLight2;
+    varying vec3 vDark2;
+    varying vec4 vFace;
     varying vec2 vLook;
     void main() {
       vLocal = position;
+      vFaceNormal = normal;
       vBase = aBase;
       vLight = aLight;
       vDark = aDark;
+      vBase2 = aBase2;
+      vLight2 = aLight2;
+      vDark2 = aDark2;
+      vFace = aFace;
       vLook = aLook;
       mat4 model = modelMatrix * instanceMatrix;
       mat3 turn = mat3(model);
@@ -282,12 +314,30 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
     uniform vec3 light;
     varying vec3 vLocal;
     varying vec3 vNormal;
+    varying vec3 vFaceNormal;
     varying float vUp;
     varying vec3 vBase;
     varying vec3 vLight;
     varying vec3 vDark;
+    varying vec3 vBase2;
+    varying vec3 vLight2;
+    varying vec3 vDark2;
+    // A cube rolling over: the face of the cube that will end up in front
+    // (xyz) wears the second colour. w: 1 — the cube had nothing to show
+    // before, so only that face is drawn; 2 — it has nothing after, so that
+    // face is left out.
+    varying vec4 vFace;
     varying vec2 vLook; // brightness, white flash
     void main() {
+      bool rolling = dot(vFace.xyz, vFace.xyz) > 0.5;
+      bool second = dot(vFaceNormal, vFace.xyz) > 0.5;
+      if (second ? vFace.w > 1.5 : mod(vFace.w, 2.0) > 0.5) discard;
+      // A rolling cube is only its front and the face coming round: the
+      // rest would show as slivers edge-on.
+      if (rolling && !second && vFaceNormal.z < 0.5) discard;
+      vec3 base = second ? vBase2 : vBase;
+      vec3 lit = second ? vLight2 : vLight;
+      vec3 dark = second ? vDark2 : vDark;
       vec3 a = abs(vLocal);
       // The two coordinates across the face this point is on.
       vec2 uv = a.x >= a.y && a.x >= a.z ? a.yz : a.y >= a.z ? a.xz : a.xy;
@@ -300,17 +350,19 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
       float face = 1.0 - smoothstep(-aa, aa, sdf);
       // 0 at the top of the block on screen, 1 at its bottom.
       float y = clamp(0.5 - vUp * 0.98, 0.0, 1.0);
-      vec3 bevel = y < 0.3 ? mix(vLight, vBase, y / 0.3) : mix(vBase, vDark, (y - 0.3) / 0.7);
+      vec3 bevel = y < 0.3 ? mix(lit, base, y / 0.3) : mix(base, dark, (y - 0.3) / 0.7);
       float fy = clamp((y - inset) / (1.0 - 2.0 * inset), 0.0, 1.0);
-      vec3 plain = mix(vBase, vec3(1.0), 0.3 * max(0.0, 1.0 - fy * 2.0));
+      vec3 plain = mix(base, vec3(1.0), 0.3 * max(0.0, 1.0 - fy * 2.0));
       vec3 colour = mix(bevel, plain, face);
-      colour *= (0.7 + 0.3 * max(dot(normalize(vNormal), light), 0.0)) * vLook.x;
+      // A face turned away from the eye darkens: a cube rolling over shows
+      // its colours flowing from one face to the next.
+      colour *= (0.5 + 0.5 * max(dot(normalize(vNormal), light), 0.0)) * vLook.x;
       colour = mix(colour, vec3(1.0), vLook.y);
       gl_FragColor = vec4(colour, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
-}), { aBase: 3, aLight: 3, aDark: 3, aLook: 2 }, 1);
+}), { aBase: 3, aLight: 3, aDark: 3, aLook: 2, aBase2: 3, aLight2: 3, aDark2: 3, aFace: 4 }, 1);
 
 /** Outlines and see-through cubes: the landing spot, the aiming lane, the
  * sticks in front and behind. Far to near. */
@@ -353,6 +405,17 @@ function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91, lift = 0
   solid.items.push({ at: at.clone(), size: [size, size, size], lift, nudge, tone: TONES[color], brightness, flash });
 }
 
+/** A cube of the flat picture rolling over: at `scene` (already on the
+ * screen), turned by `quat`, its front the colour `before` and its face
+ * `face` the colour `after`; either may be null for an empty cell. */
+function pushRoll(scene, quat, before, after, face, { size = 0.91, flash = 0 } = {}) {
+  const flags = (before === null ? 1 : 0) + (after === null ? 2 : 0);
+  solid.items.push({
+    scene, quat, size: [size, size, size], tone: TONES[before ?? after], tone2: TONES[after ?? before],
+    face, flags, brightness: 1, flash,
+  });
+}
+
 function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0, nudge = null } = {}) {
   clear.items.push({ at: at.clone(), size, lift, nudge, color, alpha, fill, edge, depth: 0 });
 }
@@ -381,13 +444,20 @@ function flushLayers() {
   solid.items.forEach((item, i) => {
     // A size in the hub's frame: turn it the way the hub is turned.
     scaleVector.set(...item.size);
-    matrix.compose(place(item), hubGroup.quaternion, scaleVector);
+    matrix.compose(item.scene ?? place(item), item.quat ?? hubGroup.quaternion, scaleVector);
     solid.mesh.setMatrixAt(i, matrix);
     const { base, light, dark } = item.tone;
-    solid.buffers.aBase.setXYZ(i, base.r, base.g, base.b);
-    solid.buffers.aLight.setXYZ(i, light.r, light.g, light.b);
-    solid.buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
-    solid.buffers.aLook.setXY(i, item.brightness, item.flash);
+    const second = item.tone2 ?? item.tone;
+    const { buffers } = solid;
+    buffers.aBase.setXYZ(i, base.r, base.g, base.b);
+    buffers.aLight.setXYZ(i, light.r, light.g, light.b);
+    buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
+    buffers.aBase2.setXYZ(i, second.base.r, second.base.g, second.base.b);
+    buffers.aLight2.setXYZ(i, second.light.r, second.light.g, second.light.b);
+    buffers.aDark2.setXYZ(i, second.dark.r, second.dark.g, second.dark.b);
+    if (item.face) buffers.aFace.setXYZW(i, item.face.x, item.face.y, item.face.z, item.flags);
+    else buffers.aFace.setXYZW(i, 0, 0, 0, 0);
+    buffers.aLook.setXY(i, item.brightness, item.flash);
   });
   for (const item of clear.items) {
     place(item);
@@ -447,10 +517,10 @@ const toScene = (d) => new THREE.Vector3(...d).applyQuaternion(targetQ).round();
 
 const topGlass = () => sideOfNormal(toData(SCENE_UP));
 
-/** `targetQ` after a quarter turn about a scene axis, snapped so that the
+/** `base` after a quarter turn about a scene axis, snapped so that the
  * rounding drift of many turns never builds up. */
-function quarterTurned(axis, quarters) {
-  const q = new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2).multiply(targetQ);
+function quarterTurned(axis, quarters, base = targetQ) {
+  const q = new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2).multiply(base);
   const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
   m.elements.forEach((e, i) => { m.elements[i] = Math.round(e); });
   return q.setFromRotationMatrix(m);
@@ -462,17 +532,87 @@ const dataIn = (q, v) => {
   return [Math.round(w.x), Math.round(w.y), Math.round(w.z)];
 };
 
+/** The game's hub seen from the side a turn `q` faces the eye, on the same
+ * blocks (read only). */
+const viewAt = (q, hub = game.hub) =>
+  game.lookFrom(dataIn(q, SCENE_TOWARD), { right: dataIn(q, SCENE_RIGHT), up: dataIn(q, SCENE_UP) }, hub);
+
+/** What a view shows: the colour seen in each cell of the screen. */
+function pictureOf(view) {
+  const picture = new Map();
+  for (let sx = -view.middle; sx <= view.middle; sx++) {
+    for (let sy = -view.middle; sy <= view.middle; sy++) {
+      const p = view.seenAt(sx, sy);
+      if (p) picture.set(`${sx},${sy}`, { sx, sy, color: view.hub.at(p) });
+    }
+  }
+  return picture;
+}
+
+/** A change of side shown on the flat picture: every cube of it rolls over
+ * about the axis of the turn, in a wave that starts where the hub comes
+ * towards the eye, its front wearing the colour seen before and the face
+ * coming round the colour seen after. With no single axis (back from a look
+ * around) the cubes shrink and come back in their new colours instead. */
+let roll = null;
+
+/** Shows the hub turning about a scene axis. While V is held, or for a turn
+ * in the screen (as the 2D cross turns), the hub itself turns; otherwise
+ * the picture rolls from `before` to `after`. */
+function transition(axis, quarters, before, after) {
+  if (options.peek || axis === SCENE_TOWARD) {
+    roll = null;
+    turnFrom.copy(turned);
+    turn.t = 0;
+    return;
+  }
+  roll = { t: 0, axis, quarters, before, after };
+  turn.t = 1;
+}
+
 /** Turns the hub a quarter turn about a scene axis: about the line of sight
  * as the 2D cross turns (← →, the number keys of the side glasses), or about
  * the screen's horizontal (↑/↓), so that the glass behind or in front comes
  * over the top and the new picture settles and pops. The glass on top is
- * steered. */
-function turnHub(axis, quarters) {
-  turnFrom.copy(turned);
-  turn.t = 0;
-  targetQ.copy(quarterTurned(axis, quarters));
+ * steered. `shown`: a preview has already shown it, settled. */
+function turnHub(axis, quarters, { shown = false } = {}) {
+  const to = quarterTurned(axis, quarters);
+  if (!shown) transition(axis, quarters, pictureOf(viewAt(targetQ)), pictureOf(viewAt(to)));
+  targetQ.copy(to);
   const tipped = axis !== SCENE_TOWARD;
   game.turn(topGlass(), toData(SCENE_TOWARD), { right: toData(SCENE_RIGHT), up: toData(SCENE_UP) }, tipped);
+  // The preview showed the blocks where they come to rest: no fall again.
+  if (shown && game.phase === 'settling') game.phaseElapsed = game.phaseDuration;
+}
+
+/** While paused, the hub can be turned any way to be looked at: ← → about
+ * the screen's upright, ↑ ↓ about its horizontal, Q E about the line of
+ * sight. Nothing in the game changes; going on brings it back. */
+let inspect = null;
+
+function inspectTurn(axis, quarters) {
+  const from = inspect ?? targetQ;
+  const to = quarterTurned(axis, quarters, from);
+  transition(axis, quarters, pictureOf(viewAt(from)), pictureOf(viewAt(to)));
+  inspect = to;
+}
+
+/** The single quarter turn about a scene axis from `from` to `to`, if any. */
+function quarterBetween(from, to) {
+  for (const axis of [SCENE_RIGHT, SCENE_UP, SCENE_TOWARD]) {
+    for (const quarters of [1, -1]) {
+      if (Math.abs(quarterTurned(axis, quarters, from).dot(to)) > 0.999) return { axis, quarters };
+    }
+  }
+  return null;
+}
+
+/** Back from a look around to where the game is. */
+function endInspect() {
+  if (!inspect) return;
+  const step = quarterBetween(inspect, targetQ);
+  transition(step?.axis ?? null, step?.quarters ?? 0, pictureOf(viewAt(inspect)), pictureOf(viewAt(targetQ)));
+  inspect = null;
 }
 
 /** A tip of the hub looked at before it is made, while ↑/↓ is held: the
@@ -483,9 +623,8 @@ let preview = null;
 function startPreview(code) {
   const quarters = code === 'ArrowUp' ? 1 : -1;
   preview = { code, quarters, q: quarterTurned(SCENE_RIGHT, quarters), version: -1, result: null };
-  turnFrom.copy(turned);
-  turn.t = 0;
   refreshPreview();
+  transition(SCENE_RIGHT, quarters, pictureOf(viewAt(targetQ)), pictureOf(preview.result.view));
 }
 
 /** Works the preview out again when the board has changed under it. */
@@ -500,14 +639,14 @@ function commitPreview(code) {
   if (preview?.code !== code) return;
   const { quarters } = preview;
   preview = null;
-  turnHub(SCENE_RIGHT, quarters);
+  turnHub(SCENE_RIGHT, quarters, { shown: true });
 }
 
 function cancelPreview() {
   if (!preview) return;
+  const { quarters, result } = preview;
   preview = null;
-  turnFrom.copy(turned);
-  turn.t = 0;
+  transition(SCENE_RIGHT, -quarters, pictureOf(result.view), pictureOf(viewAt(targetQ)));
 }
 
 /** A number key: a glass around the cross is turned to the top, as in the
@@ -533,11 +672,37 @@ function toggle(id) {
   renderSettings();
 }
 
+/** With V held, W/A/S/D choose where the hub is looked at from. */
+const PEEK_KEYS = {
+  KeyW: ['peekPitch', 1],
+  KeyS: ['peekPitch', -1],
+  KeyA: ['peekYaw', -1],
+  KeyD: ['peekYaw', 1],
+};
+/** While paused, these turn the hub to be looked at. */
+const INSPECT_KEYS = {
+  ArrowLeft: [SCENE_UP, 1],
+  ArrowRight: [SCENE_UP, -1],
+  ArrowUp: [SCENE_RIGHT, 1],
+  ArrowDown: [SCENE_RIGHT, -1],
+  KeyQ: [SCENE_TOWARD, 1],
+  KeyE: [SCENE_TOWARD, -1],
+};
+/** Keys that play; a pause holds them. */
+const PLAY_KEYS = /^(Key[ADWSQE]|Space|Arrow\w+|Digit[1-6]|Escape)$/;
+
 function press(code, { repeat = false } = {}) {
   const move = (v) => game.move(toData(v));
   const turnStick = (clockwise) => game.rotate(toData(clockwise ? SCENE_TOWARD.clone().negate() : SCENE_TOWARD));
   const setting = SETTINGS.find((s) => s.key === code);
-  if (code === 'KeyA') move(SCENE_RIGHT.clone().negate());
+  if (options.peek && PEEK_KEYS[code]) {
+    const [which, sign] = PEEK_KEYS[code];
+    options[which] = sign;
+  } else if (options.paused && PLAY_KEYS.test(code)) {
+    if (INSPECT_KEYS[code] && !repeat) inspectTurn(...INSPECT_KEYS[code]);
+    else if (code === 'Escape') endInspect();
+    else return false;
+  } else if (code === 'KeyA') move(SCENE_RIGHT.clone().negate());
   else if (code === 'KeyD') move(SCENE_RIGHT);
   else if (code === 'KeyW') game.screenUp();
   else if (code === 'KeyS') game.screenDown();
@@ -557,7 +722,11 @@ function press(code, { repeat = false } = {}) {
   } else if (code === 'KeyV') options.peek = true;
   else if (setting) toggle(setting.id);
   else if (code === 'KeyF') game.fillForTesting();
-  else if (code === 'KeyP') options.paused = !options.paused;
+  else if (code === 'KeyP') {
+    // Going on brings a hub that was turned to be looked at back.
+    if (options.paused) endInspect();
+    options.paused = !options.paused;
+  }
   else if (code === 'KeyH') options.help = !options.help;
   else if (code === 'KeyN') restart();
   else return false;
@@ -590,6 +759,8 @@ window.addEventListener('blur', () => {
 
 function restart() {
   preview = null;
+  inspect = null;
+  roll = null;
   game = makeGame();
   targetQ.identity();
   turned.identity();
@@ -654,9 +825,74 @@ function buildPreview() {
   flushLayers();
 }
 
+/** The picture rolling from one side of the hub to another (`roll`). */
+function buildRoll() {
+  const { t, axis, quarters, before, after } = roll;
+  const turnQ = axis && new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI) / 2);
+  // The face of a cube that the turn brings round to the front.
+  const incoming = turnQ && SCENE_TOWARD.clone().applyQuaternion(turnQ.clone().invert()).round();
+  // Who goes first: where the turn brings the hub towards the eye, or, with
+  // no axis, from the middle out — spread over the cells there are.
+  const cells = [...new Set([...before.keys(), ...after.keys()])].map((key) => {
+    const was = before.get(key);
+    const now = after.get(key);
+    const { sx, sy } = was ?? now;
+    const at = new THREE.Vector3(sx, sy, 0);
+    const lead = axis ? new THREE.Vector3().crossVectors(axis, at).z * Math.sign(quarters) : -Math.hypot(sx, sy);
+    return { was, now, at, lead };
+  });
+  const first = Math.max(...cells.map((c) => c.lead));
+  const span = Math.max(1, first - Math.min(...cells.map((c) => c.lead)));
+  for (const { was, now, at, lead } of cells) {
+    const order = (first - lead) / span;
+    const u = THREE.MathUtils.clamp((t - order * FLIP_SPREAD) / (1 - FLIP_SPREAD), 0, 1);
+    const swell = 0.91 * (1 + 0.1 * Math.sin(Math.PI * u));
+    const flash = 0.12 * Math.sin(Math.PI * u);
+    if (axis) {
+      const quat = new THREE.Quaternion().setFromAxisAngle(axis, (quarters * Math.PI * ease(u)) / 2);
+      pushRoll(at, quat, was?.color ?? null, now?.color ?? null, incoming, { size: swell, flash });
+    } else {
+      const shown = u < 0.5 ? was : now;
+      const size = 0.91 * Math.abs(Math.cos(Math.PI * u));
+      if (shown && size > 0.03) pushRoll(at, new THREE.Quaternion(), shown.color, shown.color, null, { size, flash });
+    }
+  }
+  flushLayers();
+}
+
+/** Lines the hub would show from the side it is looked at from, while
+ * paused: worked out once per board and side. */
+const linesCache = { key: '', cells: new Set(), runs: 0 };
+function inspectLines() {
+  const key = `${game.hub.version}:${inspect.toArray().join()}`;
+  if (linesCache.key !== key) {
+    const match = viewAt(inspect).findMatches();
+    Object.assign(linesCache, { key, cells: match.cells, runs: match.runs.length });
+  }
+  return linesCache;
+}
+
+/** Paused and turned to be looked at: the blocks as seen from there, those
+ * that make lines from there blinking. In the open too, while V is held. */
+function buildInspect() {
+  const { cells } = inspectLines();
+  const blink = 0.2 + 0.3 * (0.5 + 0.5 * Math.sin(performance.now() / 110));
+  game.hub.forEachBlock((p, color, index) => pushSolid(local(p), color, { flash: cells.has(index) ? blink : 0 }));
+  pushBehindMarks(viewAt(inspect), `inspect:${linesCache.key}`);
+  flushLayers();
+}
+
 function buildBlocks(dt) {
+  if (roll) {
+    buildRoll();
+    return;
+  }
   if (preview?.result && turn.t >= 1) {
     buildPreview();
+    return;
+  }
+  if (inspect) {
+    buildInspect();
     return;
   }
   const hub = game.hub;
@@ -813,6 +1049,12 @@ function renderHud() {
     const { popped, rounds } = preview.result;
     const pops = popped === 0 ? 'ничего не лопнет' : `лопнет ${popped}${rounds > 1 ? `, каскад ×${rounds}` : ''}`;
     line = `опрокинуть: отпусти ${preview.code === 'ArrowUp' ? '↑' : '↓'}, Esc — отмена · ${pops}`;
+  } else if (options.paused) {
+    const { runs, cells } = inspect ? inspectLines() : { runs: 0, cells: new Set() };
+    const lines = runs === 0 ? 'линий отсюда нет' : `линий отсюда: ${runs}, блоков ${cells.size}`;
+    line = inspect
+      ? `осмотр · ${lines} · P — вернуться к игре`
+      : 'стрелки, Q E — осмотреть хаб с любой стороны';
   }
   $('phase').textContent = `${options.paused ? 'пауза · ' : ''}${line}`;
   const next = game.nextColors.join();
@@ -851,8 +1093,9 @@ function renderKeys() {
     '<b>1–6</b> — взять стакан: боковой повернуть наверх, передний/задний вести на месте',
     '<b>← →</b> — повернуть крест, как в 2D: левый / правый стакан наверх',
     '<b>↑ ↓</b> (держать) — показать, как ляжет хаб, если задний / передний стакан опрокинуть наверх; отпустить — опрокинуть; <b>Esc</b> — отмена',
-    '<b>V</b> (держать) — заглянуть в объём',
-    '<b>F</b> — набросать блоков · <b>P</b> — пауза',
+    '<b>V</b> (держать) — заглянуть в объём; <b>W A S D</b> при этом — откуда смотреть: сверху/снизу, слева/справа',
+    '<b>P</b> — пауза; на паузе <b>← → ↑ ↓ Q E</b> поворачивают хаб, чтобы осмотреть его с любой стороны; линии мигают',
+    '<b>F</b> — набросать блоков',
     '<b>N</b> — заново · <b>H</b> — спрятать подсказку',
   ].map((line) => `<div>${line}</div>`).join('');
 }
@@ -872,32 +1115,51 @@ $('settings-list').addEventListener('change', (event) => {
 // ------------------------------------------------------------------ loop
 
 let last = performance.now();
+/** Where V looks from, easing towards the corner W/A/S/D chose. */
+const peekFrom = new THREE.Quaternion();
+const peekTo = new THREE.Quaternion();
+const IDENTITY = new THREE.Quaternion();
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (!options.paused) {
+  // The game holds still while the picture rolls to another side.
+  if (!options.paused && !roll) {
     clock += dt;
     game.update(dt);
   }
   consumeEvents();
-  // A pause stops the turn too, so that it can be looked at half-way.
-  if (turn.t < 1 && !options.paused) turn.t = Math.min(1, turn.t + dt / TURN_SECONDS);
+  const step = dt * options.transitionScale;
+  if (roll) {
+    roll.t = Math.min(1, roll.t + step / FLIP_SECONDS);
+    if (roll.t >= 1) roll = null;
+  }
+  if (turn.t < 1) turn.t = Math.min(1, turn.t + step / TURN_SECONDS);
   refreshPreview();
-  const goal = preview ? preview.q : targetQ;
+  const goal = preview?.q ?? inspect ?? targetQ;
   if (turn.t < 1) turned.slerpQuaternions(turnFrom, goal, ease(turn.t));
   else turned.copy(goal);
   peek += ((options.peek ? 1 : 0) - peek) * (1 - Math.exp(-dt * 10));
-  hubGroup.quaternion.slerpQuaternions(new THREE.Quaternion(), PEEK, ease(peek)).multiply(turned);
-  // Depth shows mid-turn and while peeking; the cross of the screen fades
+  peekTo.setFromEuler(new THREE.Euler(PEEK_PITCH * options.peekPitch, -PEEK_YAW * options.peekYaw, 0));
+  peekFrom.slerp(peekTo, 1 - Math.exp(-dt * 8));
+  hubGroup.quaternion.slerpQuaternions(IDENTITY, peekFrom, ease(peek)).multiply(turned);
+  // Depth opens only while V is held: the cross of the screen fades
   // meanwhile, and the edges of the hub stand out.
-  const opened = Math.max(turn.t < 1 ? Math.sin(Math.PI * turn.t) : 0, peek);
+  const opened = peek;
   depthShown = FLAT + (1 - FLAT) * opened;
   const shown = (1 - opened) ** 2;
   cross.traverse((object) => {
     if (object.material) object.material.opacity = object.material.userData.opacity * shown;
   });
-  hubLines.forEach((line) => { line.material.opacity = 0.1 + 0.25 * opened; });
+  // With the volume setting off nothing but V hints at the glasses in front
+  // and behind: it looks like the 2D game, and they are kept in mind.
+  const volume = options.volume || opened > 0.02;
+  hubLines.forEach((line) => {
+    line.visible = volume;
+    line.material.opacity = 0.1 + 0.25 * opened;
+  });
   labels.forEach(({ sprite }, side) => {
+    const alongSight = Math.abs(new THREE.Vector3(...normalOf(side)).applyQuaternion(turned).z) > 0.5;
+    sprite.visible = volume || !alongSight;
     sprite.material.opacity = side === game.active ? 0.95 : 0.4;
   });
   buildBlocks(dt);
@@ -923,6 +1185,6 @@ window.__proto3d = {
   /** A data direction as the screen shows it once the turn is over:
    * +x right, +y up, +z towards the eye. */
   toScene: (d) => toScene(d).toArray(),
-  get turning() { return turn.t < 1; },
+  get turning() { return turn.t < 1 || roll !== null; },
   ready: true,
 };

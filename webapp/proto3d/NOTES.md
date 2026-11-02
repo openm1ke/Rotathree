@@ -82,13 +82,26 @@ After review the rules follow what the screen shows.
   behind. The steered stick is an outline over the picture with a mark in each
   square: its colour if that square will be seen, a dark hole if it will hide.
   The panel says the layer: «сядет в слой −3, видно 1 из 3» (`03`, `04`).
-- **Tipping the hub over (↑/↓).** Holding the key turns the hub and shows the
-  picture as it would settle, with what would pop blinking; the panel counts
-  it (`09`, `11`). Letting go tips it; Esc puts it back. What was depth
-  becomes up or across: columns built from the top become, after ↑, the
-  bottom line made of their top blocks (`07` → `08` → `09` → `10`).
-- **V (held)** opens the depth up to look at (`05`); so does every tumble,
-  half-way (`08`).
+- **Tipping the hub over (↑/↓).** Holding the key shows the picture as it
+  would settle, with what would pop blinking; the panel counts it (`09`,
+  `11`). Letting go tips it; Esc puts it back. What was depth becomes up or
+  across: columns built from the top become, after ↑, the bottom line made
+  of their top blocks (`07` → `08` → `09` → `10`).
+- **The change of side rolls.** Every cube of the flat picture rolls over
+  about the axis of the turn, in a wave that starts where the hub comes
+  towards the eye. Its front face carries the colour seen before, and the face
+  coming round carries the colour seen after, darkening as it turns away
+  (`08`). The game holds still for the 0.8 s it takes. With V held the whole
+  hub turns in the open instead.
+- **V (held)** opens the depth up to look at (`05`). With V held, W/A/S/D
+  choose where from: above or below, the right or the left (`14`, from below
+  and the left).
+- **Pause = a look around.** While paused, ← → ↑ ↓ and Q E turn the hub any
+  way to be looked at: about the screen's upright, its horizontal or the line
+  of sight. Nothing in the game changes, the blocks that would make lines
+  from that side blink, and the panel counts them (`12`; in the open with V,
+  `13`). Esc or going on rolls it back to where the game is; the play keys
+  rest meanwhile.
 - **Keys, one meaning each.**
   - A/D move left and right.
   - W turns the stick on top, as in 2D, and moves a front or back stick up.
@@ -109,19 +122,22 @@ After review the rules follow what the screen shows.
   - let those glasses fall on their own, every 6 s (Y), off;
   - the other glasses dropping on their own (I), on;
   - the colour-behind marks (B), on;
+  - the volume of the glasses (O), on — off hides the edges of the hub and
+    the numbers of the glasses in front and behind, so that it looks like the
+    2D game and they are kept in mind (`15`);
   - the aiming lane (G), on.
 
 What reads well:
 
 - **It is the 2D game while nothing tips.** A clean board, the same keys,
-  lines that pop where you see them (`12`).
+  lines that pop where you see them (`16`).
 - **Depth shows only as marks and on request.** The colour-behind mark says
   what a pop will reveal. The landing marks say whether a front or back stick
   will be seen. Holding ↑/↓ says what a tip will do, and V shows the whole
   thing — all without see-through blocks.
 - **A tumble does what one expects**, and can now be planned: the preview of
   a busy board shows the six blocks a tip would pop (`11`).
-- **Careless scripted play lasted 34 sticks** (`13`).
+- **Careless scripted play lasted 34 sticks** (`17`).
 
 What is still open:
 
