@@ -519,12 +519,17 @@ export class Game {
   }
 
   /** What tipping the hub over to look along `plane` would give: the
-   * settled picture, what pops in it first, and how many blocks the whole
-   * cascade would pop in how many rounds. */
+   * settled picture with the sticks in flight on it, what pops in it first,
+   * and how many blocks the whole cascade would pop in how many rounds. */
   previewTurn(plane, viewFrame) {
     const view = this.lookFrom(plane, viewFrame);
     view.settle();
     const settled = this.lookFrom(plane, viewFrame, view.hub.clone());
+    // The sticks in flight, laid on the new side as the tip would lay them;
+    // the glass on top is the one steered then.
+    settled.pieces = new Map([...this.pieces].map(([side, piece]) => [side, { ...piece, pivot: [...piece.pivot], dir: [...piece.dir] }]));
+    settled.active = sideOfNormal(viewFrame.up);
+    settled.reseat();
     const first = view.findMatches();
     let match = first;
     let rounds = 0;

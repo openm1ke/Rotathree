@@ -117,12 +117,13 @@ try {
   await key('Digit1');
   await wait(200);
   await shot('07-columns-before-tip');
-  // Holding ↑: the cubes of the picture roll over in a wave to the new side,
-  // then show how it would lie, what would pop blinking; letting go tips it.
+  // Holding ↑: the hub leans over like a tower of blocks, opening up into
+  // depth half-way, then shows how it would lie, what would pop blinking;
+  // letting go tips it.
   await slow(0.1);
   await page.keyboard.down('ArrowUp');
-  await wait(3600);
-  await snap('08-tip-roll');
+  await wait(3300);
+  await snap('08-tip-tilt');
   await slow(1);
   await settled();
   await shot('09-tip-preview');

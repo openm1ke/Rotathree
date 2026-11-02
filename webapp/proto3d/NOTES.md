@@ -87,12 +87,14 @@ After review the rules follow what the screen shows.
   `11`). Letting go tips it; Esc puts it back. What was depth becomes up or
   across: columns built from the top become, after ↑, the bottom line made
   of their top blocks (`07` → `08` → `09` → `10`).
-- **The change of side rolls.** Every cube of the flat picture rolls over
-  about the axis of the turn, in a wave that starts where the hub comes
-  towards the eye. Its front face carries the colour seen before, and the face
-  coming round carries the colour seen after, darkening as it turns away
-  (`08`). The game holds still for the 0.8 s it takes. With V held the whole
-  hub turns in the open instead.
+- **The change of side is a real turn.** The hub leans over as one body,
+  like a tower of blocks tipping the way the arrow says, and opens up into
+  depth half-way before landing flat on its new side (`08`). The game holds
+  still for the 0.65 s it takes. The sticks in flight turn with it; the
+  preview shows them where the tip lays them (`09`), and a stick laid
+  somewhere else slides and turns there rather than jumping. (A wave of cubes each rolling over to its
+  new colour was tried in its place and dropped on review: it read as window
+  blinds, not as the hub turning.)
 - **V (held)** opens the depth up to look at (`05`). With V held, W/A/S/D
   choose where from: above or below, the right or the left (`14`, from below
   and the left).
