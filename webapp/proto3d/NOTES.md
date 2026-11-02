@@ -101,7 +101,9 @@ After review the rules follow what the screen shows.
   of sight. Nothing in the game changes, the blocks that would make lines
   from that side blink, and the panel counts them (`12`; in the open with V,
   `13`). Esc or going on rolls it back to where the game is; the play keys
-  rest meanwhile.
+  rest meanwhile. Once the game is over the same keys look around at once,
+  to see how it was lost; the banner hides while the hub is turned or V is
+  held, and a setting (K) hides it for good (`18`).
 - **Keys, one meaning each.**
   - A/D move left and right.
   - W turns the stick on top, as in 2D, and moves a front or back stick up.
@@ -125,7 +127,8 @@ After review the rules follow what the screen shows.
   - the volume of the glasses (O), on — off hides the edges of the hub and
     the numbers of the glasses in front and behind, so that it looks like the
     2D game and they are kept in mind (`15`);
-  - the aiming lane (G), on.
+  - the aiming lane (G), on;
+  - the game-over banner (K), on.
 
 What reads well:
 

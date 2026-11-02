@@ -207,6 +207,12 @@ try {
     await drop();
   }
   await shot('17-game-over');
+  // Once the game is over the hub can be looked around at once, and the
+  // banner keeps out of the way.
+  await key('ArrowLeft');
+  await settled();
+  await wait(200);
+  await snap('18-game-over-look');
 } finally {
   await browser.close();
   await server.close();

@@ -74,6 +74,7 @@ const SETTINGS = [
   { id: 'behind', key: 'KeyB', label: 'Метка: цвет блока за клеткой', initial: true },
   { id: 'volume', key: 'KeyO', label: 'Объём стаканов: рёбра хаба и номера переднего и заднего', initial: true },
   { id: 'lane', key: 'KeyG', label: 'Дорожка до места посадки', initial: true },
+  { id: 'gameOverBanner', key: 'KeyK', label: 'Плашка «Конец игры» (при осмотре и с V прячется сама)', initial: true },
 ];
 const STORE = 'rotathree-proto3d-settings';
 const options = {
@@ -585,9 +586,10 @@ function turnHub(axis, quarters, { shown = false } = {}) {
   if (shown && game.phase === 'settling') game.phaseElapsed = game.phaseDuration;
 }
 
-/** While paused, the hub can be turned any way to be looked at: ← → about
- * the screen's upright, ↑ ↓ about its horizontal, Q E about the line of
- * sight. Nothing in the game changes; going on brings it back. */
+/** While paused, or once the game is over, the hub can be turned any way to
+ * be looked at: ← → about the screen's upright, ↑ ↓ about its horizontal,
+ * Q E about the line of sight. Nothing in the game changes; going on (or
+ * Esc) brings it back. */
 let inspect = null;
 
 function inspectTurn(axis, quarters) {
@@ -698,7 +700,8 @@ function press(code, { repeat = false } = {}) {
   if (options.peek && PEEK_KEYS[code]) {
     const [which, sign] = PEEK_KEYS[code];
     options[which] = sign;
-  } else if (options.paused && PLAY_KEYS.test(code)) {
+  } else if ((options.paused || game.isGameOver) && PLAY_KEYS.test(code)) {
+    // Paused, or the game over: the play keys look around instead.
     if (INSPECT_KEYS[code] && !repeat) inspectTurn(...INSPECT_KEYS[code]);
     else if (code === 'Escape') endInspect();
     else return false;
@@ -767,7 +770,6 @@ function restart() {
   turn.t = 1;
   pieceViews.clear();
   flashes.clear();
-  document.getElementById('banner').hidden = true;
 }
 
 // ------------------------------------------------------------------ frame
@@ -787,7 +789,6 @@ function consumeEvents() {
     } else if (event.type === 'gameEnded') {
       document.getElementById('banner-text').textContent =
         `Стакан ${SIDES[event.side].label} заполнен до края. Очки: ${game.score}.`;
-      document.getElementById('banner').hidden = false;
     }
   }
   game.events.length = 0;
@@ -1049,14 +1050,14 @@ function renderHud() {
     const { popped, rounds } = preview.result;
     const pops = popped === 0 ? 'ничего не лопнет' : `лопнет ${popped}${rounds > 1 ? `, каскад ×${rounds}` : ''}`;
     line = `опрокинуть: отпусти ${preview.code === 'ArrowUp' ? '↑' : '↓'}, Esc — отмена · ${pops}`;
-  } else if (options.paused) {
+  } else if (options.paused || game.isGameOver) {
     const { runs, cells } = inspect ? inspectLines() : { runs: 0, cells: new Set() };
     const lines = runs === 0 ? 'линий отсюда нет' : `линий отсюда: ${runs}, блоков ${cells.size}`;
-    line = inspect
-      ? `осмотр · ${lines} · P — вернуться к игре`
-      : 'стрелки, Q E — осмотреть хаб с любой стороны';
+    const back = game.isGameOver ? 'Esc — вернуть, N — новая игра' : 'P — вернуться к игре';
+    line = inspect ? `осмотр · ${lines} · ${back}` : 'стрелки, Q E — осмотреть хаб с любой стороны';
   }
-  $('phase').textContent = `${options.paused ? 'пауза · ' : ''}${line}`;
+  const ended = game.isGameOver ? `конец игры: стакан ${SIDES[game.gameOverSide].label} заполнен · ` : '';
+  $('phase').textContent = `${options.paused ? 'пауза · ' : ''}${ended}${line}`;
   const next = game.nextColors.join();
   if (next !== nextKey) {
     nextKey = next;
@@ -1094,7 +1095,7 @@ function renderKeys() {
     '<b>← →</b> — повернуть крест, как в 2D: левый / правый стакан наверх',
     '<b>↑ ↓</b> (держать) — показать, как ляжет хаб, если задний / передний стакан опрокинуть наверх; отпустить — опрокинуть; <b>Esc</b> — отмена',
     '<b>V</b> (держать) — заглянуть в объём; <b>W A S D</b> при этом — откуда смотреть: сверху/снизу, слева/справа',
-    '<b>P</b> — пауза; на паузе <b>← → ↑ ↓ Q E</b> поворачивают хаб, чтобы осмотреть его с любой стороны; линии мигают',
+    '<b>P</b> — пауза; на паузе и после конца игры <b>← → ↑ ↓ Q E</b> поворачивают хаб, чтобы осмотреть его с любой стороны; линии мигают; <b>Esc</b> — вернуть',
     '<b>F</b> — набросать блоков',
     '<b>N</b> — заново · <b>H</b> — спрятать подсказку',
   ].map((line) => `<div>${line}</div>`).join('');
@@ -1162,6 +1163,8 @@ function frame(now) {
     sprite.visible = volume || !alongSight;
     sprite.material.opacity = side === game.active ? 0.95 : 0.4;
   });
+  // The game-over banner keeps out of the way of a look around.
+  $('banner').hidden = !(game.isGameOver && options.gameOverBanner && !inspect && peek < 0.05);
   buildBlocks(dt);
   renderHud();
   renderer.render(scene, camera);
