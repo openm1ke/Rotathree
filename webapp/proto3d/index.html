@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RotaThree 3D — прототип</title>
+  <link rel="icon" href="../favicon.svg" />
+  <style>
+    /* The tokens and backdrop of the game (src/styles). */
+    :root {
+      color-scheme: dark;
+      --bg: #07070c; --panel: rgba(255, 255, 255, 0.045); --line: rgba(255, 255, 255, 0.11); --line-strong: rgba(255, 255, 255, 0.26);
+      --text: #eceff9; --text-dim: #8b90a8; --text-faint: #5d6178; --accent: #78cdff; --danger: #ff4664;
+      --font-display: 'Exo 2', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1.35 var(--font-display); -webkit-font-smoothing: antialiased; user-select: none; }
+    .backdrop { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+    .backdrop i { position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%; opacity: 0.2; background: radial-gradient(circle closest-side, rgb(var(--glow) / 0.8) 0%, rgb(var(--glow) / 0.5) 30%, rgb(var(--glow) / 0.1) 65%, rgb(var(--glow) / 0) 100%); }
+    .backdrop i:nth-child(1) { --glow: 143 91 255; left: -22vmax; top: -28vmax; }
+    .backdrop i:nth-child(2) { --glow: 54 169 255; right: -26vmax; bottom: -30vmax; }
+    .backdrop b { position: absolute; inset: -2px; background-image: linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px); background-size: 44px 44px; mask-image: radial-gradient(circle at 50% 50%, #000 0%, transparent 78%); }
+    #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .panel { position: fixed; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+    #status { top: 12px; left: 12px; min-width: 170px; }
+    #status h1 { margin: 0 0 6px; font-size: 14px; font-weight: 900; font-style: italic; letter-spacing: 0.02em; }
+    #status .score { font-size: 22px; font-weight: 800; }
+    #status .row { color: var(--text-dim); }
+    #status .row b { color: var(--text); font-weight: 700; }
+    #side { top: 12px; right: 12px; width: 214px; }
+    #side h2 { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+    #next { display: flex; gap: 3px; margin-bottom: 12px; }
+    /* A block of the game: a bevel lit from the top around a flat face. */
+    #next i { position: relative; width: 22px; height: 22px; border-radius: 4px; background: linear-gradient(var(--light), var(--base) 30%, var(--dark)); }
+    #next i::after { content: ''; position: absolute; inset: 3.5px; border-radius: 2px; background: linear-gradient(rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 50%), var(--base); }
+    .glass { display: grid; grid-template-columns: 18px 26px 1fr 22px; align-items: center; gap: 6px; margin: 3px 0; color: var(--text-dim); }
+    .glass.active { color: var(--text); font-weight: 700; }
+    .glass .num { text-align: center; border: 1px solid var(--line); border-radius: 4px; }
+    .glass.active .num { border-color: var(--accent); color: var(--accent); }
+    .glass .key { text-align: center; }
+    .glass .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+    .glass .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+    .glass.crowded .bar i { background: var(--danger); }
+    .glass .pct { text-align: right; font-variant-numeric: tabular-nums; }
+    #keys { left: 12px; bottom: 12px; max-width: 580px; color: var(--text-dim); columns: 2; column-gap: 18px; }
+    #keys[hidden] { display: none; }
+    #keys div { break-inside: avoid; }
+    #keys b { color: var(--text); font-weight: 700; }
+    #keys .on { color: var(--accent); }
+    #banner { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 16px; padding: 18px 26px; background: rgba(18, 18, 30, 0.92); }
+    #banner[hidden] { display: none; }
+    #banner strong { display: block; font-size: 26px; font-weight: 900; font-style: italic; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"><i></i><i></i><b></b></div>
+  <canvas id="scene"></canvas>
+  <div class="panel" id="status">
+    <h1>ROTATHREE 3D · прототип</h1>
+    <div class="score" id="score">0</div>
+    <div class="row">комбо <b id="combo">—</b> · фигур <b id="placed">0</b></div>
+    <div class="row">фаза <b id="phase">playing</b></div>
+  </div>
+  <div class="panel" id="side">
+    <h2>Следующая</h2>
+    <div id="next"></div>
+    <h2>Стакан · клавиша · запас рядов</h2>
+    <div id="glasses"></div>
+  </div>
+  <div class="panel" id="keys"></div>
+  <div class="panel" id="banner" hidden><strong>Конец игры</strong><span id="banner-text"></span><br />N — новая игра</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
