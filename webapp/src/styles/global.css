@@ -2427,7 +2427,7 @@ select:focus-visible {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   padding: 14px 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.035);
 }
@@ -2446,7 +2446,11 @@ select:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.navitem--tile .navitem__title { font-size: clamp(20px, min(3vw, 4.2svh), 30px); color: rgba(236, 239, 249, 0.86); }
+/* Names in the accent of the round buttons beside the logo; a picked tile's
+   name turns white, its border takes the accent. */
+.navitem--tile .navitem__title { font-size: clamp(20px, min(3vw, 4.2svh), 30px); color: var(--accent); }
+.navitem--tile:hover .navitem__title,
+.navitem--tile:focus-visible .navitem__title { color: #fff; text-shadow: none; }
 .navitem--tile .navitem__caption { opacity: 1; font-size: 13px; }
 .navitem--small { padding: 10px 14px; gap: 12px; }
 .navitem--small .navitem__title { font-size: 17px; }
@@ -2499,4 +2503,4 @@ select:focus-visible {
   .navitem--tile:hover .blocks i,
   .navitem--tile:focus-visible .blocks i { animation: none; }
 }
-.navitem__icon--play { width: 30px; height: 30px; color: #2fd985; }
+.navitem__icon--play { width: 30px; height: 30px; color: var(--accent); }
