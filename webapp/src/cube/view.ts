@@ -324,7 +324,19 @@ export class CubeView {
   private readonly tiltFrom = new THREE.Quaternion();
   /** The turn under way: `tilt` when it leans the hub over rather than
    * turning the cross in the screen. */
-  private readonly turn = { t: 1, tilt: false, carry: false, steeredFrom: 0 };
+  private readonly turn = {
+    t: 1,
+    tilt: false,
+    carry: false,
+    steeredFrom: 0,
+    /** A turn in the screen, as an angle: the quarters pressed, plus what
+     * was left of a turn it cut short, in the way they were pressed. A turn
+     * of half the circle or more has no shortest way round, and must not
+     * pick one; null for a turn that is not only in the screen. */
+    spin: null as number | null,
+    /** How far round the cross was laid as the turn began. */
+    crossFrom: 0,
+  };
   /** 0 when the picture is the game, 1 while the volume is looked into. */
   private peek = 0;
   /** 0 to 1: the edges of the glasses show while the volume is looked into,
@@ -810,7 +822,14 @@ export class CubeView {
    * of blocks and opens up into depth on the way, flattening again as it
    * lands. Turned in the screen it stays flat, as the 2D cross turns.
    * `steered`: the glass steered on the side the turn starts from. */
-  private transition(axis: THREE.Vector3 | null, { carry = false, steered = this.game.active } = {}): void {
+  private transition(axis: THREE.Vector3 | null, { carry = false, steered = this.game.active, quarters = 0 } = {}): void {
+    const { turn } = this;
+    // A turn in the screen goes on from where one cut short has got to, and
+    // the rest of that one is added to it.
+    const going = turn.t < 1;
+    const left = going && turn.spin !== null ? turn.spin * (1 - ease(turn.t)) : 0;
+    turn.crossFrom = this.crossGroup.rotation.z;
+    turn.spin = axis === SCENE_TOWARD && (!going || turn.spin !== null) ? left + (quarters * Math.PI) / 2 : null;
     this.turnFrom.copy(this.turned);
     this.turn.t = 0;
     this.turn.tilt = axis !== SCENE_TOWARD;
@@ -872,7 +891,7 @@ export class CubeView {
    * already shown it, settled. */
   private turnHub(axis: THREE.Vector3, quarters: number, shown = false): void {
     const to = quarterTurned(axis, quarters, this.targetQ);
-    if (!shown) this.transition(axis, { carry: true });
+    if (!shown) this.transition(axis, { carry: true, quarters });
     this.targetQ.copy(to);
     const tipped = axis !== SCENE_TOWARD;
     const { game } = this;
@@ -1002,7 +1021,7 @@ export class CubeView {
     const from = this.inspect ?? this.targetQ;
     const about = axis === 'upright' ? SCENE_UP : axis === 'across' ? SCENE_RIGHT : SCENE_TOWARD;
     const to = quarterTurned(about, quarters, from);
-    this.transition(about);
+    this.transition(about, { quarters });
     this.inspect = to;
   }
 
@@ -1039,7 +1058,11 @@ export class CubeView {
     }
     this.refreshPreview();
     const goal = this.goalQ();
-    if (turn.t < 1) this.turned.slerpQuaternions(this.turnFrom, goal, ease(turn.t));
+    // In the screen, round the way it was pressed; any other turn by the
+    // shortest way.
+    if (turn.t < 1 && turn.spin !== null) {
+      this.turned.setFromAxisAngle(SCENE_TOWARD, turn.spin * ease(turn.t)).multiply(this.turnFrom);
+    } else if (turn.t < 1) this.turned.slerpQuaternions(this.turnFrom, goal, ease(turn.t));
     else this.turned.copy(goal);
     this.peek += ((this.peeking ? 1 : 0) - this.peek) * (1 - Math.exp(-dt * 10));
     this.peekTo.setFromEuler(new THREE.Euler(PEEK_PITCH * this.peekPitch, -PEEK_YAW * this.peekYaw, 0));
@@ -1053,14 +1076,10 @@ export class CubeView {
     const opened = Math.max(this.peek, this.tilting ? Math.sin(Math.PI * turn.t) : 0);
     this.depthShown = FLAT + (1 - FLAT) * opened;
     const shown = (this.crossShown = (1 - opened) ** 2);
-    // Turned in the screen, the cross goes round with the hub.
-    let turnedBy = 0;
-    if (turn.t < 1 && !turn.tilt) {
-      const between = goal.clone().multiply(this.turnFrom.clone().invert());
-      turnedBy = 2 * Math.atan2(between.z, between.w) * ease(turn.t);
-      if (turnedBy > Math.PI) turnedBy -= 2 * Math.PI;
-      if (turnedBy < -Math.PI) turnedBy += 2 * Math.PI;
-    }
+    // Turned in the screen, the cross goes round with the hub, by the same
+    // angle; laid back once at rest, where a quarter turn leaves it as it was.
+    // A tip that cut such a turn short lays the cross back on its way.
+    const turnedBy = turn.t >= 1 ? 0 : turn.spin !== null ? turn.crossFrom + turn.spin * ease(turn.t) : turn.crossFrom * (1 - ease(turn.t));
     this.crossGroup.rotation.z = this.hintGroup.rotation.z = turnedBy;
     this.paintAccent();
     const fade = (group: THREE.Object3D, by: number) =>

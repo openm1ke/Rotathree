@@ -9,10 +9,10 @@ import { CubeGame, SIDES, type Vec } from './rules';
 export const CUBE_LESSONS = [
   ['Это куб', 'Шесть стаканов вокруг него. Крест на экране — вид спереди'],
   ['Линия — из того, что видно', 'Блоки лежат на разной глубине, а считается картинка. Брось фигуру'],
-  ['Стакан спереди', 'Возьми его и брось: фигура летит вглубь. Метка в углу — будет ли её видно'],
+  ['Поверни крест', 'Как в 2D: наверх выходит стакан слева или справа, весь куб поворачивается'],
   ['Опрокинь куб', 'Держи — покажет, как ляжет и что лопнет. Отпусти — опрокинет'],
   ['Загляни в объём', 'Держи — куб раскроется в 3D'],
-  ['Теперь сам', 'Крест поворачивается, как в 2D. ↑ ↓ — опрокинуть куб'],
+  ['Теперь сам', 'Собирай линии. На паузе куб можно осмотреть со всех сторон'],
 ] as const;
 
 export const CUBE_LESSON_LAST = CUBE_LESSONS.length - 1;
@@ -20,17 +20,16 @@ export const CUBE_LESSON_LAST = CUBE_LESSONS.length - 1;
 /** What a lesson asks for: the keys shown. */
 export const LESSON_KEYS: Record<number, readonly Action[]> = {
   1: ['hardDrop'],
-  2: ['frontGlass', 'hardDrop'],
+  2: ['glassLeft', 'glassRight'],
   3: ['tipBack'],
   4: ['peek'],
 };
 
 /** The same on the pads: each group is one thing to do, done by any of its
- * actions (the glass in front is taken by its own button, or by cycling the
- * glasses in depth). Their buttons glow. */
+ * actions. Their buttons glow. */
 export const LESSON_PADS: Record<number, readonly (readonly Action[])[]> = {
   1: [['hardDrop']],
-  2: [['frontGlass', 'depthGlass'], ['hardDrop']],
+  2: [['glassLeft', 'glassRight']],
   3: [['tipBack']],
   4: [['peek']],
 };
@@ -43,10 +42,8 @@ export function missingOnPads(lesson: number, layouts: Record<'left' | 'right', 
   return group?.[0] ?? null;
 }
 
-/** The glass at the top of the screen and the one in front, as a new game
- * lies. */
+/** The glass at the top of the screen, as a new game lies. */
 const TOP = SIDES.findIndex((s) => s.axis === 1 && s.sign === 1);
-const FRONT = SIDES.findIndex((s) => s.axis === 2 && s.sign === 1);
 
 // The colours the boards are painted in: the first four of the set.
 const RED = 0;
@@ -95,19 +92,15 @@ export function lessonGame(lesson: number): CubeGame {
       ]);
       Object.assign(top, { pivot: game.cellAt(2, h + 3, 0), dir: [1, 0, 0] as Vec, colors: [YELLOW, GREEN, BLUE] });
       break;
-    case 2: {
-      // A gap between two yellows, empty all the way through: the stick in
-      // front falls to the back of the cube, and is seen there.
+    case 2:
+      // A few blocks at the bottom: they go round with the cross.
       paint(game, [
-        [-2, -h, 2, GREEN],
-        [-1, -h, 1, YELLOW],
-        [1, -h, -2, YELLOW],
-        [2, -h, 0, RED],
+        [-1, -h, 0, GREEN],
+        [0, -h, 0, YELLOW],
+        [1, -h, 0, RED],
+        [0, -h + 1, 0, BLUE],
       ]);
-      const front = game.pieces.get(FRONT)!;
-      Object.assign(front, { pivot: game.cellAt(0, -h + 1, game.middle), dir: [0, 1, 0] as Vec, colors: [YELLOW, BLUE, RED] });
       break;
-    }
     case 3:
       // Three columns whose tops are yellow: from above, the tops make a line.
       paint(game, [

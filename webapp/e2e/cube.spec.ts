@@ -45,12 +45,11 @@ test('every lesson is done with the keys it teaches, and a miss lays it out agai
   await page.keyboard.press('Space');
   await expect(page.locator('.tutorial__hint')).toHaveText('Мимо — попробуй ещё раз');
   await page.keyboard.press('Space');
-  await expect(page.getByRole('heading', { name: 'Стакан спереди' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  // A key the lesson does not teach is answered with what to press.
   await page.keyboard.press('Space');
-  await expect(page.locator('.tutorial__hint')).toHaveText('Сначала возьми стакан спереди');
-  await page.keyboard.press('KeyZ');
-  await expect(line(page)).toHaveText('Передний стакан');
-  await page.keyboard.press('Space');
+  await expect(page.locator('.tutorial__hint')).toHaveText('Нажми подсвеченную клавишу');
+  await page.keyboard.press('ArrowLeft');
   await expect(page.getByRole('heading', { name: 'Опрокинь куб' })).toBeVisible();
   await page.keyboard.down('ArrowUp');
   await expect(line(page)).toContainText('лопнет 3');
@@ -91,6 +90,47 @@ test('the keys play the cube: move, turn, tip, the glass in front', async ({ pag
   await expect(line(page)).toHaveText('Передний стакан');
   await page.keyboard.press('KeyZ');
   await expect(line(page)).toHaveCount(0);
+});
+
+test('quick presses turn the cross all the way round the way they were pressed, sticks and backdrop together', async ({ page }) => {
+  await openCube(page);
+  await play(page);
+  await page.evaluate(() => {
+    (window as unknown as { __rotathreeCube: { game: CubeGame } }).__rotathreeCube.game.stepsHeld = true;
+  });
+  for (const [code, way] of [['ArrowLeft', -1], ['ArrowRight', 1]] as const) {
+    const turned = await page.evaluate(async ({ code }) => {
+      // The view's insides, as a development build lets them be read.
+      type Turning = { pieceViews: Map<number, { at: { clone(): { applyQuaternion(q: unknown): { x: number; y: number } }; length(): number } }>; hubGroup: { quaternion: unknown }; crossGroup: { rotation: { z: number } } };
+      const view = (window as unknown as { __rotathreeCube: { view: Turning } }).__rotathreeCube.view;
+      const stick = () => {
+        const far = [...view.pieceViews.values()].find((v) => v.at.length() > 5)!;
+        const at = far.at.clone().applyQuaternion(view.hubGroup.quaternion);
+        return (Math.atan2(at.y, at.x) * 180) / Math.PI;
+      };
+      const press = () => {
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+        document.body.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+      };
+      const wrap = (a: number) => ((a + 540) % 360) - 180;
+      let before = stick();
+      let total = 0;
+      const steps = new Set<number>();
+      const cross = new Set<number>();
+      for (let i = 0; i < 3; i++) press();
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 40));
+        const now = stick();
+        const step = wrap(now - before);
+        total += step;
+        if (Math.abs(step) > 0.3) steps.add(Math.sign(step));
+        if (Math.abs(view.crossGroup.rotation.z) > 0.01) cross.add(Math.sign(view.crossGroup.rotation.z));
+        before = now;
+      }
+      return { total: Math.round(total), steps: [...steps], cross: [...cross] };
+    }, { code });
+    expect(turned).toEqual({ total: 270 * way, steps: [way], cross: [way] });
+  }
 });
 
 test('a pause lets the cube be looked at; a lost game shows, records and can be looked at too', async ({ page }) => {

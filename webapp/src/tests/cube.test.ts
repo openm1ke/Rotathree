@@ -262,15 +262,6 @@ describe('Cube: the tutorial', () => {
     expect(game.matches).toBe(1);
   });
 
-  it('pops a line with the stick in front dropped to the back of the cube', () => {
-    const game = lessonGame(2);
-    game.control(FRONT);
-    expect(game.landing()).toMatchObject({ count: 3 });
-    game.dropActive();
-    run(game, 0.3);
-    expect(game.matches).toBe(1);
-  });
-
   it('pops the tops of the columns when tipped back over the top', () => {
     const game = lessonGame(3);
     expect(game.findMatches().runs).toHaveLength(0);
@@ -344,9 +335,9 @@ describe('Cube: its own pads', () => {
 
   it('let a lesson offer to press for the player what no button does', () => {
     expect(missingOnPads(2, CUBE_PADS)).toBeNull();
-    const noDepth = { left: { ...CUBE_PADS.left, center: 'none' }, right: CUBE_PADS.right };
-    expect(missingOnPads(2, noDepth)).toBe('frontGlass');
-    expect(missingOnPads(2, { ...noDepth, right: { ...CUBE_PADS.right, center: 'frontGlass' } })).toBeNull();
-    expect(missingOnPads(4, { ...noDepth, right: { ...CUBE_PADS.right, center: 'none' } })).toBe('peek');
+    const noTurns = { left: CUBE_PADS.left, right: { ...CUBE_PADS.right, left: 'none', right: 'none' } };
+    expect(missingOnPads(2, noTurns)).toBe('glassLeft');
+    expect(missingOnPads(2, { ...noTurns, right: { ...noTurns.right, center: 'glassRight' } })).toBeNull();
+    expect(missingOnPads(4, { ...noTurns, right: { ...CUBE_PADS.right, center: 'none' } })).toBe('peek');
   });
 });

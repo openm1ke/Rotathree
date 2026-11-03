@@ -435,15 +435,11 @@
   "Шесть стаканов вокруг него. Крест на экране — вид спереди": "Six glasses around it. The cross on the screen is its front view",
   "Линия — из того, что видно": "A line is what you see",
   "Блоки лежат на разной глубине, а считается картинка. Брось фигуру": "The blocks lie at different depths, but the picture is what counts. Drop the piece",
-  "Стакан спереди": "The front glass",
-  "Возьми его и брось: фигура летит вглубь. Метка в углу — будет ли её видно": "Take it and drop: the piece flies into the depth. The corner mark says whether it will be seen",
   "Опрокинь куб": "Tip the cube over",
   "Держи — покажет, как ляжет и что лопнет. Отпусти — опрокинет": "Hold to see how it will lie and what will pop. Release to tip it over",
   "Загляни в объём": "Look into the volume",
   "Держи — куб раскроется в 3D": "Hold, and the cube opens up in 3D",
   "Теперь сам": "Your turn",
-  "Крест поворачивается, как в 2D. ↑ ↓ — опрокинуть куб": "The cross turns as in 2D. ↑ ↓ tip the cube over",
-  "Сначала возьми стакан спереди": "Take the front glass first",
   "Мимо — попробуй ещё раз": "Missed. Try again",
   "Ширина стакана": "Glass width",
   "куб {a}×{b}×{c} · рукав: {arm} · скорость растёт с очками": "cube {a}×{b}×{c} · arm: {arm} · the speed rises with the score",
@@ -481,5 +477,7 @@
   "Уровень {n} из {total} · {points} · {time}": "Level {n} of {total} · {points} · {time}",
   "Крестовины для": "Pads for",
   "Обычная игра": "Regular game",
-  "пройдена · Кошмар открыт": "complete · Nightmare unlocked"
+  "пройдена · Кошмар открыт": "complete · Nightmare unlocked",
+  "Как в 2D: наверх выходит стакан слева или справа, весь куб поворачивается": "As in 2D: the glass on the left or right comes to the top, and the whole cube turns",
+  "Собирай линии. На паузе куб можно осмотреть со всех сторон": "Make lines. While paused, the cube can be looked at from every side"
 }

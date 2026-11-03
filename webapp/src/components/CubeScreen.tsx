@@ -102,10 +102,9 @@ const PEEK_LESSON_SECONDS = 1.2;
 /** The first lesson opens the cube and closes it again, from either side,
  * this many seconds at a time. */
 const INTRO_BEAT_SECONDS = 2.4;
-/** What the lessons let the player do (the last one: everything). In front
- * of the glass in front, only that glass; a tip, only back over the top. */
+/** What the lessons let the player do with the stick (the last one:
+ * everything; a tip, only back over the top). */
 const PIECE_ACTIONS: readonly Action[] = ['moveLeft', 'moveRight', 'rotateCW', 'rotateCCW', 'softDrop', 'hardDrop'];
-const DEPTH_ACTIONS: readonly Action[] = ['frontGlass', 'backGlass', 'depthGlass'];
 
 /** The glass that filled up, by where the screen shows it. */
 const PLACE_NAMES = { top: 'Верхний', right: 'Правый', bottom: 'Нижний', left: 'Левый', front: 'Передний', back: 'Задний' } as const;
@@ -388,20 +387,16 @@ export function CubeScreen(props: Props) {
       if (lesson < 0 || lesson === CUBE_LESSON_LAST) return true;
       if (lessonDone || lesson === 0) return false;
       if (lesson === 1) return PIECE_ACTIONS.includes(action);
-      if (lesson === 2) {
-        return DEPTH_ACTIONS.includes(action)
-          || (view.steering !== 'top' && (PIECE_ACTIONS.includes(action) || action === 'tipBack' || action === 'tipFront'));
-      }
+      if (lesson === 2) return action === 'glassLeft' || action === 'glassRight';
       if (lesson === 3) return action === 'tipBack';
       return action === 'peek' || (view.peeking && PIECE_ACTIONS.includes(action));
     };
-    const wrongInput = (action: Action) => {
-      if (lesson === 2 && view.steering === 'top' && PIECE_ACTIONS.includes(action)) setTutorialHint('Сначала возьми стакан спереди');
-      else setTutorialHint(touchMode.current ? 'Нажми подсвеченную кнопку' : 'Нажми подсвеченную клавишу');
+    const wrongInput = () => {
+      setTutorialHint(touchMode.current ? 'Нажми подсвеченную кнопку' : 'Нажми подсвеченную клавишу');
     };
-    /** The lessons with a piece to drop: a miss lays the board out again. */
+    /** The lesson with a piece to drop: a miss lays the board out again. */
     const checkLesson = (seconds: number, now: number) => {
-      if (lesson === 1 || lesson === 2) {
+      if (lesson === 1) {
         if (matched) didLesson();
         else if (landed && game.phase === 'playing') {
           enterLesson(lesson);
@@ -427,7 +422,7 @@ export function CubeScreen(props: Props) {
     const lets = (action: Action): boolean => {
       if (!tutorial) return true;
       if (!allows(action)) {
-        wrongInput(action);
+        wrongInput();
         return false;
       }
       // On the right track: the reminder goes, and waits again.
@@ -482,6 +477,7 @@ export function CubeScreen(props: Props) {
           case 'glassLeft':
           case 'glassRight':
             view.turnCross(action === 'glassLeft' ? -1 : 1);
+            if (lesson === 2) didLesson();
             break;
           case 'tipBack':
           case 'tipFront':
