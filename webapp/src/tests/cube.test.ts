@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGame, EMPTY, SIDES, type Vec } from '../cube/rules';
-import { CUBE_LESSON_LAST, lessonGame } from '../cube/tutorial';
+import { CUBE_LESSON_LAST, lessonGame, missingOnPads } from '../cube/tutorial';
+import { CUBE_PADS } from '../input/pads';
+import { defaultSettings, sanitizeSettings } from '../services/storage';
 import { abandonedCube, sanitizeCubeRuns, sanitizeCubeSave } from '../cube/save';
 import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST, cubeLevelConfig, defaultCubeProgress, passCubeLevel, sanitizeCubeProgress } from '../cube/campaign';
 
@@ -323,5 +325,28 @@ describe('Cube: the campaign', () => {
     expect(abandonedCube(level)).toMatchObject({ mode: 'cubeCampaign', level: 3, interrupted: true });
     expect(abandonedCube(endless)).toMatchObject({ mode: 'cube', level: 1 });
     expect(sanitizeCubeSave({ ...level, level: 99 })).toBeNull();
+  });
+});
+
+describe('Cube: its own pads', () => {
+  it('keep their own layout, of actions Cube has', () => {
+    const settings = defaultSettings();
+    expect(settings.cubePads).toEqual(CUBE_PADS);
+    const stored = JSON.parse(JSON.stringify(settings));
+    stored.cubePads.right.center = 'frontGlass';
+    stored.cubePads.left.center = 'glassOpposite';
+    stored.pads.right.center = 'tipBack';
+    const read = sanitizeSettings(stored);
+    expect(read.cubePads.right.center).toBe('frontGlass');
+    expect(read.cubePads.left.center).toBe(CUBE_PADS.left.center);
+    expect(read.pads.right.center).toBe(settings.pads.right.center);
+  });
+
+  it('let a lesson offer to press for the player what no button does', () => {
+    expect(missingOnPads(2, CUBE_PADS)).toBeNull();
+    const noDepth = { left: { ...CUBE_PADS.left, center: 'none' }, right: CUBE_PADS.right };
+    expect(missingOnPads(2, noDepth)).toBe('frontGlass');
+    expect(missingOnPads(2, { ...noDepth, right: { ...CUBE_PADS.right, center: 'frontGlass' } })).toBeNull();
+    expect(missingOnPads(4, { ...noDepth, right: { ...CUBE_PADS.right, center: 'none' } })).toBe('peek');
   });
 });

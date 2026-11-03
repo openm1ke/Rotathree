@@ -12,10 +12,12 @@ export const SLOT_LABELS: Record<PadSlot, string> = {
   down: 'Вниз',
   center: 'Центр',
 };
-/** Cube's pads: the left one plays the stick, its centre picks the glass in
- * front or behind; the right one tips the hub (up, down — or moves the stick
- * in front or behind up and down), turns the cross (left, right) and, held in
- * the centre, opens the volume. */
+/** Cube's pads as they come: the left one plays the stick, its centre picks
+ * the glass in front or behind; the right one tips the hub (up, down — or
+ * moves the stick in front or behind up and down), turns the cross (left,
+ * right) and, held in the centre, opens the volume. The player may lay them
+ * out anew (Settings.cubePads); where they are and how they look is shared
+ * with the flat game's. */
 export const CUBE_PADS = {
   left: { up: 'rotateCW', left: 'moveLeft', right: 'moveRight', down: 'hardDrop', center: 'depthGlass' } as PadLayout,
   right: { up: 'tipBack', left: 'glassLeft', right: 'glassRight', down: 'tipFront', center: 'peek' } as PadLayout,

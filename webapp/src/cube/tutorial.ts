@@ -17,20 +17,31 @@ export const CUBE_LESSONS = [
 
 export const CUBE_LESSON_LAST = CUBE_LESSONS.length - 1;
 
-/** What a lesson asks for: the keys shown, and the pad buttons that glow
- * (the pads pick the glass in front by cycling the glasses in depth). */
+/** What a lesson asks for: the keys shown. */
 export const LESSON_KEYS: Record<number, readonly Action[]> = {
   1: ['hardDrop'],
   2: ['frontGlass', 'hardDrop'],
   3: ['tipBack'],
   4: ['peek'],
 };
-export const LESSON_PADS: Record<number, readonly Action[]> = {
-  1: ['hardDrop'],
-  2: ['depthGlass', 'hardDrop'],
-  3: ['tipBack'],
-  4: ['peek'],
+
+/** The same on the pads: each group is one thing to do, done by any of its
+ * actions (the glass in front is taken by its own button, or by cycling the
+ * glasses in depth). Their buttons glow. */
+export const LESSON_PADS: Record<number, readonly (readonly Action[])[]> = {
+  1: [['hardDrop']],
+  2: [['frontGlass', 'depthGlass'], ['hardDrop']],
+  3: [['tipBack']],
+  4: [['peek']],
 };
+
+/** The first thing the lesson asks for that no pad button does, if any:
+ * the lesson then offers to do it for the player. */
+export function missingOnPads(lesson: number, layouts: Record<'left' | 'right', Record<string, string>>): Action | null {
+  const assigned = new Set([...Object.values(layouts.left), ...Object.values(layouts.right)]);
+  const group = (LESSON_PADS[lesson] ?? []).find((actions) => !actions.some((action) => assigned.has(action)));
+  return group?.[0] ?? null;
+}
 
 /** The glass at the top of the screen and the one in front, as a new game
  * lies. */

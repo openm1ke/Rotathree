@@ -1,6 +1,7 @@
 import { T } from '../i18n/Text';
 import { useRef } from 'react';
-import type { Action } from '../input/bindings';
+import { ACTIONS, type Action } from '../input/bindings';
+import { PAD_SLOTS, type PadSlot } from '../input/pads';
 import { useTouchControls } from '../input/touch';
 import { CUBE_LIMITS, type CubeOptions, type Progress, type Settings, type Stats } from '../services/storage';
 import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST } from '../cube/campaign';
@@ -40,14 +41,8 @@ const KEYS: readonly { actions: readonly Action[]; label: string }[] = [
   { actions: ['pause'], label: 'Пауза; на паузе куб можно осмотреть со всех сторон' },
 ];
 
-/** The same on the pads (CUBE_PADS). */
-const PADS: readonly { where: string; label: string }[] = [
-  { where: 'Левая: ← → ↑ ↓', label: 'Влево, вправо, повернуть, сбросить' },
-  { where: 'Левая: центр', label: 'Стакан спереди, сзади, снова сверху' },
-  { where: 'Правая: ← →', label: 'Повернуть крест' },
-  { where: 'Правая: ↑ ↓', label: 'Держать — показать, отпустить — опрокинуть куб' },
-  { where: 'Правая: центр', label: 'Держать — заглянуть в объём' },
-];
+/** Where a pad button is, as the list of Cube's pads names it. */
+const SLOT_SIGNS: Record<PadSlot, string> = { up: '↑', left: '←', right: '→', down: '↓', center: 'центр' };
 
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
@@ -135,12 +130,20 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, s
           />
           <dl className="cube-keys">
             {touch
-              ? PADS.map(({ where, label }) => (
-                  <div className="cube-keys__row" key={where}>
-                    <dt><T>{where}</T></dt>
-                    <dd><T>{label}</T></dd>
-                  </div>
-                ))
+              ? (['left', 'right'] as const).flatMap((side) =>
+                  PAD_SLOTS.flatMap((slot) => {
+                    // The player's own layout of Cube's pads.
+                    const action = ACTIONS.find(({ id }) => id === settings.cubePads[side][slot]);
+                    if (!action) return [];
+                    const where = `${side === 'left' ? 'Левая' : 'Правая'}: ${SLOT_SIGNS[slot]}`;
+                    return [
+                      <div className="cube-keys__row" key={where}>
+                        <dt><T>{where}</T></dt>
+                        <dd><T>{action.label}</T></dd>
+                      </div>,
+                    ];
+                  }),
+                )
               : KEYS.map(({ actions, label }) => (
                   <div className="cube-keys__row" key={label}>
                     <dt><Keys codes={actions.flatMap((action) => settings.bindings[action])} /></dt>

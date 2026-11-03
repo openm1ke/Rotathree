@@ -3,13 +3,13 @@ import { T } from '../i18n/Text';
 import { useEffect, useRef, useState } from 'react';
 import { CubeGame } from '../cube/rules';
 import type { CubeSave } from '../cube/save';
-import { CUBE_LESSONS, CUBE_LESSON_LAST, LESSON_KEYS, LESSON_PADS, lessonGame } from '../cube/tutorial';
+import { CUBE_LESSONS, CUBE_LESSON_LAST, LESSON_KEYS, LESSON_PADS, lessonGame, missingOnPads } from '../cube/tutorial';
 import { CubeView, TILT_SECONDS, type LookAxis, type Steering } from '../cube/view';
 import { AdaptiveQuality } from '../render/quality';
 import { CUBE_RAMP, MODE_NAMES } from '../game/modes';
 import { KeyboardController } from '../input/keyboard';
 import { keyLabel, type Action } from '../input/bindings';
-import { CUBE_PADS, PadController, type PadAction } from '../input/pads';
+import { PadController, type PadAction } from '../input/pads';
 import { useTouchControls } from '../input/touch';
 import type { Progress, RunRecord, Settings } from '../services/storage';
 import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST, cubeLevelConfig, defaultCubeProgress, passCubeLevel } from '../cube/campaign';
@@ -139,6 +139,7 @@ export function CubeScreen(props: Props) {
     down: (_action: PadAction) => {},
     up: (_action: PadAction) => {},
     nextLesson: () => {},
+    practice: (_action: Action) => {},
   });
 
   const [size, setSize] = useState(0);
@@ -340,6 +341,12 @@ export function CubeScreen(props: Props) {
       down: (action) => pads.down(action),
       up: (action) => pads.up(action),
       nextLesson: () => nextLesson(),
+      // A lesson whose button the player's pads do not have: pressed for
+      // them, held a moment for the volume.
+      practice: (action) => {
+        pads.down(action);
+        setTimeout(() => pads.up(action), action === 'peek' ? 1500 : 60);
+      },
     };
 
     // ------------------------------------------------------- the tutorial
@@ -741,6 +748,8 @@ export function CubeScreen(props: Props) {
   /** The key that brings the dialog back after a look around: Esc where the
    * game may use it, else the pause key. */
   const backKey = keyLabel(USES_ESCAPE ? 'Escape' : settings.bindings.pause[0] ?? 'Escape');
+  /** On a touch screen, what the lesson asks for that no pad button does. */
+  const missing = tutorial && touch && !performed ? missingOnPads(tutorialStep, settings.cubePads) : null;
   // A done lesson keeps its keys, dimmed: the panel keeps its size.
   const lessonKeys = tutorial ? LESSON_KEYS[tutorialStep] ?? [] : [];
   const field = (
@@ -790,6 +799,7 @@ export function CubeScreen(props: Props) {
                 ? [{ label: action, keys: [...settings.bindings[action]].sort((a, b) => Number(a.startsWith('Arrow')) - Number(b.startsWith('Arrow'))) }]
                 : [])}
               onNext={() => actions.current.nextLesson()}
+              onPractice={missing ? () => actions.current.practice(missing) : undefined}
               onSkip={() => props.onTutorialDone?.(false)}
             />
             {field}
@@ -811,9 +821,9 @@ export function CubeScreen(props: Props) {
         <div className="touch-controls">
           <TouchControls
             settings={settings}
-            layouts={CUBE_PADS}
+            layouts={settings.cubePads}
             disabled={(status !== 'playing' && !looking) || blocked}
-            hint={tutorial && !performed ? LESSON_PADS[tutorialStep] : undefined}
+            hint={tutorial && !performed ? LESSON_PADS[tutorialStep]?.flat() : undefined}
             onDown={(action) => actions.current.down(action)}
             onUp={(action) => actions.current.up(action)}
           />

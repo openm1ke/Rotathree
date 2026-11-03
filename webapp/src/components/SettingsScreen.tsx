@@ -24,7 +24,7 @@ import { defaultSettings, type CubeOptions, type Palettes, type Settings, type E
 import { Button, Chip, Choice, Screen, Slider, Toggle } from './ui';
 import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
-import { DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS, type PadSlot } from '../input/pads';
+import { CUBE_PADS, DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS, type PadSlot } from '../input/pads';
 import { USES_ESCAPE } from '../platform/target';
 
 type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound' | 'licenses';
@@ -76,6 +76,11 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
   /** The button the controls tab is editing, outlined in the preview. */
   const [editSide, setEditSide] = useState<PadSide>('left');
   const [editSlot, setEditSlot] = useState<PadSlot>('up');
+  /** Which game's pad buttons are being laid out: the flat game's or Cube's.
+   * Where the pads are and how they look is the same for both. */
+  const [padGame, setPadGame] = useState<'flat' | 'cube'>('flat');
+  const padsKey = padGame === 'cube' ? 'cubePads' : 'pads';
+  const editedPads = settings[padsKey];
   /** The key slot waiting for its new key. */
   const [capture, setCapture] = useState<{ action: Action; slot: number } | null>(null);
   useScreenKeys(rootRef, active && capture === null, onBack);
@@ -139,6 +144,15 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                 Назначьте действия кнопкам обеих крестовин. Их можно нажимать одновременно; настройки действуют и в
                 обучении.
               </T></p>
+              <Choice
+                label="Крестовины для"
+                value={padGame}
+                options={[
+                  ['flat', 'Обычная игра'],
+                  ['cube', 'Куб'],
+                ]}
+                onChange={setPadGame}
+              />
               <section className="group">
                 <h3><T>Размер и положение</T></h3>
                 <p className="hint"><T>
@@ -150,6 +164,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                 </T></div>
                 <TouchControls
                   settings={settings}
+                  layouts={padGame === 'cube' ? settings.cubePads : undefined}
                   onDown={() => {}}
                   onUp={() => {}}
                   onEdit={(padPositions) => onChange({ ...settings, padPositions })}
@@ -246,6 +261,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                       onChange({
                         ...settings,
                         pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
+                        cubePads: { left: { ...CUBE_PADS.left }, right: { ...CUBE_PADS.right } },
                         padPositions: structuredClone(DEFAULT_POSITIONS),
                         padShape: 'square',
                         padButtons: structuredClone(DEFAULT_BUTTONS),
@@ -263,16 +279,16 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                       <span className="row__label"><T>{SLOT_LABELS[slot]}</T></span>
                       <select
                         className="pad-select"
-                        value={settings.pads[side][slot]}
+                        value={editedPads[side][slot]}
                         onChange={(event) =>
                           onChange({
                             ...settings,
-                            pads: { ...settings.pads, [side]: { ...settings.pads[side], [slot]: event.target.value } },
+                            [padsKey]: { ...editedPads, [side]: { ...editedPads[side], [slot]: event.target.value } },
                           })
                         }
                       >
                         <option value="none"><T>Не назначено</T></option>
-                        {ACTIONS.filter((action) => action.scope !== 'cube').map((action) => (
+                        {ACTIONS.filter((action) => !action.scope || action.scope === padGame).map((action) => (
                           <option key={action.id} value={action.id}><T>
                             {action.label}
                           </T></option>
@@ -357,6 +373,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                   ...(touch
                     ? {
                         pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
+                        cubePads: { left: { ...CUBE_PADS.left }, right: { ...CUBE_PADS.right } },
                         padPositions: structuredClone(DEFAULT_POSITIONS),
                         padShape: 'square',
                         padButtons: structuredClone(DEFAULT_BUTTONS),

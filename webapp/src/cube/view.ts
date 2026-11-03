@@ -335,7 +335,9 @@ export class CubeView {
   /** The look into the volume alone, without the hub's own turn: what the
    * boxes of the next sticks turn with. */
   private readonly peekTurn = new THREE.Quaternion();
-  /** The lines of `look.depthHint`, fixed to the screen. */
+  /** The outlines of the cross's four arms, the one on top first. */
+  private readonly armOutlines: LineSegments2[] = [];
+  /** The lines of `look.depthHint`, turning with the cross. */
   private readonly hintGroup = new THREE.Group();
   /** The canvas size, to fit the cross to it again when the boxes of the
    * next sticks come or go. */
@@ -441,10 +443,12 @@ export class CubeView {
     parent.add(mesh);
   }
 
-  /** The cross of the flat game, fixed to the screen (src/render/renderer.ts
-   * drawField): a faint fill and grid for each arm and for the centre,
-   * outlines a little brighter, the glass on top in the accent. It fades
-   * while the hub opens up. */
+  /** The cross of the flat game (src/render/renderer.ts drawField): a faint
+   * fill and grid for each arm and for the centre, outlines a little
+   * brighter, the glass on top in the accent. It turns with the hub in the
+   * screen, as the flat game's field turns, and is laid back when the turn
+   * is over: a quarter turn leaves it as it was. It fades while the hub
+   * opens up. */
   private buildCross(): void {
     const { h, reach } = this;
     const { centre, arm } = this.game.config;
@@ -470,9 +474,19 @@ export class CubeView {
       opacity: 0.22,
       width: 1.5,
     });
-    // The glass on top: its outline in the accent.
-    arms[0].material.color.copy(ACCENT);
-    arms[0].material.userData.opacity = arms[0].material.opacity = 0.6;
+    this.armOutlines.push(...arms);
+    this.paintAccent();
+  }
+
+  /** The glass on top has its outline in the accent; as the cross turns,
+   * the outline going from the top loses it and the one coming gains it. */
+  private paintAccent(): void {
+    const turnedBy = this.crossGroup.rotation.z;
+    this.armOutlines.forEach((outline, quarter) => {
+      const up = Math.max(0, Math.cos(turnedBy - (quarter * Math.PI) / 2)) ** 6;
+      outline.material.color.copy(WHITE).lerp(ACCENT, up);
+      outline.material.userData.opacity = 0.16 + (0.6 - 0.16) * up;
+    });
   }
 
   /** The hub itself: the edges of all six glasses and of the centre cube,
@@ -1039,6 +1053,16 @@ export class CubeView {
     const opened = Math.max(this.peek, this.tilting ? Math.sin(Math.PI * turn.t) : 0);
     this.depthShown = FLAT + (1 - FLAT) * opened;
     const shown = (this.crossShown = (1 - opened) ** 2);
+    // Turned in the screen, the cross goes round with the hub.
+    let turnedBy = 0;
+    if (turn.t < 1 && !turn.tilt) {
+      const between = goal.clone().multiply(this.turnFrom.clone().invert());
+      turnedBy = 2 * Math.atan2(between.z, between.w) * ease(turn.t);
+      if (turnedBy > Math.PI) turnedBy -= 2 * Math.PI;
+      if (turnedBy < -Math.PI) turnedBy += 2 * Math.PI;
+    }
+    this.crossGroup.rotation.z = this.hintGroup.rotation.z = turnedBy;
+    this.paintAccent();
     const fade = (group: THREE.Object3D, by: number) =>
       group.traverse((object) => {
         const material = (object as THREE.Mesh).material as THREE.Material | undefined;

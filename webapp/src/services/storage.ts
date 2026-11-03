@@ -7,7 +7,7 @@ import { DEFAULT_CUSTOM, MODE_NAMES, sanitizeCustom, type CustomSetup, type Mode
 import { sanitizeCubeRuns, type CubeRuns } from '../cube/save';
 import { sanitizeCubeProgress } from '../cube/campaign';
 import { sanitizeRunSave, sanitizeSavedRuns, type RunSave, type SavedRuns } from './runSave';
-import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
+import { CUBE_PADS, DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
 import { DEFAULT_POSITIONS, sanitizePositions, type PadPositions } from '../input/padPlacement';
 import { DEFAULT_BUTTONS, sanitizeButtons, sanitizeShape, type PadButtons, type PadShape } from '../input/padShape';
 import { ACTIONS } from '../input/bindings';
@@ -73,6 +73,8 @@ export interface Settings {
   effects: Effects;
   hud: HudOptions;
   pads: { left: PadLayout; right: PadLayout };
+  /** What Cube's pad buttons do. */
+  cubePads: { left: PadLayout; right: PadLayout };
   padPositions: PadPositions;
   /** The outline of every pad button. */
   padShape: PadShape;
@@ -149,6 +151,7 @@ export const defaultSettings = (): Settings => ({
   effects: { explosion: 'varied', fieldBackground: true, screenShake: true, turnMs: 260 },
   hud: { nextPiece: true, nextPieceOpacity: 1, keyHints: true, score: true, stats: true, opacity: 1 },
   pads: { left: { ...DEFAULT_PADS.left }, right: { ...DEFAULT_PADS.right } },
+  cubePads: { left: { ...CUBE_PADS.left }, right: { ...CUBE_PADS.right } },
   padPositions: structuredClone(DEFAULT_POSITIONS),
   padShape: 'square',
   padButtons: structuredClone(DEFAULT_BUTTONS),
@@ -195,15 +198,17 @@ export function sanitizeSettings(raw: unknown): Settings {
   const effects = (stored.effects ?? {}) as Record<string, unknown>;
   const hud = (stored.hud ?? {}) as Record<string, unknown>;
   const pads = (stored.pads ?? {}) as Record<string, unknown>;
+  const cubePads = (stored.cubePads ?? {}) as Record<string, unknown>;
   const audio = (stored.audio ?? {}) as Record<string, unknown>;
   const cube = (stored.cube ?? {}) as Record<string, unknown>;
   const flag = (key: keyof CubeOptions) => (typeof cube[key] === 'boolean' ? (cube[key] as boolean) : (DEFAULT_CUBE[key] as boolean));
-  const pad = (raw: unknown, fallback: PadLayout): PadLayout => {
+  /** Only actions of the game the pads are for: the flat game's, or Cube's. */
+  const pad = (raw: unknown, fallback: PadLayout, scope: 'flat' | 'cube' = 'flat'): PadLayout => {
     const p = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
     return Object.fromEntries(
       PAD_SLOTS.map((slot) => [
         slot,
-        p[slot] === 'none' || ACTIONS.some((a) => a.id === p[slot]) ? p[slot] : fallback[slot],
+        p[slot] === 'none' || ACTIONS.some((a) => a.id === p[slot] && (!a.scope || a.scope === scope)) ? p[slot] : fallback[slot],
       ]),
     ) as PadLayout;
   };
@@ -214,6 +219,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     padShape: sanitizeShape(stored.padShape),
     padButtons: sanitizeButtons(stored.padButtons),
     pads: { left: pad(pads.left, DEFAULT_PADS.left), right: pad(pads.right, DEFAULT_PADS.right) },
+    cubePads: { left: pad(cubePads.left, CUBE_PADS.left, 'cube'), right: pad(cubePads.right, CUBE_PADS.right, 'cube') },
     handling: {
       dasMs: numberIn(handling.dasMs, 0, 400, base.handling.dasMs),
       arrMs: numberIn(handling.arrMs, 0, 150, base.handling.arrMs),

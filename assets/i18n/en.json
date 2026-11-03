@@ -422,11 +422,6 @@
   "Вести фигуру стакана спереди или сзади; ↑ ↓ двигают её": "Steer the piece of the front or back glass; ↑ ↓ move it",
   "Держать — заглянуть в объём; с A W S D — откуда смотреть": "Hold to look into the volume; with A W S D, from where",
   "Пауза; на паузе куб можно осмотреть со всех сторон": "Pause; while paused, the cube can be looked at from every side",
-  "Влево, вправо, повернуть, сбросить": "Left, right, rotate, drop",
-  "Стакан спереди, сзади, снова сверху": "Front glass, back glass, the top one again",
-  "Повернуть крест": "Turn the cross",
-  "Держать — показать, отпустить — опрокинуть куб": "Hold to see, release to tip the cube over",
-  "Держать — заглянуть в объём": "Hold to look into the volume",
   "Рекорд: {score}": "Best: {score}",
   "Рекорда ещё нет": "No record yet",
   "Что показывать поверх креста в режиме «Куб»": "What to show over the cross in Cube",
@@ -483,5 +478,7 @@
   "Лучший результат: {score}": "Best score: {score}",
   "куб {width} · рукав {arm}": "cube {width} · arm {arm}",
   "куб {width} · рукав {arm} · глубина": "cube {width} · arm {arm} · depth",
-  "Уровень {n} из {total} · {points} · {time}": "Level {n} of {total} · {points} · {time}"
+  "Уровень {n} из {total} · {points} · {time}": "Level {n} of {total} · {points} · {time}",
+  "Крестовины для": "Pads for",
+  "Обычная игра": "Regular game"
 }

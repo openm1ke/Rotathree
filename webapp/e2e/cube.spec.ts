@@ -196,6 +196,26 @@ test('a phone plays Cube with its own pads', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('a phone lays out the pads of Cube in the settings, apart from those of the flat game', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await openCube(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: /Настройки/ }).click();
+  await page.getByRole('button', { name: 'Куб', exact: true }).click();
+  const right = page.locator('section.group').filter({ has: page.getByRole('heading', { name: 'Правая крестовина' }) });
+  await right.locator('label.row').filter({ hasText: 'Центр' }).locator('select').selectOption('frontGlass');
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.settings.v2')!)))
+    .toMatchObject({ cubePads: { right: { center: 'frontGlass' } }, pads: { right: { center: 'glassOpposite' } } });
+  await page.getByRole('button', { name: 'Назад', exact: true }).click();
+  await page.getByRole('button', { name: /Шесть стаканов в 3D/ }).click();
+  await expect(page.locator('.cube-keys')).toContainText('Передний стакан');
+  await play(page);
+  await page.getByRole('group', { name: 'Правая крестовина' })
+    .getByRole('button', { name: 'Вести его фигуру; ещё раз — назад к верхнему', exact: true }).click();
+  await expect(line(page)).toHaveText('Передний стакан');
+});
+
 test.describe('in English', () => {
   test.use({ locale: 'en-GB' });
   test('Cube, its lessons and its game speak English', async ({ page }) => {
