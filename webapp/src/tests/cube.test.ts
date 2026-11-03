@@ -153,6 +153,47 @@ describe('Cube: a whole game', () => {
   });
 });
 
+describe('Cube: sizes and the next sticks', () => {
+  it('gives each glass its own next stick', () => {
+    const game = new CubeGame({ seed: 12, inactiveFalls: false });
+    const top = game.active;
+    const coming = game.nextOf(top);
+    const others = SIDES.filter((s) => s.id !== top).map((s) => game.nextOf(s.id));
+    game.dropActive();
+    run(game, 1);
+    expect(game.activePiece!.colors).toEqual(coming);
+    expect(SIDES.filter((s) => s.id !== top).map((s) => game.nextOf(s.id))).toEqual(others);
+  });
+
+  it('plays an even cube: the sticks across the screen fall in the nearer middle layer, before a tip and after', () => {
+    const game = new CubeGame({ seed: 13, centre: 10, arm: 9, inactiveFalls: false });
+    expect(game.half).toBe(4.5);
+    expect(game.layer).toBe(0.5);
+    for (const piece of game.pieces.values()) if (game.inPlane(piece.side)) expect(game.depthOf(piece.pivot)).toBe(0.5);
+    // Three seen in a row at the bottom, at whole and half depths alike.
+    const h = game.half;
+    for (const sx of [-1.5, -0.5, 0.5]) game.hub.set(game.cellAt(sx, -h, sx + 1), 1);
+    expect(game.findMatches().runs).toHaveLength(1);
+    const TOP = sideOf(1, 1);
+    const tipped = { down: BACK, plane: [0, 1, 0] as Vec, frame: { right: [1, 0, 0] as Vec, up: [0, 0, -1] as Vec } };
+    const upright = { down: TOP, plane: [0, 0, 1] as Vec, frame: { right: [1, 0, 0] as Vec, up: [0, 1, 0] as Vec } };
+    for (let i = 0; i < 3000 && !game.isGameOver; i++) {
+      if (i % 7 === 3) {
+        const to = i % 2 ? tipped : upright;
+        game.turn(to.down, to.plane, to.frame, true);
+        run(game, 2);
+        for (const piece of game.pieces.values()) {
+          if (game.inPlane(piece.side)) expect(game.depthOf(piece.pivot), `glass ${piece.side}`).toBe(0.5);
+        }
+      }
+      game.dropActive();
+      run(game, 0.5);
+    }
+    expect(game.isGameOver).toBe(true);
+    expect(game.placed).toBeGreaterThan(5);
+  });
+});
+
 describe('Cube: the tutorial', () => {
   const settle = (game: CubeGame) => {
     for (let i = 0; i < 400 && game.phase !== 'playing'; i++) game.update(0.02);

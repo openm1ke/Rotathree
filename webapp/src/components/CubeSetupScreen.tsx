@@ -84,9 +84,9 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, o
           />
           <Choice
             label="Ширина стакана"
-            note="нечётная: в среднем слое куба падают фигуры"
+            note="и сторона куба в середине"
             value={cube.width}
-            options={range(...CUBE_LIMITS.width).filter((n) => n % 2 === 1).map((n) => [n, String(n)] as const)}
+            options={range(...CUBE_LIMITS.width).map((n) => [n, String(n)] as const)}
             onChange={(width) => set({ width })}
           />
           <Choice
@@ -97,7 +97,7 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, o
             onChange={(arm) => set({ arm })}
           />
           <Toggle
-            label="Следующая фигура"
+            label="Следующие фигуры над стаканами"
             value={cube.nextPiece}
             on="показывать"
             off="скрыть"

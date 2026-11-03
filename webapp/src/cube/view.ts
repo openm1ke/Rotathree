@@ -40,8 +40,11 @@ export interface CubeLook {
   numbers: boolean;
   /** The aiming lane under the stick on top. */
   lane: boolean;
-  /** The stick that comes next, beside the far end of the glass on top. */
+  /** The stick each glass gets next, beyond the far end of its arm. */
   nextPiece: boolean;
+  /** Faint lines round the cross where the hub's depth would show, were it
+   * drawn in perspective: a reminder that the cross is a cube. */
+  depthHint: boolean;
 }
 
 /** Which way the hub is turned to be looked at, while paused. */
@@ -126,6 +129,21 @@ const FLAT = 0.02;
  * sprite is a rounded tile with a narrow gap round it. */
 const TILE = 0.96;
 const ROUND = 0.13;
+/** How far beyond the far end of an arm the box of its next stick is. */
+const NEXT_GAP = 1.6;
+/** The eye's distance the depth hint is drawn from, in reaches of an arm:
+ * farther than the camera, so that the hint stays short of the boxes. */
+const HINT_DISTANCE = 6;
+/** The box of a next stick: three squares and a margin. */
+const NEXT_BOX: [number, number, number] = [3.5, 1.5, 0.2];
+const NEXT_EDGE = new THREE.Color('#eef6ff');
+/** How bright the edges of the glasses are when the hub is looked at in
+ * the open. */
+const EDGE_OPACITY = 0.24;
+/** How much a stick hidden behind blocks shows through them while the hub
+ * is open. */
+const XRAY_OPACITY = 0.5;
+
 /** The small marks in the corners of cells. */
 const MARK = 0.3;
 const corner = (x: number, y: number) => new THREE.Vector3(0.27 * x, 0.27 * y, 0.5);
@@ -197,6 +215,7 @@ const TILE_FRAGMENT = /* glsl */ `
   varying vec3 vLight;
   varying vec3 vDark;
   varying vec3 vLook; // brightness, white flash, opacity
+  uniform float uOpacity;
   void main() {
     vec3 n = normalize(vObjectNormal);
     // 1 on the flat of a face, 0 on its rounded rim.
@@ -212,7 +231,7 @@ const TILE_FRAGMENT = /* glsl */ `
     vec3 colour = mix(rim, face, onFace);
     colour *= clamp(0.72 + 0.28 * toEye + 0.12 * vFaceNormal.y, 0.0, 1.0) * vLook.x;
     colour = mix(colour, vec3(1.0), vLook.y);
-    gl_FragColor = vec4(colour, vLook.z);
+    gl_FragColor = vec4(colour, vLook.z * uOpacity);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
@@ -250,7 +269,7 @@ const CLEAR_FRAGMENT = /* glsl */ `
  * the hub looks like as it tips. The screen owns the game loop and calls
  * `frame` once per animation frame. */
 export class CubeView {
-  look: CubeLook = { depthSticks: false, behind: true, edges: false, numbers: false, lane: true, nextPiece: true };
+  look: CubeLook = { depthSticks: false, behind: true, edges: false, numbers: false, lane: true, nextPiece: true, depthHint: true };
   /** How long the cross takes to turn in the screen; 0 turns it at once. */
   turnSeconds = 0.36;
   /** Paused: the sticks in front and behind all show. */
@@ -305,10 +324,17 @@ export class CubeView {
   private edgesShown = 0;
   /** How much the cross shows: less while the hub is open. */
   private crossShown = 1;
-  /** The box beside the far end of the glass on top where the next stick
-   * shows, and where its squares go. */
-  private readonly nextGroup = new THREE.Group();
-  private readonly nextAt: THREE.Vector3[] = [];
+  /** The look into the volume alone, without the hub's own turn: what the
+   * boxes of the next sticks turn with. */
+  private readonly peekTurn = new THREE.Quaternion();
+  /** The lines of `look.depthHint`, fixed to the screen. */
+  private readonly hintGroup = new THREE.Group();
+  /** The canvas size, to fit the cross to it again when the boxes of the
+   * next sticks come or go. */
+  private size = { width: 0, height: 0, withNext: false };
+  /** Sticks hidden behind blocks, drawn again where they are hidden. */
+  private readonly xray: Layer<TileItem>;
+  private readonly xrayOpacity = { value: 0 };
   private readonly peekFrom = new THREE.Quaternion();
   private readonly peekTo = new THREE.Quaternion();
   /** Turned to be looked at, while paused or once the game is over. */
@@ -346,16 +372,18 @@ export class CubeView {
     this.camera = new THREE.PerspectiveCamera(30, 1, 1, this.distance * 3);
     this.camera.position.set(0, 0, this.distance);
     this.camera.lookAt(0, 0, 0);
-    this.scene.add(this.hubGroup, this.crossGroup, this.nextGroup);
+    this.scene.add(this.hubGroup, this.crossGroup, this.hintGroup);
     this.buildCross();
-    this.buildNext();
     this.buildHub();
     const maxCubes = this.n * this.n * this.n + 64;
     const tileAttributes = { aBase: 3, aLight: 3, aDark: 3, aLook: 3 };
-    this.solid = this.cubeLayer(this.tileMaterial(false), tileAttributes, 1, maxCubes, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
+    this.solid = this.cubeLayer(this.tileMaterial('solid'), tileAttributes, 1, maxCubes, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
+    // While the hub is open, a stick hidden behind blocks shows through them
+    // faintly: drawn again only where something nearer covers it.
+    this.xray = this.cubeLayer(this.tileMaterial('xray'), tileAttributes, 2, 64, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
     // Blocks fading in or out — sticks going out of sight or coming into it
     // as the hub tips over — drawn see-through, far to near, after the others.
-    this.fading = this.cubeLayer(this.tileMaterial(true), tileAttributes, 2, maxCubes, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
+    this.fading = this.cubeLayer(this.tileMaterial('fading'), tileAttributes, 3, maxCubes, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
     const clearMaterial = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -425,27 +453,12 @@ export class CubeView {
     arms[0].material.userData.opacity = arms[0].material.opacity = 0.6;
   }
 
-  /** The box of the next stick: in the empty corner right of the far end of
-   * the glass on top, fixed to the screen as the flat game's is to its arm. */
-  private buildNext(): void {
-    const { h, reach } = this;
-    const width = 3.6;
-    const height = 1.6;
-    const left = h + 0.9;
-    const middle = reach - height / 2;
-    const z = -0.5;
-    this.makePane(left + width / 2, middle, width, height, 0.05, this.nextGroup);
-    const [x0, x1, y0, y1] = [left, left + width, middle - height / 2, middle + height / 2];
-    this.makeLines([x0, y0, z, x1, y0, z, x1, y0, z, x1, y1, z, x1, y1, z, x0, y1, z, x0, y1, z, x0, y0, z], this.nextGroup, {
-      opacity: 0.3,
-      width: 1.2,
-    });
-    for (let i = 0; i < this.game.config.pieceLength; i++) this.nextAt.push(new THREE.Vector3(left + 0.3 + (i + 0.5) * 1, middle, 0));
-  }
-
   /** The hub itself: the edges of all six glasses and of the centre cube,
-   * and the glasses' numbers beside a corner of each rim. Both only when
-   * asked for. */
+   * thin, and the glasses' numbers beside a corner of each rim. The same
+   * edges drawn once in perspective, from the eye's distance, and laid flat
+   * on the screen, are `look.depthHint`: each arm doubled by its near and
+   * far faces, short lines at its corners, the glasses in front and behind
+   * a square tunnel round the centre. */
   private buildHub(): void {
     const { h } = this;
     const { arm } = this.game.config;
@@ -464,6 +477,7 @@ export class CubeView {
       [h, h],
       [-h, h],
     ];
+    const all: number[] = [];
     for (const s of SIDES) {
       const p: number[] = [];
       corners.forEach(([a, b], i) => {
@@ -471,11 +485,20 @@ export class CubeView {
         p.push(...armPoint(s.id, 0, a, b), ...armPoint(s.id, arm, a, b));
         p.push(...armPoint(s.id, arm, a, b), ...armPoint(s.id, arm, na, nb));
       });
-      this.hubLines.push(this.makeLines(p, this.hubGroup, { opacity: 0.1 }));
+      all.push(...p);
+      this.hubLines.push(this.makeLines(p, this.hubGroup, { opacity: 0.1, width: 0.7 }));
     }
     const p: number[] = [];
     for (const a of [-h, h]) for (const b of [-h, h]) p.push(-h, a, b, h, a, b, a, -h, b, a, h, b, a, b, -h, a, b, h);
-    this.hubLines.push(this.makeLines(p, this.hubGroup, { opacity: 0.12 }));
+    all.push(...p);
+    this.hubLines.push(this.makeLines(p, this.hubGroup, { opacity: 0.12, width: 0.7 }));
+    const hint: number[] = [];
+    for (let i = 0; i < all.length; i += 3) {
+      const eye = HINT_DISTANCE * this.reach;
+      const s = eye / (eye - all[i + 2]);
+      hint.push(all[i] * s, all[i + 1] * s, -0.5);
+    }
+    this.makeLines(hint, this.hintGroup, { opacity: 0.1, width: 0.8 });
     for (const s of SIDES) {
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 128;
@@ -505,14 +528,17 @@ export class CubeView {
     });
   }
 
-  private tileMaterial(fading: boolean): THREE.ShaderMaterial {
-    return new THREE.ShaderMaterial({
-      uniforms: this.sharedUniforms,
-      transparent: fading,
-      depthWrite: !fading,
+  private tileMaterial(kind: 'solid' | 'fading' | 'xray'): THREE.ShaderMaterial {
+    const material = new THREE.ShaderMaterial({
+      uniforms: { screenUp: this.sharedUniforms.screenUp, uOpacity: kind === 'xray' ? this.xrayOpacity : { value: 1 } },
+      transparent: kind !== 'solid',
+      depthWrite: kind === 'solid',
       vertexShader: TILE_VERTEX,
       fragmentShader: TILE_FRAGMENT,
     });
+    // Only where something nearer has been drawn already.
+    if (kind === 'xray') material.depthFunc = THREE.GreaterDepth;
+    return material;
   }
 
   private cubeLayer<Item>(
@@ -558,13 +584,14 @@ export class CubeView {
   private pushSolid(
     at: THREE.Vector3,
     color: number,
-    { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null as THREE.Vector3 | null, spin = null as THREE.Quaternion | null, frame = null as THREE.Quaternion | null, alpha = 1 } = {},
+    { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null as THREE.Vector3 | null, spin = null as THREE.Quaternion | null, frame = null as THREE.Quaternion | null, alpha = 1, seeThrough = false } = {},
   ): void {
     if (alpha <= 0.01) return;
     const tone = this.tones[color] ?? this.tones[0];
-    (alpha < 0.99 ? this.fading : this.solid).items.push({
-      at: at.clone(), size, lift, nudge, spin, frame, tone, brightness, flash, alpha, depth: 0,
-    });
+    const item = { at: at.clone(), size, lift, nudge, spin, frame, tone, brightness, flash, alpha, depth: 0 };
+    (alpha < 0.99 ? this.fading : this.solid).items.push(item);
+    // A stick, seen through what hides it while the hub is open.
+    if (seeThrough && alpha >= 0.99 && this.xrayOpacity.value > 0.01) this.xray.items.push({ ...item, at: at.clone() });
   }
 
   private pushClear(
@@ -573,9 +600,9 @@ export class CubeView {
     alpha: number,
     fill: number,
     edge: number,
-    { size = [0.91, 0.91, 0.91] as [number, number, number], lift = 0, nudge = null as THREE.Vector3 | null, spin = null as THREE.Quaternion | null } = {},
+    { size = [0.91, 0.91, 0.91] as [number, number, number], lift = 0, nudge = null as THREE.Vector3 | null, spin = null as THREE.Quaternion | null, frame = null as THREE.Quaternion | null } = {},
   ): void {
-    this.clear.items.push({ at: at.clone(), size, lift, nudge, spin, frame: null, color, alpha, fill, edge, depth: 0 });
+    this.clear.items.push({ at: at.clone(), size, lift, nudge, spin, frame, color, alpha, fill, edge, depth: 0 });
   }
 
   /** Where a cube of the hub's frame is drawn in the scene. */
@@ -594,13 +621,13 @@ export class CubeView {
   }
 
   private flushLayers(): void {
-    const { solid, fading, clear, matrix, scaleVector, camera } = this;
+    const { solid, xray, fading, clear, matrix, scaleVector, camera } = this;
     for (const item of fading.items) {
       this.place(item);
       item.depth = item.at.distanceToSquared(camera.position);
     }
     fading.items.sort((a, b) => b.depth - a.depth);
-    for (const layer of [solid, fading]) {
+    for (const layer of [solid, xray, fading]) {
       const capacity = layer.mesh.instanceMatrix.count;
       if (layer.items.length > capacity) layer.items.length = capacity;
       layer.items.forEach((item, i) => {
@@ -628,7 +655,7 @@ export class CubeView {
       clear.buffers.aColor.setXYZ(i, item.color.r, item.color.g, item.color.b);
       clear.buffers.aLook.setXYZ(i, item.alpha, item.fill, item.edge);
     });
-    for (const layer of [solid, fading, clear] as Layer<Placed>[]) {
+    for (const layer of [solid, xray, fading, clear] as Layer<Placed>[]) {
       layer.mesh.count = layer.items.length;
       layer.mesh.instanceMatrix.needsUpdate = true;
       for (const buffer of Object.values(layer.buffers)) buffer.needsUpdate = true;
@@ -646,9 +673,21 @@ export class CubeView {
       m.resolution.set(width * dpr, height * dpr);
       m.linewidth = (m.userData.width as number) * dpr;
     }
+    this.size = { width, height, withNext: this.look.nextPiece };
+    this.fit();
+    // A canvas sized anew is blank: what was drawn is drawn again at once,
+    // or a field that changes size frame after frame would flicker.
+    this.project(this.depthShown === FLAT ? 0 : (this.depthShown - FLAT) / (1 - FLAT));
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** The camera takes in the whole cross, and the boxes of the next sticks
+   * beyond its arms when they show. */
+  private fit(): void {
     const { camera } = this;
+    const { width, height, withNext } = this.size;
     camera.aspect = width / height;
-    const half = this.reach + 0.6;
+    const half = this.reach + (withNext ? NEXT_GAP + NEXT_BOX[1] / 2 + 0.4 : 0.6);
     const tan = half / (this.distance - this.h) / Math.min(1, camera.aspect);
     camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tan));
     camera.updateProjectionMatrix();
@@ -657,10 +696,6 @@ export class CubeView {
     const high = this.distance * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const wide = high * camera.aspect;
     this.orthographic.makeOrthographic(-wide, wide, high, -high, camera.near, camera.far);
-    // A canvas sized anew is blank: what was drawn is drawn again at once,
-    // or a field that changes size frame after frame would flicker.
-    this.project(this.depthShown === FLAT ? 0 : (this.depthShown - FLAT) / (1 - FLAT));
-    this.renderer.render(this.scene, this.camera);
   }
 
   /** The flat picture is drawn straight on, like the flat game — no block
@@ -967,7 +1002,8 @@ export class CubeView {
     this.peekTo.setFromEuler(new THREE.Euler(PEEK_PITCH * this.peekPitch, -PEEK_YAW * this.peekYaw, 0));
     this.peekFrom.slerp(this.peekTo, 1 - Math.exp(-dt * 8));
     const peeked = ease(this.peek);
-    this.hubGroup.quaternion.slerpQuaternions(IDENTITY, this.peekFrom, peeked).multiply(this.turned);
+    this.peekTurn.slerpQuaternions(IDENTITY, this.peekFrom, peeked);
+    this.hubGroup.quaternion.copy(this.peekTurn).multiply(this.turned);
     this.tiltFrom.slerpQuaternions(IDENTITY, this.peekFrom, peeked).multiply(this.turnFrom);
     // Depth opens while the volume is looked into and half-way through a
     // tip: the cross of the screen fades meanwhile.
@@ -980,16 +1016,22 @@ export class CubeView {
         if (material) material.opacity = (material.userData.opacity as number) * by;
       });
     fade(this.crossGroup, shown);
-    // The next stick stays in sight, dimmed, while the hub is open.
-    this.nextGroup.visible = this.look.nextPiece;
-    fade(this.nextGroup, 0.35 + 0.65 * shown);
+    this.hintGroup.visible = this.look.depthHint;
+    fade(this.hintGroup, shown);
+    if (this.look.nextPiece !== this.size.withNext && this.size.width > 0) {
+      this.size.withNext = this.look.nextPiece;
+      this.fit();
+    }
     this.project(opened);
+    this.xrayOpacity.value = XRAY_OPACITY * opened;
     // The edges of the hub show the glasses' bounds whenever the hub is
     // looked at in the open; while playing on the flat picture, only when
     // asked for: with them off it looks like the flat game, and the other
     // glasses are kept in mind. The numbers only when asked for.
-    this.edgesShown += ((this.peeking || this.inspect ? 1 : 0) - this.edgesShown) * (1 - Math.exp(-dt * 10));
-    const edges = Math.max(this.look.edges ? 0.1 + 0.25 * opened : 0, 0.45 * ease(this.edgesShown));
+    // They come and go slowly, and stay while the hub turns: a turn in the
+    // open never drops them all at once.
+    this.edgesShown += ((this.peeking || this.inspect ? 1 : 0) - this.edgesShown) * (1 - Math.exp(-dt * 4));
+    const edges = Math.max(this.look.edges ? 0.08 + 0.16 * opened : 0, EDGE_OPACITY * Math.max(ease(this.edgesShown), opened));
     for (const line of this.hubLines) {
       line.visible = edges > 0.01;
       line.material.opacity = edges;
@@ -1117,7 +1159,7 @@ export class CubeView {
       }
       const cell = (i: number) => at.clone().addScaledVector(base.clone().applyQuaternion(spin), i - 1);
       if (open || source.inPlane(piece.side)) {
-        piece.colors.forEach((color, i) => this.pushSolid(cell(i), color, { spin, frame, alpha }));
+        piece.colors.forEach((color, i) => this.pushSolid(cell(i), color, { spin, frame, alpha, seeThrough: true }));
         continue;
       }
       if (!steered && !this.look.depthSticks && !this.paused) continue;
@@ -1254,13 +1296,30 @@ export class CubeView {
     this.flushLayers();
   }
 
-  /** The squares of the next stick in its box, flat to the eye. */
+  /** The stick each glass across the screen gets next, in a box beyond the
+   * far end of its arm, as the flat game shows them: turning round with the
+   * cross, fading as a glass tips out of the screen or into it, dimmed while
+   * the hub is open. The glasses in front and behind have theirs too, but
+   * nowhere on the cross to show them. */
   private pushNext(): void {
     if (!this.look.nextPiece) return;
-    const alpha = 0.35 + 0.65 * this.crossShown;
-    this.game.nextColors.forEach((color, i) => {
-      if (this.nextAt[i]) this.pushSolid(this.nextAt[i], color, { size: 0.86, frame: IDENTITY, alpha });
-    });
+    const dim = 0.35 + 0.65 * this.crossShown;
+    for (const s of SIDES) {
+      const out = new THREE.Vector3(...normalOf(s.id)).applyQuaternion(this.turned);
+      const flat = 1 - Math.abs(out.z);
+      const along = new THREE.Vector3(-out.y, out.x, 0);
+      if (flat < 0.05 || along.lengthSq() < 1e-4) continue;
+      along.normalize();
+      const alpha = dim * flat * flat;
+      const centre = out.clone().multiplyScalar(this.reach + NEXT_GAP);
+      const spin = new THREE.Quaternion().setFromAxisAngle(SCENE_TOWARD, Math.atan2(along.y, along.x));
+      this.pushClear(centre, NEXT_EDGE, alpha * 0.5, 0.06, 0.6, { size: NEXT_BOX, frame: this.peekTurn, spin });
+      // Left to right as the glass's own frame reads, arm on top.
+      this.game.nextOf(s.id).forEach((color, i, colors) => {
+        const at = centre.clone().addScaledVector(along, (colors.length - 1) / 2 - i);
+        this.pushSolid(at, color, { size: 0.86, frame: this.peekTurn, alpha });
+      });
+    }
   }
 
   /** A faint column under each lane of the stick, down to the landing spot —

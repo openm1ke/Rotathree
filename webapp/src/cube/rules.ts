@@ -73,7 +73,8 @@ export interface CubeRamp {
 
 export interface CubeConfig {
   /** Side of the shared centre cube, and the cross-section of every arm.
-   * Odd, so that the cube has a middle layer whichever way it is turned. */
+   * Odd or even: an even cube has two layers in the middle, and the sticks
+   * across the screen fall in the nearer of them (`layer`). */
   centre: number;
   /** Length of each arm, in cells. A glass is one arm plus the centre. */
   arm: number;
@@ -333,7 +334,9 @@ export class CubeGame {
   plane: Vec = [0, 0, 1];
   viewFrame: ViewFrame = { right: [1, 0, 0], up: [0, 1, 0] };
   pieces = new Map<number, Stick>();
-  queue: number[][] = [];
+  /** The stick each glass gets next, as each glass of the flat game has its
+   * own. */
+  next = new Map<number, number[]>();
   phase: CubePhase = 'playing';
   phaseElapsed = 0;
   phaseDuration = 0;
@@ -364,7 +367,7 @@ export class CubeGame {
     this.random = mulberry32(this.seed);
     this.hub = new Hub(this.config.centre, this.config.arm);
     this.baseSteps = { active: this.config.activeStepSeconds, inactive: this.config.inactiveStepSeconds };
-    for (let i = 0; i < 2; i++) this.queue.push(this.roll());
+    for (const s of SIDES) this.next.set(s.id, this.roll());
     for (const s of SIDES) this.spawn(s.id);
   }
 
@@ -376,14 +379,29 @@ export class CubeGame {
     return this.phase === 'gameOver';
   }
 
-  /** Index of the middle of the hub along any axis; also its middle layer. */
+  /** Index of the middle of the hub along any axis: a half for an even
+   * hub, whose screen cells then sit at halves from the middle (±0.5,
+   * ±1.5, …). */
   get middle(): number {
     return (this.hub.size - 1) / 2;
   }
 
-  /** Half the side of the centre, in whole cells from its middle. */
+  /** From the middle of the centre to the middle of its outer cells: 3 for
+   * a centre of 7, 4.5 for one of 10. */
   get half(): number {
-    return Math.floor(this.config.centre / 2);
+    return (this.config.centre - 1) / 2;
+  }
+
+  /** The depth of the layer the sticks across the screen fall in: the
+   * middle one, or of an even cube's two middle ones the nearer. */
+  get layer(): number {
+    return this.hub.size % 2 === 1 ? 0 : 0.5;
+  }
+
+  /** The index of the sticks' layer along the axis looked along. */
+  private layerIndex(): { axis: number; index: number } {
+    const axis = this.plane.findIndex((v) => v !== 0);
+    return { axis, index: this.middle + this.layer * this.plane[axis] };
   }
 
   /** Whether the glass lies across the screen (top, left, right, bottom)
@@ -525,9 +543,9 @@ export class CubeGame {
     return colors;
   }
 
-  /** The next stick to appear, whichever glass needs it first. */
-  get nextColors(): number[] {
-    return this.queue[0];
+  /** The stick the glass gets after the one in it now. */
+  nextOf(side: number): number[] {
+    return this.next.get(side) ?? [];
   }
 
   fits(side: number, pivot: Vec, dir: Vec): boolean {
@@ -537,7 +555,7 @@ export class CubeGame {
   /** Whether a stick of `side` may be at `pivot`/`dir`: free cells, and for
    * a glass across the screen, flat in the middle layer. */
   allowed(side: number, pivot: Vec, dir: Vec): boolean {
-    if (this.inPlane(side) && (dot(dir, this.plane) !== 0 || this.depthOf(pivot) !== 0)) return false;
+    if (this.inPlane(side) && (dot(dir, this.plane) !== 0 || this.depthOf(pivot) !== this.layer)) return false;
     return this.fits(side, pivot, dir);
   }
 
@@ -553,14 +571,19 @@ export class CubeGame {
    * middle of it — so in the middle layer, for the glasses across the screen. */
   spawnPivot(side: number): Vec {
     const lane = Math.floor(this.config.centre / 2);
-    return this.hub.toWorld(side, 0, lane, lane);
+    const pivot = this.hub.toWorld(side, 0, lane, lane);
+    if (this.inPlane(side)) {
+      const { axis, index } = this.layerIndex();
+      pivot[axis] = index;
+    }
+    return pivot;
   }
 
   /** Puts a new stick at the far end of the glass. False when it does not
    * fit there — the game is over. */
   spawn(side: number): boolean {
-    const colors = this.queue.shift()!;
-    this.queue.push(this.roll());
+    const colors = this.next.get(side) ?? this.roll();
+    this.next.set(side, this.roll());
     const dir = this.spawnDir(side);
     const pivot = this.spawnPivot(side);
     if (!this.allowed(side, pivot, dir)) return false;
@@ -758,11 +781,11 @@ export class CubeGame {
         const [sx, sy] = [dot(at, right), dot(at, up)];
         const [dx, dy] = [dot(dir, right), dot(dir, up)];
         const now = this.viewFrame;
-        pivot = vec((i) => middle + sx * now.right[i] + sy * now.up[i]);
+        pivot = vec((i) => middle + sx * now.right[i] + sy * now.up[i] + this.layer * this.plane[i]);
         dir = vec((i) => dx * now.right[i] + dy * now.up[i]);
       } else if (this.inPlane(piece.side)) {
         if (dot(dir, this.plane) !== 0) dir = cross(n, this.plane);
-        pivot[k] = this.middle;
+        pivot[k] = this.layerIndex().index;
       } else if (dot(dir, n) !== 0) {
         dir = [...this.viewFrame.up];
       }

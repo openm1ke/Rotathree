@@ -453,7 +453,9 @@
   "Сначала возьми стакан спереди": "Take the front glass first",
   "Мимо — попробуй ещё раз": "Missed. Try again",
   "Ширина стакана": "Glass width",
-  "нечётная: в среднем слое куба падают фигуры": "odd: pieces fall in the cube's middle layer",
   "куб {a}×{b}×{c} · рукав: {arm} · скорость растёт с очками": "cube {a}×{b}×{c} · arm: {arm} · the speed rises with the score",
-  "Рёбра стаканов и во время игры": "Glass edges during play too"
+  "Рёбра стаканов и во время игры": "Glass edges during play too",
+  "и сторона куба в середине": "and the side of the cube in the middle",
+  "Следующие фигуры над стаканами": "Next pieces over the glasses",
+  "Линии объёма вокруг креста": "Depth lines around the cross"
 }

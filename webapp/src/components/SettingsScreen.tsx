@@ -42,7 +42,8 @@ const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game', 'cube'];
 
 /** What Cube's picture shows besides the game, each one a switch. */
 const CUBE_LOOK: readonly (readonly [Exclude<keyof CubeOptions, 'colours' | 'width' | 'arm' | 'depthFalls'>, string])[] = [
-  ['nextPiece', 'Следующая фигура'],
+  ['nextPiece', 'Следующие фигуры над стаканами'],
+  ['depthHint', 'Линии объёма вокруг креста'],
   ['behind', 'Метка: цвет блока за клеткой'],
   ['lane', 'Дорожка до места посадки'],
   ['depthSticks', 'Фигуры спереди и сзади, которыми не управляете'],
