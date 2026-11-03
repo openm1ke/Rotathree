@@ -549,6 +549,16 @@ function transition(axis, { carry = false, steered = game.active } = {}) {
   turn.tilt = axis !== SCENE_TOWARD;
   turn.carry = carry && turn.tilt;
   turn.steeredFrom = steered;
+  // Where each stick is and how it lies on the screen as a tip begins, to
+  // carry it from there (`stickViews`).
+  for (const view of pieceViews.values()) {
+    if (!turn.carry) {
+      view.from = null;
+      continue;
+    }
+    const onScreen = turnFrom.clone().multiply(view.spin);
+    view.from = { at: view.at.clone(), turn: onScreen, dir: view.base.clone().applyQuaternion(onScreen) };
+  }
 }
 
 /** Whether the flat picture shows the stick of `side` with the hub turned
@@ -575,7 +585,12 @@ function landCarried() {
   const to = goalQ();
   const shift = to.clone().invert().multiply(turnFrom);
   for (const [side, view] of pieceViews) {
-    if (!staysPut(side, turnFrom, to)) continue;
+    view.from = null;
+    if (!staysPut(side, turnFrom, to)) {
+      // Already where it lies; the same turn, as the views keep it.
+      view.spin.copy(view.aim);
+      continue;
+    }
     view.at.applyQuaternion(shift);
     view.dir.applyQuaternion(shift).round();
     view.aim.premultiply(shift);
@@ -847,8 +862,22 @@ function stickViews(pieces, dt, plane) {
       view.aim.premultiply(by);
       view.dir.copy(dir);
     }
-    view.at.lerp(goal, k);
-    view.spin.slerp(view.aim, k);
+    if (carrying() && view.from && !staysPut(piece.side, turnFrom, goalQ())) {
+      // Carried by a tip to lie some other way: it moves round with the hub
+      // and at the same time turns, on the screen, from the way it lay to the
+      // way it will lie — flat to the eye all along, never end on.
+      const e = ease(turn.t);
+      view.at.copy(view.from.at).lerp(goal, e);
+      const end = dir.clone().applyQuaternion(goalQ());
+      const swing = new THREE.Quaternion();
+      if (view.from.dir.dot(end) > -0.99) swing.setFromUnitVectors(view.from.dir, end);
+      else swing.setFromAxisAngle(SCENE_TOWARD, Math.PI);
+      const onScreen = new THREE.Quaternion().slerp(swing, e).multiply(view.from.turn);
+      view.spin.copy(turned).invert().multiply(onScreen);
+    } else {
+      view.at.lerp(goal, k);
+      view.spin.slerp(view.aim, k);
+    }
     return { piece, at: view.at, spin: view.spin, base: view.base };
   });
 }
@@ -997,7 +1026,10 @@ function buildBlocks(dt) {
     for (const move of game.moves) pushSolid(local(move.from).lerp(local(move.to, to), t * t), move.color);
   }
 
-  const sticks = stickViews(game.pieces, dt, game.plane);
+  // While a tip carries them, the sticks head for where it lays them: the
+  // preview's, or the game's once the tip is made.
+  const heading = carrying() ? preview?.result?.view.pieces ?? game.pieces : game.pieces;
+  const sticks = stickViews(heading, dt, game.plane);
   if (phase === 'dropping' && game.drop) {
     const { piece, from } = game.drop;
     sticks.push(plainStick(piece, local(from).lerp(local(piece.pivot), progress * progress)));

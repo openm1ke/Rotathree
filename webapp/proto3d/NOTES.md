@@ -107,7 +107,10 @@ After review the rules follow what the screen shows.
   so they never turn at all. A stick the flat picture stops showing — the top
   one going in front of the eye, the bottom one behind — fades out as the hub
   leans, and the one that takes its place (from behind, or from in front)
-  fades in at the same pace. ← → move no stick: each goes
+  fades in at the same pace. A stick the tip lays some other way (one that
+  pointed at the eye after a turn of the cross) turns flat on the screen as
+  the hub leans, from the way it lay to the way it will lie, so it never
+  shows end on and needs no turn after (`10b`). ← → move no stick: each goes
   round with its glass, as in 2D. The preview shows them where
   the tip lays them (`09`); a stick laid somewhere else slides and turns there
   once the hub has landed, rather than jumping. (A wave of cubes each rolling over to its

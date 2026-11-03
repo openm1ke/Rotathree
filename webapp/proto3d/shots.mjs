@@ -138,6 +138,19 @@ try {
   await page.keyboard.up('ArrowUp');
   await atRest();
   await shot('10-after-tip');
+  // The cross turned in the screen first (←), then tipped (↑): the sticks
+  // coming over the top and from below turn flat on the screen as the hub
+  // leans, never end on.
+  await key('ArrowLeft');
+  await settled();
+  await slow(0.1);
+  await page.keyboard.down('ArrowUp');
+  await wait(3300);
+  await snap('10b-tip-after-turn');
+  await slow(1);
+  await settled();
+  await page.keyboard.up('ArrowUp');
+  await atRest();
   await key('KeyI');
 
   // A busy board looked at tipped over: what would pop blinks, and the panel
