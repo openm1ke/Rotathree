@@ -8,11 +8,12 @@ import type { SavedRuns } from '../services/runSave';
 import { useTouchControls } from '../input/touch';
 import { USES_ESCAPE } from '../platform/target';
 
-export type MenuTarget = 'campaign' | 'custom' | 'statistics' | 'settings';
+export type MenuTarget = 'campaign' | 'custom' | 'cube' | 'statistics' | 'settings';
 
 const ITEMS: readonly { id: MenuTarget; title: string; caption: string }[] = [
   { id: 'campaign', title: 'Кампания', caption: '16 уровней' },
   { id: 'custom', title: 'Кастом', caption: 'Ваши правила' },
+  { id: 'cube', title: 'Куб', caption: 'Шесть стаканов в 3D' },
   { id: 'statistics', title: 'Статистика', caption: 'Результаты и рекорды' },
   { id: 'settings', title: 'Настройки', caption: 'Управление и оформление' },
 ];

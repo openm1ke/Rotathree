@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => {
           ['../assets/fonts/OFL.txt', 'Exo2-OFL.txt'],
           ['node_modules/react/LICENSE', 'React-MIT.txt'],
           ['node_modules/react-dom/LICENSE', 'ReactDOM-MIT.txt'],
+          ['node_modules/three/LICENSE', 'three.js-MIT.txt'],
         ]) cpSync(source, `${outDir}/licenses/${name}`);
         for (const name of ['deep-focus.m4a', 'deep-focus-1.m4a', 'deep-focus.mp3', 'deep-focus-1.mp3']) rmSync(`${outDir}/music/${name}`, { force: true });
         if (!playgama) return;
@@ -61,7 +62,8 @@ export default defineConfig(({ mode }) => {
         cpSync('playgama/playgama-bridge-config.json', `${outDir}/playgama-bridge-config.json`);
       },
     }],
-    build: { outDir },
+    // three.js, for Cube, is a chunk of its own, loaded when Cube is played.
+    build: { outDir, chunkSizeWarningLimit: 600 },
     define: { __BUILD_VERSION__: JSON.stringify(BUILD_VERSION) },
     server: { port: 5183, strictPort: true },
     test: {

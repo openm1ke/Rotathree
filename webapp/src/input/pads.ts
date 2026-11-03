@@ -12,6 +12,14 @@ export const SLOT_LABELS: Record<PadSlot, string> = {
   down: 'Вниз',
   center: 'Центр',
 };
+/** Cube's pads: the left one plays the stick, its centre picks the glass in
+ * front or behind; the right one tips the hub (up, down — or moves the stick
+ * in front or behind up and down), turns the cross (left, right) and, held in
+ * the centre, opens the volume. */
+export const CUBE_PADS = {
+  left: { up: 'rotateCW', left: 'moveLeft', right: 'moveRight', down: 'hardDrop', center: 'depthGlass' } as PadLayout,
+  right: { up: 'tipBack', left: 'glassLeft', right: 'glassRight', down: 'tipFront', center: 'peek' } as PadLayout,
+};
 export const DEFAULT_PADS = {
   left: { up: 'rotateCW', left: 'moveLeft', right: 'moveRight', down: 'hardDrop', center: 'none' } as PadLayout,
   right: {
@@ -55,6 +63,10 @@ export class PadController {
   }
   up(action: PadAction): void {
     if (action === 'none') return;
+    if (!['moveLeft', 'moveRight', 'softDrop'].includes(action)) {
+      this.sink.release?.(action as Exclude<Action, 'moveLeft' | 'moveRight' | 'softDrop'>);
+      return;
+    }
     const count = this.holders.get(action) ?? 0;
     if (count === 0) return;
     if (count > 1) {

@@ -1,8 +1,9 @@
 import { T } from './i18n/Text';
 import { I18nContext, useLanguage } from './i18n/context';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CampaignScreen } from './components/CampaignScreen';
 import { CustomScreen } from './components/CustomScreen';
+import { CubeSetupScreen } from './components/CubeSetupScreen';
 import { GameScreen } from './components/GameScreen';
 import { ResumeScreen } from './components/ResumeScreen';
 import { MainMenu, type MenuTarget } from './components/MainMenu';
@@ -37,6 +38,9 @@ import { sounds } from './services/sounds';
 import { isPlatformHidden, isPlatformMuted, subscribeMute, subscribeVisibility } from './platform/lifecycle';
 import { LanguageSwitch } from './platform/LanguageSwitch';
 
+/** Cube draws with three.js: loaded only when it is played. */
+const CubeScreen = lazy(() => import('./components/CubeScreen').then((module) => ({ default: module.CubeScreen })));
+
 /** The page is hidden, or the platform has covered or muted the game. */
 const silent = () => document.hidden || isPlatformHidden() || isPlatformMuted();
 
@@ -50,6 +54,8 @@ type Route =
   | { name: 'resume' }
   | { name: 'campaign' }
   | { name: 'custom' }
+  | { name: 'cube' }
+  | { name: 'cubePlay' }
   | { name: 'statistics' }
   | { name: 'settings' }
   | { name: 'play'; session: Session; from: From; restore?: RunSave; resumeImmediately?: boolean; tutorial?: boolean };
@@ -167,9 +173,11 @@ export default function App() {
     if (silent()) music.current?.stop();
   }, [settings.audio]);
 
+  /** A game is on the screen, flat or Cube. */
+  const inGame = route.name === 'play' || route.name === 'cubePlay';
   useEffect(() => {
-    if (route.name !== 'play') onPauseChanged(false);
-  }, [route.name, onPauseChanged]);
+    if (!inGame) onPauseChanged(false);
+  }, [inGame, onPauseChanged]);
 
   // Everything the player sets up is written at once, so it survives closing
   // the tab; the block colours follow the active set.
@@ -282,6 +290,11 @@ export default function App() {
     [written],
   );
   const home = useCallback(() => setRoute({ name: 'home' }), []);
+  const playCube = useCallback(() => {
+    setNonce((n) => n + 1);
+    setSettingsOpen(false);
+    setRoute({ name: 'cubePlay' });
+  }, []);
   /** The quick sound switch mutes music and effects together, and turns both
    * back on. */
   const toggleMusic = useCallback(
@@ -337,6 +350,40 @@ export default function App() {
         />
       );
       break;
+    case 'cube':
+      screen = (
+        <CubeSetupScreen
+          settings={settings}
+          stats={stats}
+          colours={activeColours}
+          onChange={(cube) => setSettings((current) => ({ ...current, cube }))}
+          onStart={playCube}
+          onBack={home}
+          active={!settingsOpen}
+        />
+      );
+      break;
+    case 'cubePlay':
+      screen = (
+        <Suspense fallback={null}>
+          <CubeScreen
+            key={nonce}
+            settings={settings}
+            blocked={settingsOpen}
+            onSettings={() => setSettingsOpen(true)}
+            onToggleMusic={toggleMusic}
+            onPauseChanged={onPauseChanged}
+            onExit={exit}
+            onSetup={() => {
+              setSettingsOpen(false);
+              setRoute({ name: 'cube' });
+            }}
+            onRetry={playCube}
+            onRecord={recordRun}
+          />
+        </Suspense>
+      );
+      break;
     case 'statistics':
       screen = <StatisticsScreen stats={stats} progress={progress} onBack={home} active={!settingsOpen} />;
       break;
@@ -385,7 +432,7 @@ export default function App() {
   return (
     <I18nContext.Provider value={i18n}>
     <div className="app">
-      <div className={`backdrop${route.name === 'play' && !settings.effects.fieldBackground ? ' backdrop--static' : ''}`} data-paused={route.name === 'play' && gamePaused} aria-hidden="true">
+      <div className={`backdrop${inGame && !settings.effects.fieldBackground ? ' backdrop--static' : ''}`} data-paused={inGame && gamePaused} aria-hidden="true">
         <div className="backdrop__glow backdrop__glow--a" />
         <div className="backdrop__glow backdrop__glow--b" />
         <div className="backdrop__grid" />
@@ -410,7 +457,7 @@ export default function App() {
         </div>
       )}
 
-      {settingsOpen && route.name === 'play' && (
+      {settingsOpen && inGame && (
         <Overlay label="Настройки" className="overlay--settings" onDismiss={() => setSettingsOpen(false)}>
           <SettingsScreen
             overlay

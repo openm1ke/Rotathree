@@ -77,7 +77,36 @@ export interface Settings {
   /** Size and place of single buttons, by pad. */
   padButtons: PadButtons;
   audio: AudioOptions;
+  cube: CubeOptions;
 }
+
+/** Cube, the 3D mode: what it is played with and what its picture shows. */
+export interface CubeOptions {
+  /** Colours in the sticks: 3 to 6. */
+  colours: number;
+  /** The sticks in front and behind that are not being steered. */
+  depthSticks: boolean;
+  /** Let the glasses in front and behind drop their sticks by themselves. */
+  depthFalls: boolean;
+  /** A mark in a corner of a cell with the colour of the block behind it. */
+  behind: boolean;
+  /** The edges of the hub's glasses. */
+  edges: boolean;
+  /** The glasses' numbers. */
+  numbers: boolean;
+  /** The aiming lane under the stick on top. */
+  lane: boolean;
+}
+
+export const DEFAULT_CUBE: CubeOptions = {
+  colours: 4,
+  depthSticks: false,
+  depthFalls: false,
+  behind: true,
+  edges: false,
+  numbers: false,
+  lane: true,
+};
 
 export const BUILTIN_PALETTES: PaletteSet[] = [
   { id: 'classic', name: 'Классика', colours: [...DEFAULT_COLOURS], builtin: true },
@@ -107,6 +136,7 @@ export const defaultSettings = (): Settings => ({
   padShape: 'square',
   padButtons: structuredClone(DEFAULT_BUTTONS),
   audio: { music: true, musicVolume: 0.1, sounds: true, soundsVolume: 0.3 },
+  cube: { ...DEFAULT_CUBE },
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -149,6 +179,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   const hud = (stored.hud ?? {}) as Record<string, unknown>;
   const pads = (stored.pads ?? {}) as Record<string, unknown>;
   const audio = (stored.audio ?? {}) as Record<string, unknown>;
+  const cube = (stored.cube ?? {}) as Record<string, unknown>;
+  const flag = (key: keyof CubeOptions) => (typeof cube[key] === 'boolean' ? (cube[key] as boolean) : (DEFAULT_CUBE[key] as boolean));
   const pad = (raw: unknown, fallback: PadLayout): PadLayout => {
     const p = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
     return Object.fromEntries(
@@ -189,6 +221,15 @@ export function sanitizeSettings(raw: unknown): Settings {
       musicVolume: numberIn(audio.musicVolume ?? audio.volume, 0, 1, base.audio.musicVolume),
       sounds: audio.sounds !== false,
       soundsVolume: numberIn(audio.soundsVolume, 0, 1, base.audio.soundsVolume),
+    },
+    cube: {
+      colours: Math.round(numberIn(cube.colours, 3, 6, DEFAULT_CUBE.colours)),
+      depthSticks: flag('depthSticks'),
+      depthFalls: flag('depthFalls'),
+      behind: flag('behind'),
+      edges: flag('edges'),
+      numbers: flag('numbers'),
+      lane: flag('lane'),
     },
   };
 }
@@ -273,7 +314,7 @@ const emptyModeStats = (): ModeStats => ({
 });
 
 export const defaultStats = (): Stats => ({
-  modes: { campaign: emptyModeStats(), insane: emptyModeStats(), custom: emptyModeStats() },
+  modes: { campaign: emptyModeStats(), insane: emptyModeStats(), custom: emptyModeStats(), cube: emptyModeStats() },
   recent: [],
 });
 
@@ -326,7 +367,7 @@ export function sanitizeStats(raw: unknown): Stats {
     ? r.recent.flatMap((item): RunRecord[] => {
         if (typeof item !== 'object' || item === null) return [];
         const run = item as Record<string, unknown>;
-        if (run.mode !== 'campaign' && run.mode !== 'insane' && run.mode !== 'custom') return [];
+        if (run.mode !== 'campaign' && run.mode !== 'insane' && run.mode !== 'custom' && run.mode !== 'cube') return [];
         return [
           {
             id: String(run.id ?? ''),
@@ -349,6 +390,7 @@ export function sanitizeStats(raw: unknown): Stats {
       campaign: sanitizeModeStats(modes.campaign),
       insane: sanitizeModeStats(modes.insane),
       custom: sanitizeModeStats(modes.custom),
+      cube: sanitizeModeStats(modes.cube),
     },
     recent: recent.slice(0, RECENT_LIMIT),
   };

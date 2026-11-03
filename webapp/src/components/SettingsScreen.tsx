@@ -20,7 +20,7 @@ import {
   type ActionGroup,
 } from '../input/bindings';
 import { defaultHandling } from '../input/keyboard';
-import { defaultSettings, type Palettes, type Settings, type ExplosionStyle } from '../services/storage';
+import { defaultSettings, type CubeOptions, type Palettes, type Settings, type ExplosionStyle } from '../services/storage';
 import { Button, Chip, Choice, Screen, Slider, Toggle } from './ui';
 import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
@@ -38,7 +38,16 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['licenses', 'Лицензии'],
 ];
 
-const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game'];
+const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game', 'cube'];
+
+/** What Cube's picture shows besides the game, each one a switch. */
+const CUBE_LOOK: readonly (readonly [Exclude<keyof CubeOptions, 'colours' | 'depthFalls'>, string])[] = [
+  ['behind', 'Метка: цвет блока за клеткой'],
+  ['lane', 'Дорожка до места посадки'],
+  ['depthSticks', 'Фигуры спереди и сзади, которыми не управляете'],
+  ['edges', 'Рёбра стаканов в объёме'],
+  ['numbers', 'Номера стаканов'],
+];
 
 interface Props {
   settings: Settings;
@@ -261,7 +270,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                         }
                       >
                         <option value="none"><T>Не назначено</T></option>
-                        {ACTIONS.map((action) => (
+                        {ACTIONS.filter((action) => action.scope !== 'cube').map((action) => (
                           <option key={action.id} value={action.id}><T>
                             {action.label}
                           </T></option>
@@ -458,8 +467,27 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               onChange={(percent) => onChange({ ...settings, hud: { ...settings.hud, opacity: percent / 100 } })}
             />
           </section>
+          <section className="group">
+            <h3><T>Куб</T></h3>
+            <p className="hint"><T>Что показывать поверх креста в режиме «Куб»</T></p>
+            {CUBE_LOOK.map(([key, label]) => (
+              <Toggle
+                key={key}
+                label={label}
+                value={settings.cube[key]}
+                on="показывать"
+                off="скрыть"
+                onChange={(value) => onChange({ ...settings, cube: { ...settings.cube, [key]: value } })}
+              />
+            ))}
+          </section>
           <div className="form__start">
-            <Button ghost onClick={() => onChange({ ...settings, hud: defaults.hud, effects: defaults.effects })}><T>
+            <Button ghost onClick={() => onChange({
+              ...settings,
+              hud: defaults.hud,
+              effects: defaults.effects,
+              cube: { ...defaults.cube, colours: settings.cube.colours, depthFalls: settings.cube.depthFalls },
+            })}><T>
               Сбросить интерфейс
             </T></Button>
           </div>

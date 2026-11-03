@@ -2,7 +2,7 @@ import { useI18n } from '../i18n/context';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { Settings } from '../services/storage';
 import { movePad, padAreaHeight, padGeometry, type PadPositions, type PadSide } from '../input/padPlacement';
-import type { PadAction, PadSlot } from '../input/pads';
+import type { PadAction, PadLayout, PadSlot } from '../input/pads';
 import { DPad } from './DPad';
 
 export function TouchControls({
@@ -13,8 +13,11 @@ export function TouchControls({
   onEdit,
   highlight,
   hint,
+  layouts,
 }: {
   settings: Settings;
+  /** What the buttons do, when not the player's own pads: Cube's. */
+  layouts?: Record<PadSide, PadLayout>;
   disabled?: boolean;
   onDown: (action: PadAction) => void;
   onUp: (action: PadAction) => void;
@@ -137,7 +140,7 @@ export function TouchControls({
               <div inert={onEdit ? true : undefined}>
                 <DPad
                   label={label}
-                  layout={settings.pads[side]}
+                  layout={(layouts ?? settings.pads)[side]}
                   disabled={disabled}
                   // The preview shows what the player will see, captions included.
                   showLabels={settings.hud.keyHints}

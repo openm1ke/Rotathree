@@ -11,16 +11,28 @@ export type Action =
   | 'glassLeft'
   | 'glassRight'
   | 'glassOpposite'
+  | 'tipBack'
+  | 'tipFront'
+  | 'frontGlass'
+  | 'backGlass'
+  | 'depthGlass'
+  | 'peek'
   | 'pause'
   | 'restart';
 
-export type ActionGroup = 'piece' | 'glass' | 'game';
+export type ActionGroup = 'piece' | 'glass' | 'cube' | 'game';
+
+/** Which game an action belongs to: the flat cross, Cube, or both. A key may
+ * do one thing in the flat game and another in Cube. */
+export type ActionScope = 'flat' | 'cube';
 
 export interface ActionInfo {
   id: Action;
   label: string;
   hint: string;
   group: ActionGroup;
+  /** Absent: the action is the same in both games. */
+  scope?: ActionScope;
 }
 
 export const ACTIONS: readonly ActionInfo[] = [
@@ -32,16 +44,28 @@ export const ACTIONS: readonly ActionInfo[] = [
   { id: 'hardDrop', label: 'Сброс', hint: 'Мгновенно поставить фигуру', group: 'piece' },
   { id: 'glassLeft', label: 'Стакан слева', hint: 'Поднять наверх стакан, который слева', group: 'glass' },
   { id: 'glassRight', label: 'Стакан справа', hint: 'Поднять наверх стакан, который справа', group: 'glass' },
-  { id: 'glassOpposite', label: 'Стакан напротив', hint: 'Развернуть поле на 180°', group: 'glass' },
+  { id: 'glassOpposite', label: 'Стакан напротив', hint: 'Развернуть поле на 180°', group: 'glass', scope: 'flat' },
   { id: 'pause', label: 'Пауза', hint: 'Пауза и меню', group: 'game' },
   { id: 'restart', label: 'Заново', hint: 'Начать партию сначала', group: 'game' },
+  // Cube's own come last: a key a player gave to a shared action stays there.
+  { id: 'tipBack', label: 'Опрокинуть: задний наверх', hint: 'Держите — посмотреть, как ляжет куб; отпустите — опрокинуть', group: 'cube', scope: 'cube' },
+  { id: 'tipFront', label: 'Опрокинуть: передний наверх', hint: 'Держите — посмотреть, как ляжет куб; отпустите — опрокинуть', group: 'cube', scope: 'cube' },
+  { id: 'frontGlass', label: 'Передний стакан', hint: 'Вести его фигуру; ещё раз — назад к верхнему', group: 'cube', scope: 'cube' },
+  { id: 'backGlass', label: 'Задний стакан', hint: 'Вести его фигуру; ещё раз — назад к верхнему', group: 'cube', scope: 'cube' },
+  { id: 'depthGlass', label: 'Стакан глубины', hint: 'По кругу: верхний, передний, задний', group: 'cube', scope: 'cube' },
+  { id: 'peek', label: 'Объём', hint: 'Держите — увидеть куб в объёме', group: 'cube', scope: 'cube' },
 ];
 
 export const GROUP_TITLES: Record<ActionGroup, string> = {
   piece: 'Фигура',
   glass: 'Стаканы',
+  cube: 'Куб',
   game: 'Игра',
 };
+
+/** Whether two actions can be on at the same time, so may not share a key. */
+const overlaps = (a: ActionInfo, b: ActionInfo): boolean => !a.scope || !b.scope || a.scope === b.scope;
+const infoOf = (action: Action): ActionInfo => ACTIONS.find(({ id }) => id === action)!;
 
 /** Keys per action, as `KeyboardEvent.code` values — the physical key, so a
  * binding works the same in any keyboard layout. Two slots per action. */
@@ -60,6 +84,13 @@ export const defaultBindings: Bindings = {
   glassLeft: ['ArrowLeft', 'KeyQ'],
   glassRight: ['ArrowRight', 'KeyE'],
   glassOpposite: ['ArrowUp', 'ArrowDown'],
+  // Cube's own: the arrows up and down tip the hub there instead.
+  tipBack: ['ArrowUp'],
+  tipFront: ['ArrowDown'],
+  frontGlass: ['KeyZ'],
+  backGlass: ['KeyC'],
+  depthGlass: [],
+  peek: ['KeyV'],
   pause: USES_ESCAPE ? ['Escape', 'KeyP'] : ['KeyP'],
   restart: ['KeyN'],
 };
@@ -67,9 +98,9 @@ export const defaultBindings: Bindings = {
 export const cloneBindings = (bindings: Bindings): Bindings =>
   Object.fromEntries(ACTIONS.map(({ id }) => [id, [...bindings[id]]])) as Bindings;
 
-/** The action a key triggers, if any. */
-export function actionForCode(bindings: Bindings, code: string): Action | null {
-  for (const { id } of ACTIONS) if (bindings[id].includes(code)) return id;
+/** The action a key triggers in the given game, if any. */
+export function actionForCode(bindings: Bindings, code: string, scope: ActionScope = 'flat'): Action | null {
+  for (const { id, scope: own } of ACTIONS) if ((!own || own === scope) && bindings[id].includes(code)) return id;
   return null;
 }
 
@@ -81,7 +112,10 @@ const usable = (code: string) => USES_ESCAPE || code !== 'Escape';
 export function bindKey(bindings: Bindings, action: Action, slot: number, code: string): Bindings {
   const next = cloneBindings(bindings);
   if (!usable(code)) return next;
-  for (const { id } of ACTIONS) next[id] = next[id].filter((bound) => bound !== code);
+  const info = infoOf(action);
+  // Only from actions that can be on at the same time: a key may tip the
+  // hub in Cube and turn the cross round in the flat game.
+  for (const other of ACTIONS) if (overlaps(info, other)) next[other.id] = next[other.id].filter((bound) => bound !== code);
   const keys = next[action];
   if (slot < keys.length) keys[slot] = code;
   else keys.push(code);
@@ -109,7 +143,6 @@ const LATER_DEFAULTS: readonly { action: Action; was: readonly string[]; key: st
 export function sanitizeBindings(raw: unknown): Bindings {
   const result = cloneBindings(defaultBindings);
   if (typeof raw !== 'object' || raw === null) return result;
-  const seen = new Set<string>();
   for (const { id } of ACTIONS) {
     const stored = (raw as Record<string, unknown>)[id];
     if (!Array.isArray(stored)) continue;
@@ -117,13 +150,16 @@ export function sanitizeBindings(raw: unknown): Bindings {
       .filter((code): code is string => typeof code === 'string' && code.length > 0 && usable(code))
       .slice(0, SLOTS_PER_ACTION);
   }
-  for (const { id } of ACTIONS) {
-    result[id] = result[id].filter((code) => {
-      if (seen.has(code)) return false;
-      seen.add(code);
+  // A key keeps its first use among the actions that can be on together.
+  const kept: { info: ActionInfo; code: string }[] = [];
+  for (const info of ACTIONS) {
+    result[info.id] = result[info.id].filter((code) => {
+      if (kept.some((k) => k.code === code && overlaps(k.info, info))) return false;
+      kept.push({ info, code });
       return true;
     });
   }
+  const seen = new Set(kept.map((k) => k.code));
   for (const { action, was, key } of LATER_DEFAULTS) {
     const keys = result[action];
     const unchanged = keys.length === was.length && keys.every((code, i) => code === was[i]);

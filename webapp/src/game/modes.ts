@@ -2,12 +2,13 @@ import { defaultConfig, type GameConfig, type GravityScope } from './config';
 import type { SpeedRamp } from './engine';
 
 /** The modes a game can be played in. */
-export type ModeId = 'campaign' | 'insane' | 'custom';
+export type ModeId = 'campaign' | 'insane' | 'custom' | 'cube';
 
 export const MODE_NAMES: Record<ModeId, string> = {
   campaign: 'Кампания',
   insane: 'Кошмар',
   custom: 'Кастом',
+  cube: 'Куб',
 };
 
 /** What the custom mode is set up with; kept between launches. */
@@ -90,6 +91,10 @@ export const insanePlan = (): RunPlan => ({
   },
   ramp: { everyPoints: 1000, factor: 0.93, minActive: 0.15, minInactive: 0.5 },
 });
+
+/** Cube: it starts at the speed of the flat game and speeds up more gently
+ * than Insane, as there is more to keep in mind. */
+export const CUBE_RAMP = { everyPoints: 1500, factor: 0.92, minActive: 0.25, minInactive: 0.8 } as const;
 
 /** Custom: everything from the setup; the speed-up is optional. */
 export const customPlan = (setup: CustomSetup): RunPlan => ({

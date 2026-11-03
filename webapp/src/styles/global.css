@@ -2335,3 +2335,56 @@ select:focus-visible {
 @media (max-height: 540px) and (min-width: 400px) {
   .home__brand { width: 100%; max-width: 760px; margin-inline: auto; text-align: left; }
 }
+
+/* Cube: its own screen, and the bar over the bottom of the field: a line of
+   words, and the button that brings the dialog back after a look around. */
+.screen--cube .screen__foot {
+  justify-content: center;
+  text-align: center;
+}
+.cube-about {
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+.cube-keys {
+  display: grid;
+  gap: 2px;
+  margin: 14px 0 0;
+}
+.cube-keys__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 34%) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cube-keys__row dt { margin: 0; font-size: 13px; color: var(--text-dim); }
+.cube-keys__row dd { margin: 0; font-size: 13.5px; }
+.cube-keys .keys { flex-wrap: wrap; }
+
+.cube-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  transform: translateX(-50%);
+  max-width: 96%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.cube-bar .button { pointer-events: auto; flex: none; }
+.cube-line {
+  min-width: 0;
+  padding: 0.35em 0.9em;
+  border-radius: 999px;
+  background: rgba(6, 8, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+  font-size: max(11px, 1.15em);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

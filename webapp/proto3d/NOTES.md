@@ -1,5 +1,10 @@
 # 3D RotaThree — prototype notes
 
+> The mode is now part of the web game as **Cube** (menu → «Куб»):
+> `src/cube/rules.ts` (rules, with a speed ramp), `src/cube/view.ts` (this
+> page's picture), `src/components/CubeScreen.tsx` and `CubeSetupScreen.tsx`.
+> This page stays as the dev-only sandbox it was.
+
 A throwaway page to find out whether a 3D RotaThree is playable. It runs on
 the dev server only (`npm run dev` in `webapp/`, then
 http://localhost:5183/proto3d/); no build includes it. URL parameters:

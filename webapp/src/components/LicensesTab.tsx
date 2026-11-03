@@ -27,9 +27,11 @@ export function LicensesTab() {
       <div className="license-list">
         {LINKS ? <>
           <article className="license-card"><strong>React / React DOM</strong><p>Meta Platforms, Inc. and affiliates · MIT</p><a href="./licenses/React-MIT.txt" target="_blank" rel="noopener noreferrer">React — MIT ↗</a>{' · '}<a href="./licenses/ReactDOM-MIT.txt" target="_blank" rel="noopener noreferrer">React DOM — MIT ↗</a></article>
+          <article className="license-card"><strong>three.js</strong><p>three.js authors · MIT</p><a href="./licenses/three.js-MIT.txt" target="_blank" rel="noopener noreferrer">MIT ↗</a></article>
           <article className="license-card"><strong>Exo 2</strong><p>The Exo 2 Project Authors · SIL OFL 1.1</p><a href="./licenses/Exo2-OFL.txt" target="_blank" rel="noopener noreferrer">SIL OFL 1.1 ↗</a></article>
         </> : <>
           <article className="license-card"><strong>React / React DOM</strong><p>Meta Platforms, Inc. and affiliates · MIT</p></article>
+          <article className="license-card"><strong>three.js</strong><p>three.js authors · MIT</p></article>
           <article className="license-card"><strong>Exo 2</strong><p>The Exo 2 Project Authors · SIL OFL 1.1</p></article>
         </>}
       </div>

@@ -1,0 +1,153 @@
+import { describe, expect, it } from 'vitest';
+import { CubeGame, EMPTY, SIDES, type Vec } from '../cube/rules';
+
+const run = (game: CubeGame, seconds: number) => {
+  for (let t = 0; t < seconds; t += 0.02) game.update(0.02);
+};
+const sideOf = (axis: number, sign: 1 | -1) => SIDES.findIndex((s) => s.axis === axis && s.sign === sign);
+const FRONT = sideOf(2, 1);
+const BACK = sideOf(2, -1);
+const LEFT = sideOf(0, -1);
+const RIGHT = sideOf(0, 1);
+
+describe('Cube: the picture is the board', () => {
+  it('stops the stick on top on a block seen behind it', () => {
+    const game = new CubeGame({ seed: 4, inactiveFalls: false });
+    const h = game.half;
+    game.hub.set(game.cellAt(0, -h, -2), 1);
+    const top = game.activePiece!;
+    top.pivot = game.cellAt(0, h, 0);
+    top.dir = [1, 0, 0];
+    expect(game.screenOf(game.restRow(top))[1]).toBe(-h + 1);
+  });
+
+  it('pops a line of what is seen, whatever the depths, and not one broken by a nearer block', () => {
+    const game = new CubeGame({ seed: 5, inactiveFalls: false });
+    const h = game.half;
+    game.hub.set(game.cellAt(-1, -h, 2), 3);
+    game.hub.set(game.cellAt(0, -h, -3), 3);
+    game.hub.set(game.cellAt(1, -h, 0), 3);
+    game.hub.set(game.cellAt(0, -h, -1), 2);
+    expect(game.findMatches().runs).toHaveLength(0);
+    game.hub.set(game.cellAt(0, -h, -1), EMPTY);
+    const match = game.findMatches();
+    expect(match.runs).toHaveLength(1);
+    expect(match.cells.size).toBe(3);
+  });
+
+  it('lets a cell of the picture fall with everything behind it', () => {
+    const game = new CubeGame({ seed: 6, inactiveFalls: false });
+    const h = game.half;
+    game.hub.set(game.cellAt(0, -h, 1), 0);
+    game.hub.set(game.cellAt(0, -h, -2), 1);
+    game.hub.set(game.cellAt(0, -h + 2, 3), 2);
+    game.hub.set(game.cellAt(0, -h + 2, -1), 4);
+    expect(game.settle()).toHaveLength(2);
+    expect(game.hub.at(game.cellAt(0, -h + 1, 3))).toBe(2);
+    expect(game.hub.at(game.cellAt(0, -h + 1, -1))).toBe(4);
+  });
+});
+
+describe('Cube: tipping the hub over', () => {
+  // ↑: data −Z comes on top; data +Y now looks at the eye.
+  const tipUp = (game: CubeGame) =>
+    game.turn(sideOf(2, -1), [0, 1, 0], { right: [1, 0, 0], up: [0, 0, -1] }, true);
+
+  it('shows the tops of the old columns as the bottom line', () => {
+    const game = new CubeGame({ seed: 7, inactiveFalls: false });
+    game.pieces.clear();
+    const h = game.half;
+    for (let sy = -h; sy < -h + 3; sy++) game.hub.set(game.cellAt(-1, sy, 0), sy + h);
+    game.hub.set(game.cellAt(1, -h, 0), 3);
+    tipUp(game);
+    run(game, 1);
+    const seen = (sx: number) => {
+      const p = game.seenAt(sx, -h);
+      return p ? game.hub.at(p) : null;
+    };
+    expect(seen(-1)).toBe(2);
+    expect(seen(1)).toBe(3);
+  });
+
+  it('keeps the sticks on its axis where the screen showed them, and moves none on a turn in the screen', () => {
+    const game = new CubeGame({ seed: 5, inactiveFalls: false });
+    const left = game.pieces.get(LEFT)!;
+    left.pivot = game.cellAt(-9, 1, 0);
+    left.dir = [1, 0, 0];
+    const right = game.pieces.get(RIGHT)!;
+    const before = [game.screenOf(left.pivot), game.screenOf(right.pivot)];
+    tipUp(game);
+    expect([game.screenOf(left.pivot), game.screenOf(right.pivot)]).toEqual(before);
+    expect([left.dir[0], left.dir[2] + 0]).toEqual([1, 0]);
+
+    const other = new CubeGame({ seed: 6, inactiveFalls: false });
+    const snapshot = () => [...other.pieces.values()].map((p) => `${p.pivot}|${p.dir}`).join(' ');
+    const was = snapshot();
+    other.turn(LEFT, [0, 0, 1], { right: [0, 1, 0], up: [-1, 0, 0] }, false);
+    expect(snapshot()).toBe(was);
+  });
+
+  it('previews a tip without touching the game, and counts what would pop', () => {
+    const game = new CubeGame({ seed: 7, inactiveFalls: false });
+    game.pieces.clear();
+    const h = game.half;
+    for (let sy = -h; sy < -h + 3; sy++) game.hub.set(game.cellAt(-1, sy, 0), 0);
+    game.hub.set(game.cellAt(0, -h, 0), 0);
+    game.hub.set(game.cellAt(1, -h, 0), 0);
+    const version = game.hub.version;
+    const preview = game.previewTurn([0, 1, 0], { right: [1, 0, 0], up: [0, 0, -1] });
+    expect(game.hub.version).toBe(version);
+    expect(preview.rounds).toBeGreaterThanOrEqual(1);
+    expect(preview.popped).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('Cube: the glasses in front and behind', () => {
+  it('lands a front stick in front, seen, and a back one behind, hidden', () => {
+    const game = new CubeGame({ seed: 8, inactiveFalls: false });
+    for (const sx of [-1, 0, 1]) game.hub.set(game.cellAt(sx, 0, 0), 1);
+    game.pieces.get(FRONT)!.pivot = game.cellAt(0, 0, game.middle);
+    game.pieces.get(BACK)!.pivot = game.cellAt(0, 0, -game.middle);
+    expect(game.landing(FRONT)).toMatchObject({ layer: 1, count: 3 });
+    expect(game.landing(BACK)).toMatchObject({ layer: -1, count: 0 });
+  });
+
+  it('waits until steered unless they may fall alone', () => {
+    const game = new CubeGame({ seed: 3 });
+    const start: Vec = [...game.pieces.get(FRONT)!.pivot];
+    run(game, 7);
+    expect(game.pieces.get(FRONT)!.pivot).toEqual(start);
+    game.config.depthFalls = true;
+    run(game, 6.5);
+    expect(game.pieces.get(FRONT)!.pivot[2]).toBe(start[2] - 1);
+  });
+
+  it('steers them in place', () => {
+    const game = new CubeGame({ seed: 3, inactiveFalls: false });
+    game.control(FRONT);
+    const start: Vec = [...game.activePiece!.pivot];
+    game.move([0, -1, 0]);
+    expect(game.activePiece!.pivot).toEqual([start[0], start[1] - 1, start[2]]);
+  });
+});
+
+describe('Cube: a whole game', () => {
+  it('plays to the end with every glass taking turns', () => {
+    const game = new CubeGame({ seed: 9, ramp: { everyPoints: 500, factor: 0.9, minActive: 0.3, minInactive: 0.8 } });
+    for (let i = 0; i < 3000 && !game.isGameOver; i++) {
+      game.control([0, BACK, FRONT][i % 3]);
+      game.dropActive();
+      run(game, 0.5);
+    }
+    expect(game.isGameOver).toBe(true);
+    expect(game.placed).toBeGreaterThan(5);
+  });
+
+  it('steps fast while soft drop is held', () => {
+    const game = new CubeGame({ seed: 2, inactiveFalls: false });
+    const start = game.activePiece!.pivot[1];
+    game.softDrop = true;
+    run(game, 0.3);
+    expect(start - game.activePiece!.pivot[1]).toBeGreaterThan(3);
+  });
+});

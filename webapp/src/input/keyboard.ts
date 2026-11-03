@@ -1,4 +1,4 @@
-import { actionForCode, type Action, type Bindings } from './bindings';
+import { actionForCode, type Action, type ActionScope, type Bindings } from './bindings';
 
 /** How held movement keys repeat, in the terms players of falling-block
  * games know: the delay before auto-shift starts and the interval between
@@ -19,6 +19,9 @@ export interface ActionSink {
   /** A one-shot action: rotate, drop, switch glass, pause, restart. */
   press(action: Exclude<Action, 'moveLeft' | 'moveRight' | 'softDrop'>): void;
   softDrop(held: boolean): void;
+  /** The key or button of a one-shot action was let go: for the actions
+   * that act while held (Cube's tips and its look into the volume). */
+  release?(action: Exclude<Action, 'moveLeft' | 'moveRight' | 'softDrop'>): void;
 }
 
 /** Turns key events into game actions. Movement auto-repeats with DAS/ARR
@@ -39,13 +42,15 @@ export class KeyboardController {
     private readonly bindings: () => Bindings,
     private readonly handling: () => Handling,
     private readonly sink: ActionSink,
+    /** Which game the keys are for: Cube reads some of them its own way. */
+    private readonly scope: ActionScope = 'flat',
   ) {}
 
   /** Returns true when the key belongs to the game (and its default browser
    * behaviour — scrolling on arrows and space — should be suppressed). */
   keyDown(code: string, isRepeat = false): boolean {
     if (!this.enabled) return false;
-    const action = actionForCode(this.bindings(), code);
+    const action = actionForCode(this.bindings(), code, this.scope);
     if (action === null) return false;
     if (isRepeat || this.down.has(code)) return true;
     this.down.add(code);
@@ -72,7 +77,7 @@ export class KeyboardController {
 
   keyUp(code: string): boolean {
     if (!this.down.delete(code)) return false;
-    const action = actionForCode(this.bindings(), code);
+    const action = actionForCode(this.bindings(), code, this.scope);
     if (action === 'moveLeft' || action === 'moveRight') {
       const direction = action === 'moveLeft' ? -1 : 1;
       // Another key for the same direction may still be held.
@@ -86,6 +91,8 @@ export class KeyboardController {
       }
     } else if (action === 'softDrop' && !this.isHeld('softDrop')) {
       this.sink.softDrop(false);
+    } else if (action !== null && action !== 'softDrop' && !this.isHeld(action)) {
+      this.sink.release?.(action);
     }
     return action !== null;
   }

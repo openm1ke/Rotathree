@@ -14,12 +14,13 @@ interface Props {
   active: boolean;
 }
 
-const MODES: ModeId[] = ['campaign', 'insane', 'custom'];
+const MODES: ModeId[] = ['campaign', 'insane', 'custom', 'cube'];
 
 const DESCRIPTIONS: Record<ModeId, string> = {
   campaign: 'Шестнадцать уровней, каждый со своей целью очков',
   insane: 'Шесть цветов, четыре стакана, скорость растёт',
   custom: 'Своя настройка, скорость — по желанию',
+  cube: 'Шесть стаканов вокруг куба, скорость растёт',
 };
 
 /** Totals and records of every mode, and the last runs. */

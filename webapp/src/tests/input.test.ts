@@ -12,9 +12,11 @@ import { KeyboardController, type Handling } from '../input/keyboard';
 import { defaultSettings, loadSettings, sanitizeSettings, saveSettings, type Settings } from '../services/storage';
 
 describe('key bindings', () => {
-  it('every key does one thing, and the defaults are the ones agreed for the game', () => {
-    const codes = ACTIONS.flatMap(({ id }) => defaultBindings[id]);
-    expect(new Set(codes).size).toBe(codes.length);
+  it('every key does one thing in each game, and the defaults are the ones agreed for the game', () => {
+    for (const scope of ['flat', 'cube'] as const) {
+      const codes = ACTIONS.filter((action) => !action.scope || action.scope === scope).flatMap(({ id }) => defaultBindings[id]);
+      expect(new Set(codes).size, scope).toBe(codes.length);
+    }
     expect(actionForCode(defaultBindings, 'KeyW')).toBe('rotateCW');
     expect(actionForCode(defaultBindings, 'KeyA')).toBe('moveLeft');
     expect(actionForCode(defaultBindings, 'KeyD')).toBe('moveRight');
@@ -30,6 +32,21 @@ describe('key bindings', () => {
     expect(actionForCode(defaultBindings, 'KeyE')).toBe('glassRight');
     expect(actionForCode(defaultBindings, 'KeyX')).toBe('softDrop');
     expect(defaultBindings.rotateCCW).toEqual([]);
+  });
+
+  it('Cube reads the arrows up and down as tips, and keeps the rest of the keys', () => {
+    expect(actionForCode(defaultBindings, 'ArrowUp', 'cube')).toBe('tipBack');
+    expect(actionForCode(defaultBindings, 'ArrowDown', 'cube')).toBe('tipFront');
+    expect(actionForCode(defaultBindings, 'ArrowLeft', 'cube')).toBe('glassLeft');
+    expect(actionForCode(defaultBindings, 'KeyW', 'cube')).toBe('rotateCW');
+    expect(actionForCode(defaultBindings, 'KeyV', 'cube')).toBe('peek');
+    expect(actionForCode(defaultBindings, 'KeyV')).toBeNull();
+    // A key given to one of Cube's own stays with the flat game's too.
+    const next = bindKey(defaultBindings, 'peek', 0, 'ArrowUp');
+    expect(next.peek).toEqual(['ArrowUp']);
+    expect(next.glassOpposite).toEqual(['ArrowUp', 'ArrowDown']);
+    expect(next.tipBack).toEqual([]);
+    expect(sanitizeBindings(JSON.parse(JSON.stringify(defaultBindings)))).toEqual(defaultBindings);
   });
 
   it('a save made before Q, E and X were defaults gets them, unless it uses them elsewhere', () => {
