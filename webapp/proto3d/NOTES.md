@@ -104,7 +104,10 @@ After review the rules follow what the screen shows.
   as they are whenever the hub is open (`08`) — all but those of the glasses
   on the tip's axis (left and right for ↑/↓): they stay on the screen as they
   are, upright, and the rules lay them in just those cells on the new side,
-  so they never turn at all. The preview shows them where
+  so they never turn at all. A stick the flat picture stops showing — the top
+  one going in front of the eye, the bottom one behind — fades out as the hub
+  leans, and one it starts showing fades in. ← → move no stick: each goes
+  round with its glass, as in 2D. The preview shows them where
   the tip lays them (`09`); a stick laid somewhere else slides and turns there
   once the hub has landed, rather than jumping. (A wave of cubes each rolling over to its
   new colour was tried in its place and dropped on review: it read as window

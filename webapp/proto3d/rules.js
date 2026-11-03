@@ -692,18 +692,21 @@ export class Game {
    * one in front or behind — and backs off towards its far end if it no
    * longer fits; failing that it starts again from there.
    *
-   * A glass that lies across the screen both before and after the tip (on
-   * its axis: the left and right ones for ↑/↓) keeps its stick where the
-   * screen showed it, lying the same way on the screen, so that it need not
-   * turn at all. `previous` is the plane and frame looked along before. */
+   * After a tip, a glass that lies across the screen both before and after
+   * it (on its axis: the left and right ones for ↑/↓) keeps its stick where
+   * the screen showed it, lying the same way on the screen, so that it need
+   * not turn at all. A turn in the screen (← →) moves no stick: each goes
+   * round with its glass, as in 2D. `previous` is the plane and frame looked
+   * along before. */
   reseat(previous = null) {
     const k = this.plane.findIndex((v) => v !== 0);
     const middle = this.middle;
+    const tipped = previous !== null && dot(previous.plane, this.plane) === 0;
     for (const piece of this.pieces.values()) {
       const n = normalOf(piece.side);
       let dir = piece.dir;
       let pivot = [...piece.pivot];
-      if (previous && this.inPlane(piece.side) && dot(n, previous.plane) === 0) {
+      if (tipped && this.inPlane(piece.side) && dot(n, previous.plane) === 0) {
         const { right, up } = previous.viewFrame;
         const at = pivot.map((v) => v - middle);
         const [sx, sy] = [dot(at, right), dot(at, up)];

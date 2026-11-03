@@ -277,21 +277,23 @@ const ROUND = 0.13;
 // through the colour to dark at the bottom, around a flat face of the plain
 // colour with a soft shine across its top. Faces turned from the eye are a
 // little darker, so that the hub reads as solid while it is open.
-const solid = cubeLayer(new THREE.ShaderMaterial({
+const tileMaterial = (fading) => new THREE.ShaderMaterial({
   uniforms: sharedUniforms,
+  transparent: fading,
+  depthWrite: !fading,
   vertexShader: /* glsl */ `
     uniform vec3 screenUp;
     attribute vec3 aBase;
     attribute vec3 aLight;
     attribute vec3 aDark;
-    attribute vec2 aLook;
+    attribute vec3 aLook;
     varying vec3 vObjectNormal;
     varying vec3 vFaceNormal;
     varying float vUp;
     varying vec3 vBase;
     varying vec3 vLight;
     varying vec3 vDark;
-    varying vec2 vLook;
+    varying vec3 vLook;
     void main() {
       vBase = aBase;
       vLight = aLight;
@@ -316,7 +318,7 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
     varying vec3 vBase;
     varying vec3 vLight;
     varying vec3 vDark;
-    varying vec2 vLook; // brightness, white flash
+    varying vec3 vLook; // brightness, white flash, opacity
     void main() {
       vec3 n = normalize(vObjectNormal);
       // 1 on the flat of a face, 0 on its rounded rim.
@@ -332,11 +334,16 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
       vec3 colour = mix(rim, face, onFace);
       colour *= clamp(0.72 + 0.28 * toEye + 0.12 * vFaceNormal.y, 0.0, 1.0) * vLook.x;
       colour = mix(colour, vec3(1.0), vLook.y);
-      gl_FragColor = vec4(colour, 1.0);
+      gl_FragColor = vec4(colour, vLook.z);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
-}), { aBase: 3, aLight: 3, aDark: 3, aLook: 2 }, 1, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
+});
+const TILE_ATTRIBUTES = { aBase: 3, aLight: 3, aDark: 3, aLook: 3 };
+const solid = cubeLayer(tileMaterial(false), TILE_ATTRIBUTES, 1, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
+/** Blocks fading in or out — sticks going out of sight or coming into it as
+ * the hub tips over — drawn see-through, far to near, after the others. */
+const fading = cubeLayer(tileMaterial(true), TILE_ATTRIBUTES, 2, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
 
 /** Outlines and see-through cubes: the landing spot, the aiming lane, the
  * sticks in front and behind. Far to near. */
@@ -375,8 +382,11 @@ const clear = cubeLayer(new THREE.ShaderMaterial({
  * while the picture is flat: the sticks in front of and behind the screen
  * are drawn over and under it. `nudge` shifts it on the screen, for the
  * small marks in the corners of cells. */
-function pushSolid(at, color, { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null, spin = null, frame = null } = {}) {
-  solid.items.push({ at: at.clone(), size: [size, size, size], lift, nudge, spin, frame, tone: TONES[color], brightness, flash });
+function pushSolid(at, color, { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null, spin = null, frame = null, alpha = 1 } = {}) {
+  if (alpha <= 0.01) return;
+  (alpha < 0.99 ? fading : solid).items.push({
+    at: at.clone(), size: [size, size, size], lift, nudge, spin, frame, tone: TONES[color], brightness, flash, alpha, depth: 0,
+  });
 }
 
 function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0, nudge = null, spin = null, frame = null } = {}) {
@@ -412,18 +422,25 @@ function turnOf(item) {
 }
 
 function flushLayers() {
-  solid.items.forEach((item, i) => {
-    // A size in the hub's frame: turn it the way the hub is turned.
-    scaleVector.set(...item.size);
-    matrix.compose(place(item), turnOf(item), scaleVector);
-    solid.mesh.setMatrixAt(i, matrix);
-    const { base, light, dark } = item.tone;
-    const { buffers } = solid;
-    buffers.aBase.setXYZ(i, base.r, base.g, base.b);
-    buffers.aLight.setXYZ(i, light.r, light.g, light.b);
-    buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
-    buffers.aLook.setXY(i, item.brightness, item.flash);
-  });
+  for (const item of fading.items) {
+    place(item);
+    item.depth = item.at.distanceToSquared(camera.position);
+  }
+  fading.items.sort((a, b) => b.depth - a.depth);
+  for (const layer of [solid, fading]) {
+    layer.items.forEach((item, i) => {
+      // A size in the hub's frame: turn it the way the hub is turned.
+      scaleVector.set(...item.size);
+      matrix.compose(layer === fading ? item.at : place(item), turnOf(item), scaleVector);
+      layer.mesh.setMatrixAt(i, matrix);
+      const { base, light, dark } = item.tone;
+      const { buffers } = layer;
+      buffers.aBase.setXYZ(i, base.r, base.g, base.b);
+      buffers.aLight.setXYZ(i, light.r, light.g, light.b);
+      buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
+      buffers.aLook.setXYZ(i, item.brightness, item.flash, item.alpha);
+    });
+  }
   for (const item of clear.items) {
     place(item);
     item.depth = item.at.distanceToSquared(camera.position);
@@ -436,7 +453,7 @@ function flushLayers() {
     clear.buffers.aColor.setXYZ(i, item.color.r, item.color.g, item.color.b);
     clear.buffers.aLook.setXYZ(i, item.alpha, item.fill, item.edge);
   });
-  for (const layer of [solid, clear]) {
+  for (const layer of [solid, fading, clear]) {
     layer.mesh.count = layer.items.length;
     layer.mesh.instanceMatrix.needsUpdate = true;
     for (const buffer of Object.values(layer.buffers)) buffer.needsUpdate = true;
@@ -483,7 +500,7 @@ const turnFrom = new THREE.Quaternion();
 const turned = new THREE.Quaternion();
 /** The turn under way: `tilt` when it leans the hub over rather than turning
  * the cross in the screen. */
-const turn = { t: 1, tilt: false, carry: false };
+const turn = { t: 1, tilt: false, carry: false, steeredFrom: 0 };
 /** 0 when the picture is the game, 1 while V is held. */
 let peek = 0;
 const SCENE_RIGHT = new THREE.Vector3(1, 0, 0);
@@ -530,6 +547,15 @@ function transition(axis, { carry = false } = {}) {
   turn.t = 0;
   turn.tilt = axis !== SCENE_TOWARD;
   turn.carry = carry && turn.tilt;
+  turn.steeredFrom = preview?.result?.view.active ?? game.active;
+}
+
+/** Whether the flat picture shows the stick of `side` with the hub turned
+ * by `q` and `steered` the glass steered: always for a glass across the
+ * screen; in front or behind only when steered, or asked for, or paused. */
+function shownFlat(side, q, steered) {
+  const across = Math.abs(new THREE.Vector3(...normalOf(side)).applyQuaternion(q).z) < 0.5;
+  return across || side === steered || options.depthSticks || options.paused;
 }
 
 /** Where the turn under way ends. */
@@ -620,8 +646,9 @@ function commitPreview(code) {
 
 function cancelPreview() {
   if (!preview) return;
-  preview = null;
+  // From the preview's side, where its top glass was the one steered.
   transition(SCENE_RIGHT, { carry: true });
+  preview = null;
 }
 
 /** A number key: a glass around the cross is turned to the top, as in the
@@ -850,14 +877,26 @@ function staysPut(side, from, to) {
  * be seen, an empty outline and a dark hole if it will hide. */
 function drawSticks(source, q, sticks, { marks = true, solid = false } = {}) {
   const open = solid || !flat();
+  const carried = carrying();
+  const steeredTo = sideOfNormal(dataIn(goalQ(), SCENE_UP));
   for (const { piece, at, spin, base } of sticks) {
     const steered = piece.side === source.active;
     // While a tip carries the sticks, those on its axis stay on the screen
-    // as they were, drawn in the hub's frame from before the tip.
-    const frame = carrying() && staysPut(piece.side, turnFrom, goalQ()) ? tiltFrom : null;
+    // as they were, drawn in the hub's frame from before the tip; one that
+    // the flat picture shows on one side of the tip and not on the other
+    // fades out (going in front of the eye or behind) or in as it turns.
+    const frame = carried && staysPut(piece.side, turnFrom, goalQ()) ? tiltFrom : null;
+    let alpha = 1;
+    if (carried) {
+      const before = shownFlat(piece.side, turnFrom, turn.steeredFrom);
+      const after = shownFlat(piece.side, goalQ(), steeredTo);
+      const e = ease(turn.t);
+      if (before && !after) alpha = 1 - e;
+      else if (!before && after) alpha = e;
+    }
     const cell = (i) => at.clone().addScaledVector(base.clone().applyQuaternion(spin), i - 1);
     if (open || source.inPlane(piece.side)) {
-      piece.colors.forEach((color, i) => pushSolid(cell(i), color, { spin, frame }));
+      piece.colors.forEach((color, i) => pushSolid(cell(i), color, { spin, frame, alpha }));
       continue;
     }
     if (!steered && !options.depthSticks && !options.paused) continue;
