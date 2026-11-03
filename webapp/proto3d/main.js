@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import '@fontsource/exo-2/400.css';
 import '@fontsource/exo-2/700.css';
 import '@fontsource/exo-2/900-italic.css';
@@ -70,7 +71,8 @@ const SETTINGS = [
   { id: 'depthFalls', key: 'KeyY', label: 'Передний и задний стаканы падают сами (медленно)', initial: false },
   { id: 'inactiveFalls', key: 'KeyI', label: 'Фигуры падают и в других стаканах', initial: true },
   { id: 'behind', key: 'KeyB', label: 'Метка: цвет блока за клеткой', initial: true },
-  { id: 'volume', key: 'KeyO', label: 'Объём стаканов: рёбра хаба и номера переднего и заднего', initial: true },
+  { id: 'edges', key: 'KeyO', label: 'Рёбра объёма стаканов', initial: false },
+  { id: 'numbers', key: 'KeyL', label: 'Номера стаканов', initial: false },
   { id: 'lane', key: 'KeyG', label: 'Дорожка до места посадки', initial: true },
   { id: 'gameOverBanner', key: 'KeyK', label: 'Плашка «Конец игры» (при осмотре и с V прячется сама)', initial: true },
 ];
@@ -246,8 +248,7 @@ const drawLabels = () => labels.forEach(({ sprite, canvas: label }, side) => {
 // depth can be squashed flat.
 const MAX_CUBES = N * N * N + 64;
 
-function cubeLayer(material, attributes, renderOrder) {
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
+function cubeLayer(material, attributes, renderOrder, geometry = new THREE.BoxGeometry(1, 1, 1)) {
   const buffers = {};
   for (const [name, size] of Object.entries(attributes)) {
     buffers[name] = new THREE.InstancedBufferAttribute(new Float32Array(MAX_CUBES * size), size);
@@ -264,9 +265,18 @@ function cubeLayer(material, attributes, renderOrder) {
 
 const sharedUniforms = {
   screenUp: { value: new THREE.Vector3(0, 1, 0) },
-  light: { value: new THREE.Vector3(0.2, 0.45, 1).normalize() },
 };
 
+/** How much of a cell a block fills, and how round its edges are: the 2D
+ * sprite is a rounded tile with a narrow gap round it. */
+const TILE = 0.96;
+const ROUND = 0.13;
+
+// The game's block in 3D: a cube with rounded edges. Seen face on it is the
+// 2D sprite — the rounded rim graded from light at the top of the screen
+// through the colour to dark at the bottom, around a flat face of the plain
+// colour with a soft shine across its top. Faces turned from the eye are a
+// little darker, so that the hub reads as solid while it is open.
 const solid = cubeLayer(new THREE.ShaderMaterial({
   uniforms: sharedUniforms,
   vertexShader: /* glsl */ `
@@ -275,61 +285,58 @@ const solid = cubeLayer(new THREE.ShaderMaterial({
     attribute vec3 aLight;
     attribute vec3 aDark;
     attribute vec2 aLook;
-    varying vec3 vLocal;
-    varying vec3 vNormal;
+    varying vec3 vObjectNormal;
+    varying vec3 vFaceNormal;
     varying float vUp;
     varying vec3 vBase;
     varying vec3 vLight;
     varying vec3 vDark;
     varying vec2 vLook;
     void main() {
-      vLocal = position;
       vBase = aBase;
       vLight = aLight;
       vDark = aDark;
       vLook = aLook;
       mat4 model = modelMatrix * instanceMatrix;
       mat3 turn = mat3(model);
-      vNormal = normalize(turn * normal);
+      vObjectNormal = normal;
+      // Which face of the cube this point belongs to, rim included.
+      vec3 a = abs(normal);
+      vec3 face = a.x >= a.y && a.x >= a.z ? vec3(sign(normal.x), 0.0, 0.0)
+        : a.y >= a.z ? vec3(0.0, sign(normal.y), 0.0) : vec3(0.0, 0.0, sign(normal.z));
+      vFaceNormal = normalize(turn * face);
       // How far up the screen this point is from the cube's centre.
       vUp = dot(turn * position, screenUp) / length(turn[0]);
       gl_Position = projectionMatrix * viewMatrix * model * vec4(position, 1.0);
     }`,
   fragmentShader: /* glsl */ `
-    uniform vec3 light;
-    varying vec3 vLocal;
-    varying vec3 vNormal;
+    varying vec3 vObjectNormal;
+    varying vec3 vFaceNormal;
     varying float vUp;
     varying vec3 vBase;
     varying vec3 vLight;
     varying vec3 vDark;
     varying vec2 vLook; // brightness, white flash
     void main() {
-      vec3 a = abs(vLocal);
-      // The two coordinates across the face this point is on.
-      vec2 uv = a.x >= a.y && a.x >= a.z ? a.yz : a.y >= a.z ? a.xz : a.xy;
-      // The flat face: a rounded square set into the bevel.
-      const float inset = 0.13;
-      const float radius = 0.07;
-      vec2 q = uv - vec2(0.5 - inset - radius);
-      float sdf = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
-      float aa = fwidth(sdf) + 1e-4;
-      float face = 1.0 - smoothstep(-aa, aa, sdf);
-      // 0 at the top of the block on screen, 1 at its bottom.
-      float y = clamp(0.5 - vUp * 0.98, 0.0, 1.0);
-      vec3 bevel = y < 0.3 ? mix(vLight, vBase, y / 0.3) : mix(vBase, vDark, (y - 0.3) / 0.7);
-      float fy = clamp((y - inset) / (1.0 - 2.0 * inset), 0.0, 1.0);
-      vec3 plain = mix(vBase, vec3(1.0), 0.3 * max(0.0, 1.0 - fy * 2.0));
-      vec3 colour = mix(bevel, plain, face);
-      // A face turned away from the light darkens, so that a leaning tower
-      // of blocks reads as one.
-      colour *= (0.5 + 0.5 * max(dot(normalize(vNormal), light), 0.0)) * vLook.x;
+      vec3 n = normalize(vObjectNormal);
+      // 1 on the flat of a face, 0 on its rounded rim.
+      float flatness = max(max(abs(n.x), abs(n.y)), abs(n.z));
+      float onFace = smoothstep(0.985, 0.999, flatness);
+      // The rim: light at the top of the screen, the colour, dark at the bottom.
+      float y = clamp(0.5 - vUp, 0.0, 1.0);
+      vec3 rim = y < 0.3 ? mix(vLight, vBase, y / 0.3) : mix(vBase, vDark, (y - 0.3) / 0.7);
+      // The face: the plain colour, a shine across its top where it looks at the eye.
+      float toEye = max(vFaceNormal.z, 0.0);
+      float fy = clamp((0.37 - vUp) / 0.74, 0.0, 1.0);
+      vec3 face = mix(vBase, vec3(1.0), 0.34 * max(0.0, 1.0 - fy * 2.0) * toEye);
+      vec3 colour = mix(rim, face, onFace);
+      colour *= clamp(0.72 + 0.28 * toEye + 0.12 * vFaceNormal.y, 0.0, 1.0) * vLook.x;
       colour = mix(colour, vec3(1.0), vLook.y);
       gl_FragColor = vec4(colour, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`,
-}), { aBase: 3, aLight: 3, aDark: 3, aLook: 2 }, 1);
+}), { aBase: 3, aLight: 3, aDark: 3, aLook: 2 }, 1, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
 
 /** Outlines and see-through cubes: the landing spot, the aiming lane, the
  * sticks in front and behind. Far to near. */
@@ -368,7 +375,7 @@ const clear = cubeLayer(new THREE.ShaderMaterial({
  * while the picture is flat: the sticks in front of and behind the screen
  * are drawn over and under it. `nudge` shifts it on the screen, for the
  * small marks in the corners of cells. */
-function pushSolid(at, color, { brightness = 1, flash = 0, size = 0.91, lift = 0, nudge = null } = {}) {
+function pushSolid(at, color, { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null } = {}) {
   solid.items.push({ at: at.clone(), size: [size, size, size], lift, nudge, tone: TONES[color], brightness, flash });
 }
 
@@ -440,6 +447,22 @@ function resize() {
   const tan = half / (DISTANCE - H) / Math.min(1, camera.aspect);
   camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tan));
   camera.updateProjectionMatrix();
+  perspective.copy(camera.projectionMatrix);
+  // The same size at the cross's own plane, with nothing seen from the side.
+  const high = DISTANCE * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const wide = high * camera.aspect;
+  orthographic.makeOrthographic(-wide, wide, high, -high, camera.near, camera.far);
+}
+
+/** The flat picture is drawn straight on, like the 2D game — no block shows
+ * a side, however far it is from the middle. As the hub opens up the eye
+ * eases into perspective; the cross's own plane keeps its size throughout. */
+const perspective = new THREE.Matrix4();
+const orthographic = new THREE.Matrix4();
+function project(opened) {
+  const e = camera.projectionMatrix.elements;
+  for (let i = 0; i < 16; i++) e[i] = orthographic.elements[i] + (perspective.elements[i] - orthographic.elements[i]) * opened;
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 }
 window.addEventListener('resize', resize);
 
@@ -850,12 +873,12 @@ function buildBlocks(dt) {
   hub.forEachBlock((p, color, index) => {
     if (falling.has(index)) return;
     let flash = 0;
-    let size = 0.91;
+    let size = TILE;
     if (matched?.has(index)) {
       if (phase === 'matching') flash = 0.25 + 0.4 * Math.sin(progress * Math.PI);
       if (phase === 'clearing') {
         flash = 0.6;
-        size = 0.91 * (1 - progress);
+        size = TILE * (1 - progress);
       }
     }
     const landed = flashes.get(index);
@@ -1050,16 +1073,16 @@ function frame(now) {
   cross.traverse((object) => {
     if (object.material) object.material.opacity = object.material.userData.opacity * shown;
   });
-  // With the volume setting off nothing but V hints at the glasses in front
-  // and behind: it looks like the 2D game, and they are kept in mind.
-  const volume = options.volume || opened > 0.02;
+  project(opened);
+  // The edges of the hub and the glasses' numbers only when asked for: with
+  // them off it looks like the 2D game, and the other glasses are kept in
+  // mind.
   hubLines.forEach((line) => {
-    line.visible = volume;
+    line.visible = options.edges;
     line.material.opacity = 0.1 + 0.25 * opened;
   });
   labels.forEach(({ sprite }, side) => {
-    const alongSight = Math.abs(new THREE.Vector3(...normalOf(side)).applyQuaternion(turned).z) > 0.5;
-    sprite.visible = volume || !alongSight;
+    sprite.visible = options.numbers;
     sprite.material.opacity = side === game.active ? 0.95 : 0.4;
   });
   // The game-over banner keeps out of the way of a look around.

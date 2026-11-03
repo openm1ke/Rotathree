@@ -66,7 +66,15 @@ the game there with no warning.
 After review the rules follow what the screen shows.
 
 - **The picture.** The hub seen along the line of sight: each cell shows the
-  nearest block behind it, drawn solid as in 2D. Nothing is see-through. A
+  nearest block behind it, drawn solid as in 2D. Nothing is see-through.
+  The flat picture is drawn straight on (an orthographic eye), so no block
+  shows a side however far it is from the middle; the eye eases into
+  perspective only while the hub is open.
+- **The blocks** are cubes with rounded edges. Face on, each one is the 2D
+  sprite: a rounded rim graded from light at the top of the screen to dark at
+  the bottom, a flat face of the plain colour with a shine across its top,
+  and a narrow gap between tiles. Open, they read as solid rounded cubes,
+  faces turned from the eye a little darker. A
   small square in a corner of a cell gives the colour of the block behind it:
   what a pop there would show (`01`).
 - **Sticks of the side glasses** live in the middle layer and stop on whatever
@@ -130,9 +138,9 @@ After review the rules follow what the screen shows.
   - let those glasses fall on their own, every 6 s (Y), off;
   - the other glasses dropping on their own (I), on;
   - the colour-behind marks (B), on;
-  - the volume of the glasses (O), on — off hides the edges of the hub and
-    the numbers of the glasses in front and behind, so that it looks like the
-    2D game and they are kept in mind (`15`);
+  - the edges of the hub (O) and the glasses' numbers (L), both off: it
+    looks like the 2D game, and the other glasses are kept in mind (`15` has
+    them off);
   - the aiming lane (G), on;
   - the game-over banner (K), on.
 

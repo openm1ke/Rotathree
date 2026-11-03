@@ -167,12 +167,10 @@ try {
   await key('KeyP');
   await settled();
 
-  // The volume setting off: no edges of the hub, no numbers of the glasses
-  // in front and behind — it looks like the 2D game.
-  await key('KeyO');
+  // No edges of the hub and no numbers of the glasses (the default): it
+  // looks like the 2D game.
   await wait(200);
   await shot('15-flat-2d');
-  await key('KeyO');
 
   // Drop here and there, with every glass taking turns, until something
   // matches; freeze on the flash.
