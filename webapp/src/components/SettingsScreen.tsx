@@ -20,8 +20,9 @@ import {
   type ActionGroup,
 } from '../input/bindings';
 import { defaultHandling } from '../input/keyboard';
-import { defaultSettings, type CubeOptions, type Palettes, type Settings, type ExplosionStyle } from '../services/storage';
+import { defaultSettings, type Palettes, type Settings, type ExplosionStyle } from '../services/storage';
 import { Button, Chip, Choice, Screen, Slider, Toggle } from './ui';
+import { CubeLookToggles } from './CubeLookToggles';
 import { useScreenKeys } from './nav';
 import { useTouchControls } from '../input/touch';
 import { CUBE_PADS, DEFAULT_PADS, PAD_SLOTS, SLOT_LABELS, type PadSlot } from '../input/pads';
@@ -40,17 +41,6 @@ const TABS: readonly (readonly [Tab, string])[] = [
 
 const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game', 'cube'];
 
-/** What Cube's picture shows besides the game, each one a switch. */
-const CUBE_LOOK: readonly (readonly [Exclude<keyof CubeOptions, 'colours' | 'width' | 'arm' | 'depthFalls'>, string])[] = [
-  ['nextPiece', 'Следующие фигуры над стаканами'],
-  ['depthHint', 'Линии объёма вокруг креста'],
-  ['behind', 'Метка: цвет блока за клеткой'],
-  ['lane', 'Дорожка до места посадки'],
-  ['depthSticks', 'Фигуры спереди и сзади, которыми не управляете'],
-  ['edges', 'Рёбра стаканов и во время игры'],
-  ['numbers', 'Номера стаканов'],
-];
-
 interface Props {
   settings: Settings;
   /** False when the browser refuses to keep the settings. */
@@ -59,26 +49,28 @@ interface Props {
   overlay?: boolean;
   /** False while another layer takes the keyboard. */
   active: boolean;
+  /** Opened over a game of Cube: its look comes first, and its pads. */
+  cube?: boolean;
   onChange: (next: Settings) => void;
   onBack: () => void;
 }
 
 const newId = (): string => `custom-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-export function SettingsScreen({ settings, stored, overlay, active, onChange, onBack }: Props) {
+export function SettingsScreen({ settings, stored, overlay, active, cube = false, onChange, onBack }: Props) {
   const { t } = useI18n();
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
-  const [tab, setTab] = useState<Tab>('controls');
+  const [tab, setTab] = useState<Tab>(cube ? 'interface' : 'controls');
   /** The button the controls tab is editing, outlined in the preview. */
   const [editSide, setEditSide] = useState<PadSide>('left');
   const [editSlot, setEditSlot] = useState<PadSlot>('up');
   /** Which game's pad buttons are being laid out: the flat game's or Cube's.
    * Where the pads are and how they look is the same for both. */
-  const [padGame, setPadGame] = useState<'flat' | 'cube'>('flat');
+  const [padGame, setPadGame] = useState<'flat' | 'cube'>(cube ? 'cube' : 'flat');
   const padsKey = padGame === 'cube' ? 'cubePads' : 'pads';
   const editedPads = settings[padsKey];
   /** The key slot waiting for its new key. */
@@ -440,9 +432,18 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
         </>
       );
       break;
-    case 'interface':
+    case 'interface': {
+      // Cube's switches: over its game, the first thing on the tab.
+      const cubeLook = (
+        <section className="group">
+          <h3><T>Куб</T></h3>
+          <p className="hint"><T>Что показывать в режиме «Куб»</T></p>
+          <CubeLookToggles cube={settings.cube} onChange={(next) => onChange({ ...settings, cube: next })} />
+        </section>
+      );
       body = (
         <>
+          {cube && cubeLook}
           <LanguagePicker value={settings.language} onChange={(language) => onChange({ ...settings, language })} />
           <section className="group">
             <h3><T>Игровое поле</T></h3>
@@ -486,20 +487,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               onChange={(percent) => onChange({ ...settings, hud: { ...settings.hud, opacity: percent / 100 } })}
             />
           </section>
-          <section className="group">
-            <h3><T>Куб</T></h3>
-            <p className="hint"><T>Что показывать поверх креста в режиме «Куб»</T></p>
-            {CUBE_LOOK.map(([key, label]) => (
-              <Toggle
-                key={key}
-                label={label}
-                value={settings.cube[key]}
-                on="показывать"
-                off="скрыть"
-                onChange={(value) => onChange({ ...settings, cube: { ...settings.cube, [key]: value } })}
-              />
-            ))}
-          </section>
+          {!cube && cubeLook}
           <div className="form__start">
             <Button ghost onClick={() => onChange({
               ...settings,
@@ -511,6 +499,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
                 width: settings.cube.width,
                 arm: settings.cube.arm,
                 depthFalls: settings.cube.depthFalls,
+                inactiveFalls: settings.cube.inactiveFalls,
               },
             })}><T>
               Сбросить интерфейс
@@ -519,6 +508,7 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
         </>
       );
       break;
+    }
     case 'sound':
       body = (
         <>

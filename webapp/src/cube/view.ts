@@ -45,6 +45,12 @@ export interface CubeLook {
   /** Faint lines round the cross where the hub's depth would show, were it
    * drawn in perspective: a reminder that the cross is a cube. */
   depthHint: boolean;
+  /** The glasses' edges while the hub is open. */
+  volumeEdges: boolean;
+  /** In the open, a stick hidden behind blocks shows through them. */
+  xray: boolean;
+  /** The faint lines between the cells of the cross. */
+  grid: boolean;
 }
 
 /** Which way the hub is turned to be looked at, while paused. */
@@ -275,7 +281,18 @@ const CLEAR_FRAGMENT = /* glsl */ `
  * the hub looks like as it tips. The screen owns the game loop and calls
  * `frame` once per animation frame. */
 export class CubeView {
-  look: CubeLook = { depthSticks: false, behind: true, edges: false, numbers: false, lane: true, nextPiece: true, depthHint: true };
+  look: CubeLook = {
+    depthSticks: false,
+    behind: true,
+    edges: false,
+    numbers: false,
+    lane: true,
+    nextPiece: true,
+    depthHint: true,
+    volumeEdges: true,
+    xray: true,
+    grid: true,
+  };
   /** How long the cross takes to turn in the screen; 0 turns it at once. */
   turnSeconds = 0.36;
   /** How long the hub takes to lean over; 0 tips it at once. */
@@ -349,6 +366,8 @@ export class CubeView {
   private readonly peekTurn = new THREE.Quaternion();
   /** The outlines of the cross's four arms, the one on top first. */
   private readonly armOutlines: LineSegments2[] = [];
+  /** The lines between the cells, for `look.grid`. */
+  private readonly cellGrids: LineSegments2[] = [];
   /** The lines of `look.depthHint`, turning with the cross. */
   private readonly hintGroup = new THREE.Group();
   /** The canvas size, to fit the cross to it again when the boxes of the
@@ -474,14 +493,14 @@ export class CubeView {
       const grid: number[] = [];
       for (let i = 1; i < centre; i++) grid.push(-h + i, h, z, -h + i, reach, z);
       for (let j = 1; j < arm; j++) grid.push(-h, h + j, z, h, h + j, z);
-      this.makeLines(grid, group, { opacity: 0.045 });
+      this.cellGrids.push(this.makeLines(grid, group, { opacity: 0.045 }));
       const outline = [-h, h, z, -h, reach, z, -h, reach, z, h, reach, z, h, reach, z, h, h, z];
       return this.makeLines(outline, group, { opacity: 0.16, width: 1.5 });
     });
     this.makePane(0, 0, centre, centre, 0.05, this.crossGroup);
     const grid: number[] = [];
     for (let i = 1; i < centre; i++) grid.push(-h + i, -h, z, -h + i, h, z, -h, -h + i, z, h, -h + i, z);
-    this.makeLines(grid, this.crossGroup, { opacity: 0.07 });
+    this.cellGrids.push(this.makeLines(grid, this.crossGroup, { opacity: 0.07 }));
     this.makeLines([-h, -h, z, h, -h, z, h, -h, z, h, h, z, h, h, z, -h, h, z, -h, h, z, -h, -h, z], this.crossGroup, {
       opacity: 0.22,
       width: 1.5,
@@ -1096,19 +1115,22 @@ export class CubeView {
       this.fit();
     }
     this.project(opened);
-    this.xrayOpacity.value = XRAY_OPACITY * opened;
+    this.xrayOpacity.value = this.look.xray ? XRAY_OPACITY * opened : 0;
     // The edges of the hub show the glasses' bounds whenever the hub is
     // looked at in the open; while playing on the flat picture, only when
     // asked for: with them off it looks like the flat game, and the other
     // glasses are kept in mind. The numbers only when asked for.
     // They come and go slowly, and stay while the hub turns: a turn in the
     // open never drops them all at once.
-    this.edgesShown += ((this.peeking || this.inspect ? 1 : 0) - this.edgesShown) * (1 - Math.exp(-dt * 4));
-    const edges = Math.max(this.look.edges ? 0.08 + 0.16 * opened : 0, EDGE_OPACITY * Math.max(ease(this.edgesShown), opened));
+    const { volumeEdges } = this.look;
+    this.edgesShown += ((volumeEdges && (this.peeking || this.inspect) ? 1 : 0) - this.edgesShown) * (1 - Math.exp(-dt * 4));
+    const open = EDGE_OPACITY * Math.max(ease(this.edgesShown), volumeEdges ? opened : 0);
+    const edges = Math.max(this.look.edges ? 0.08 + 0.16 * opened : 0, open);
     for (const line of this.hubLines) {
       line.visible = edges > 0.01;
       line.material.opacity = edges;
     }
+    for (const grid of this.cellGrids) grid.visible = this.look.grid;
     this.labels.forEach(({ sprite }, side) => {
       sprite.visible = this.look.numbers;
       sprite.material.opacity = side === game.active ? 0.95 : 0.4;

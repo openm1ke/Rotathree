@@ -98,8 +98,8 @@ test('quick presses turn the cross all the way round the way they were pressed, 
   await page.evaluate(() => {
     (window as unknown as { __rotathreeCube: { game: CubeGame } }).__rotathreeCube.game.stepsHeld = true;
   });
-  // → clockwise, ← counterclockwise, as the arrows and the pads' marks say.
-  for (const [code, way] of [['ArrowLeft', 1], ['ArrowRight', -1]] as const) {
+  // ← clockwise, → counterclockwise, as in the flat game.
+  for (const [code, way] of [['ArrowLeft', -1], ['ArrowRight', 1]] as const) {
     const turned = await page.evaluate(async ({ code }) => {
       // The view's insides, as a development build lets them be read.
       type Turning = { pieceViews: Map<number, { at: { clone(): { applyQuaternion(q: unknown): { x: number; y: number } }; length(): number } }>; hubGroup: { quaternion: unknown }; crossGroup: { rotation: { z: number } } };
@@ -191,12 +191,21 @@ test('a game left for the menu is kept through a reload, goes on paused, and a n
   await expect.poll(endless).not.toBe(kept);
 });
 
-test('the campaign opens its levels one by one, goes on to the next, and keeps a level left unfinished', async ({ page }) => {
-  await openCube(page);
-  await expect(page.locator('.cube-campaign')).toContainText('уровень 1 из 8 · Первые линии');
-  await page.getByRole('button', { name: 'Уровни', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Уровень 2, цель 2000', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Уровень 1, цель 1500', exact: true }).click();
+test('the campaign holds Cube\'s levels after the flat ones: open one by one, on to the next, one left unfinished kept', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('rotathree.tutorial.v1', 'true');
+    localStorage.setItem('rotathree.cube-tutorial.v1', 'true');
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /Кампания/ }).click();
+  const parts = page.locator('.campaign-part');
+  await expect(parts).toHaveCount(2);
+  await expect(parts.first().getByRole('heading', { name: 'Стаканы · 2D' })).toBeVisible();
+  const cubePart = parts.last();
+  await expect(cubePart.getByRole('heading', { name: 'Куб · 3D' })).toBeVisible();
+  await expect(cubePart).toContainText('пройдено 0 из 8');
+  await expect(cubePart.getByRole('button', { name: 'Уровень 2, цель 2000', exact: true })).toBeDisabled();
+  await cubePart.getByRole('button', { name: 'Уровень 1, цель 1500', exact: true }).click();
   await expect(page.getByRole('progressbar', { name: 'Прогресс уровня 1' })).toBeVisible();
   await expect(page.locator('.game__readout')).toContainText('Уровень 1 / 8');
   await expect.poll(() => cube(page, (game) => game.config.numberOfColors)).toBe(3);
@@ -217,11 +226,32 @@ test('the campaign opens its levels one by one, goes on to the next, and keeps a
   await expect.poll(() => cube(page, (game) => game.phase)).toBe('playing');
   await page.keyboard.press('KeyP');
   await page.getByRole('button', { name: 'К уровням', exact: true }).click();
+  await expect(cubePart).toContainText('пройдено 1 из 8');
   await expect(page.locator('.cube-campaign')).toContainText('Уровень 2 не закончен');
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Пауза' })).toBeVisible();
   expect(await cube(page, (game) => [game.placed, game.config.numberOfColors])).toEqual([1, 4]);
   await expect(page.locator('.game__readout')).toContainText('Уровень 2 / 8');
+});
+
+test('Cube\'s screen turns off what the picture shows, and its settings over a game open on them', async ({ page }) => {
+  await openCube(page);
+  const hide = (label: string) =>
+    page.locator('.row').filter({ hasText: label }).getByRole('button', { name: 'скрыть', exact: true }).click();
+  await hide('Спрятанные фигуры сквозь блоки в объёме');
+  await hide('Рёбра стаканов в объёме (3D-сетка)');
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.settings.v2')!).cube))
+    .toMatchObject({ xray: false, volumeEdges: false });
+  await play(page);
+  expect(await page.evaluate(() => {
+    const { look } = (window as unknown as { __rotathreeCube: { view: { look: Record<string, boolean> } } }).__rotathreeCube.view;
+    return [look.xray, look.volumeEdges];
+  })).toEqual([false, false]);
+  await page.keyboard.press('KeyP');
+  await page.getByRole('dialog', { name: 'Пауза', exact: true }).getByRole('button', { name: 'Настройки', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Интерфейс' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.overlay--settings section.group').first().getByRole('heading', { name: 'Куб' })).toBeVisible();
 });
 
 test('a phone plays Cube with its own pads', async ({ page }) => {
@@ -277,6 +307,10 @@ test.describe('in English', () => {
     await page.keyboard.press('KeyP');
     await english();
     await page.getByRole('button', { name: 'Look around the cube', exact: true }).click();
+    await english();
+    await page.goto('/');
+    await page.getByRole('button', { name: /Campaign/ }).click();
+    await expect(page.getByRole('heading', { name: 'Cube · 3D' })).toBeVisible();
     await english();
   });
 });

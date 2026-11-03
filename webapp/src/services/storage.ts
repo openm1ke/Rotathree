@@ -97,6 +97,9 @@ export interface CubeOptions {
   depthSticks: boolean;
   /** Let the glasses in front and behind drop their sticks by themselves. */
   depthFalls: boolean;
+  /** Let the sticks of the glasses not steered fall at all (the endless
+   * game; the campaign's levels always do). */
+  inactiveFalls: boolean;
   /** A mark in a corner of a cell with the colour of the block behind it. */
   behind: boolean;
   /** The edges of the hub's glasses. */
@@ -109,6 +112,12 @@ export interface CubeOptions {
   nextPiece: boolean;
   /** Faint lines of the cube's depth round the cross. */
   depthHint: boolean;
+  /** The glasses' edges while the cube is looked at in the open. */
+  volumeEdges: boolean;
+  /** In the open, a stick hidden behind blocks shows through them. */
+  xray: boolean;
+  /** The faint lines between the cells of the cross. */
+  grid: boolean;
 }
 
 export const CUBE_LIMITS = { width: [5, 12], arm: [4, 12] } as const;
@@ -119,12 +128,16 @@ export const DEFAULT_CUBE: CubeOptions = {
   arm: 9,
   depthSticks: false,
   depthFalls: false,
+  inactiveFalls: true,
   behind: true,
   edges: false,
   numbers: false,
   lane: true,
   nextPiece: true,
   depthHint: true,
+  volumeEdges: true,
+  xray: true,
+  grid: true,
 };
 
 export const BUILTIN_PALETTES: PaletteSet[] = [
@@ -257,6 +270,10 @@ export function sanitizeSettings(raw: unknown): Settings {
       lane: flag('lane'),
       nextPiece: flag('nextPiece'),
       depthHint: flag('depthHint'),
+      volumeEdges: flag('volumeEdges'),
+      xray: flag('xray'),
+      grid: flag('grid'),
+      inactiveFalls: flag('inactiveFalls'),
     },
   };
 }

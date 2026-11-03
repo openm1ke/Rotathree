@@ -4,7 +4,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { CampaignScreen } from './components/CampaignScreen';
 import { CustomScreen } from './components/CustomScreen';
 import { CubeSetupScreen } from './components/CubeSetupScreen';
-import { CubeCampaignScreen } from './components/CubeCampaignScreen';
 import { GameScreen } from './components/GameScreen';
 import { ResumeScreen } from './components/ResumeScreen';
 import { MainMenu, type MenuTarget } from './components/MainMenu';
@@ -64,10 +63,10 @@ type CubeThen = 'game' | 'setup' | number;
 type Route =
   | { name: 'home' }
   | { name: 'resume' }
-  | { name: 'campaign' }
+  /** `cube`: opened from a level of Cube, whose part is shown first. */
+  | { name: 'campaign'; cube?: boolean }
   | { name: 'custom' }
   | { name: 'cube' }
-  | { name: 'cubeLevels' }
   /** `level`: a level of the campaign, rather than the endless game. `then`:
    * where the tutorial leads when it is skipped — into the game or the level
    * it came before, or back to Cube's screen. */
@@ -424,9 +423,14 @@ export default function App() {
       screen = (
         <CampaignScreen
           progress={progress}
+          cubeProgress={cubeProgress}
+          cubeSaved={cubeRuns.campaign}
           colours={activeColours}
           onStart={(level) => start({ mode: 'campaign', level }, 'campaign')}
           onInsane={() => start({ mode: 'insane' }, 'campaign')}
+          onCubeStart={(level) => startCube(level)}
+          onCubeResume={() => resumeCube('campaign')}
+          cube={route.cube}
           onBack={home}
           active={!settingsOpen}
         />
@@ -454,23 +458,8 @@ export default function App() {
           onStart={() => startCube()}
           saved={cubeRuns.endless}
           onResume={() => resumeCube('endless')}
-          progress={cubeProgress}
-          onCampaign={() => setRoute({ name: 'cubeLevels' })}
           onTutorial={() => openCubeTutorial('setup')}
           onBack={home}
-          active={!settingsOpen}
-        />
-      );
-      break;
-    case 'cubeLevels':
-      screen = (
-        <CubeCampaignScreen
-          progress={cubeProgress}
-          colours={activeColours}
-          saved={cubeRuns.campaign}
-          onResume={() => resumeCube('campaign')}
-          onStart={(level) => startCube(level)}
-          onBack={() => setRoute({ name: 'cube' })}
           active={!settingsOpen}
         />
       );
@@ -496,7 +485,7 @@ export default function App() {
             onProgress={updateCubeProgress}
             onLevels={() => {
               setSettingsOpen(false);
-              setRoute({ name: 'cubeLevels' });
+              setRoute({ name: 'campaign', cube: true });
             }}
             onNextLevel={(level) => playCube(level)}
             restore={route.restore}
@@ -585,6 +574,7 @@ export default function App() {
         <Overlay label="Настройки" className="overlay--settings" onDismiss={() => setSettingsOpen(false)}>
           <SettingsScreen
             overlay
+            cube={route.name === 'cubePlay'}
             settings={settings}
             stored={stored}
             active

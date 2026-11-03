@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
-import { useRef, type ReactNode } from 'react';
+import { useRef } from 'react';
 import { CAMPAIGN_LAST } from '../game/campaign';
 import { CUBE_CAMPAIGN_LAST } from '../cube/campaign';
 import type { Progress } from '../services/storage';
@@ -36,27 +36,36 @@ const BLUE = 1;
 const YELLOW = 2;
 const GREEN = 3;
 const VIOLET = 4;
+const ORANGE = 6;
 
 /** A picture made of the game's own blocks: [column, row, colour] on a
- * three-by-three grid, `faint` ones drawn see-through. */
-type Blocks = readonly (readonly [number, number, number, boolean?])[];
+ * three-by-three grid. A `faint` one is drawn see-through; a `track` is a
+ * thin line across its row, under the blocks. */
+type Blocks = readonly (readonly [number, number, number, ('faint' | 'track')?])[];
 
-const PICTURES: Record<'campaign' | 'cube' | 'custom' | 'tutorial' | 'statistics', Blocks> = {
+const PICTURES: Record<'resume' | 'campaign' | 'cube' | 'custom' | 'tutorial' | 'statistics' | 'settings', Blocks> = {
+  // A play sign, stacked.
+  resume: [[0, 0, GREEN], [0, 1, GREEN], [0, 2, GREEN], [1, 0.5, GREEN], [1, 1.5, GREEN], [2, 1, GREEN]],
   // Three in a row, the game in one picture.
   campaign: [[0, 2, RED], [1, 2, RED], [2, 2, RED], [1, 1, BLUE]],
   // A cube: its front, and its back showing behind.
-  cube: [[1, 0, BLUE, true], [2, 0, BLUE, true], [2, 1, BLUE, true], [0, 1, BLUE], [1, 1, BLUE], [0, 2, BLUE], [1, 2, BLUE]],
+  cube: [[1, 0, BLUE, 'faint'], [2, 0, BLUE, 'faint'], [2, 1, BLUE, 'faint'], [0, 1, BLUE], [1, 1, BLUE], [0, 2, BLUE], [1, 2, BLUE]],
   // A stick of three colours, as the player sets them.
   custom: [[1, 0, YELLOW], [1, 1, GREEN], [1, 2, VIOLET]],
   // A stick coming down into the gap that makes the line.
-  tutorial: [[1, 0, GREEN], [0, 2, GREEN], [2, 2, GREEN], [1, 2, GREEN, true]],
+  tutorial: [[1, 0, GREEN], [0, 2, GREEN], [2, 2, GREEN], [1, 2, GREEN, 'faint']],
   // Columns growing: the records.
   statistics: [[0, 2, VIOLET], [1, 2, VIOLET], [1, 1, VIOLET], [2, 2, VIOLET], [2, 1, VIOLET], [2, 0, VIOLET]],
+  // Three sliders, each set somewhere else.
+  settings: [
+    [0, 0, ORANGE, 'track'], [0, 1, ORANGE, 'track'], [0, 2, ORANGE, 'track'],
+    [2, 0, ORANGE], [0, 1, ORANGE], [1, 2, ORANGE],
+  ],
 };
 
 interface Props {
   progress: Progress;
-  /** How far Cube's campaign has been played. */
+  /** How far Cube's levels, the campaign's second part, have been played. */
   cubeProgress?: Progress;
   onOpen: (target: MenuTarget) => void;
   /** False while the settings are open over the menu. */
@@ -80,6 +89,13 @@ export function MainMenu({ progress, cubeProgress, onOpen, active, savedRuns, cu
   const saved = (savedRuns && Object.keys(savedRuns).length > 0) || cubeSaved;
   const levels = CAMPAIGN_LAST + 1;
   const cubeLevels = CUBE_CAMPAIGN_LAST + 1;
+  const cubePassed = cubeProgress ? (cubeProgress.completed ? cubeLevels : cubeProgress.unlocked) : 0;
+  // The flat levels first; once they are passed, Cube's.
+  const campaign = !progress.completed
+    ? `уровень ${progress.unlocked + 1} из ${levels}`
+    : cubePassed < cubeLevels
+      ? `куб: уровень ${cubePassed + 1} из ${cubeLevels}`
+      : 'пройдена · Кошмар открыт';
   return (
     <main className={`home ${touch ? 'home--touch' : ''}`} ref={rootRef}>
       <div className="home__drift" aria-hidden="true">
@@ -108,13 +124,13 @@ export function MainMenu({ progress, cubeProgress, onOpen, active, savedRuns, cu
 
         <nav className="home__nav" aria-label={t('Главное меню')}>
           {saved && (
-            <Tile wide accent title="Продолжить" caption="Сохранённые игры" picture={<Play />} onClick={onResume} />
+            <Tile wide accent title="Продолжить" caption="Сохранённые игры" picture={PICTURES.resume} onClick={onResume} />
           )}
           <Tile
             title="Кампания"
-            caption={progress.completed ? 'пройдена · Кошмар открыт' : `уровень ${progress.unlocked + 1} из ${levels}`}
+            caption={campaign}
             picture={PICTURES.campaign}
-            done={progress.completed ? 1 : progress.unlocked / levels}
+            done={((progress.completed ? levels : progress.unlocked) + cubePassed) / (levels + cubeLevels)}
             autoFocus={!saved}
             onClick={() => onOpen('campaign')}
           />
@@ -122,7 +138,6 @@ export function MainMenu({ progress, cubeProgress, onOpen, active, savedRuns, cu
             title="Куб"
             caption="Шесть стаканов в 3D"
             picture={PICTURES.cube}
-            done={cubeProgress && (cubeProgress.completed ? 1 : cubeProgress.unlocked / cubeLevels)}
             onClick={() => onOpen('cube')}
           />
           <Tile title="Кастом" caption="Ваши правила" picture={PICTURES.custom} onClick={() => onOpen('custom')} />
@@ -136,7 +151,7 @@ export function MainMenu({ progress, cubeProgress, onOpen, active, savedRuns, cu
           )}
           <div className="home__more">
             <Tile small title="Статистика" picture={PICTURES.statistics} onClick={() => onOpen('statistics')} />
-            <Tile small title="Настройки" picture={<Gear />} onClick={() => onOpen('settings')} />
+            <Tile small title="Настройки" picture={PICTURES.settings} onClick={() => onOpen('settings')} />
           </div>
         </nav>
 
@@ -157,7 +172,7 @@ export function MainMenu({ progress, cubeProgress, onOpen, active, savedRuns, cu
 function Tile({ title, caption, picture, done, wide = false, small = false, accent = false, autoFocus = false, onClick }: {
   title: string;
   caption?: string;
-  picture: Blocks | ReactNode;
+  picture: Blocks;
   done?: number;
   wide?: boolean;
   small?: boolean;
@@ -169,7 +184,7 @@ function Tile({ title, caption, picture, done, wide = false, small = false, acce
   return (
     <button type="button" data-nav className={`navitem navitem--tile ${kind}`} autoFocus={autoFocus} onClick={onClick}>
       <span className="navitem__picture" aria-hidden="true">
-        {Array.isArray(picture) ? <BlockPicture blocks={picture as Blocks} /> : picture}
+        <BlockPicture blocks={picture} />
       </span>
       <span className="navitem__text">
         <span className="navitem__title"><T>{title}</T></span>
@@ -185,30 +200,13 @@ function Tile({ title, caption, picture, done, wide = false, small = false, acce
 function BlockPicture({ blocks }: { blocks: Blocks }) {
   return (
     <span className="blocks">
-      {blocks.map(([x, y, colour, faint], i) => (
+      {blocks.map(([x, y, colour, look], i) => (
         <i
           key={i}
-          className={faint ? 'blocks__faint' : undefined}
+          className={look && `blocks__${look}`}
           style={{ left: `${x * 34}%`, top: `${y * 34}%`, ['--block' as string]: COLOURS[colour] }}
         />
       ))}
     </span>
-  );
-}
-
-function Play() {
-  return (
-    <svg className="navitem__icon navitem__icon--play" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
-    </svg>
-  );
-}
-
-function Gear() {
-  return (
-    <svg className="navitem__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="m9 3-.6 2.3-1.5.9-2.3-.6-3 5.2 1.7 1.7v1.8l-1.7 1.7 3 5.2 2.3-.6 1.5.9.6 2.3h6l.6-2.3 1.5-.9 2.3.6 3-5.2-1.7-1.7v-1.8l1.7-1.7-3-5.2-2.3.6-1.5-.9L15 3Z" transform="translate(1 0) scale(.9)" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
   );
 }

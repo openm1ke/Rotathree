@@ -3,10 +3,10 @@ import { useRef } from 'react';
 import { ACTIONS, type Action } from '../input/bindings';
 import { PAD_SLOTS, type PadSlot } from '../input/pads';
 import { useTouchControls } from '../input/touch';
-import { CUBE_LIMITS, type CubeOptions, type Progress, type Settings, type Stats } from '../services/storage';
-import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST } from '../cube/campaign';
+import { CUBE_LIMITS, type CubeOptions, type Settings, type Stats } from '../services/storage';
 import { formatCells, formatDuration, formatNumber, formatPoints } from './format';
 import type { CubeSave } from '../cube/save';
+import { CubeLookToggles } from './CubeLookToggles';
 import { Keys } from './Keycap';
 import { Button, Choice, Screen, Toggle } from './ui';
 import { useScreenKeys } from './nav';
@@ -20,9 +20,6 @@ interface Props {
   /** The game left unfinished, to go on with instead of a new one. */
   saved?: CubeSave | null;
   onResume?: () => void;
-  /** How far Cube's campaign has been played; opens its levels. */
-  progress: Progress;
-  onCampaign: () => void;
   /** Cube's lessons, again. */
   onTutorial: () => void;
   onBack: () => void;
@@ -34,7 +31,7 @@ const KEYS: readonly { actions: readonly Action[]; label: string }[] = [
   { actions: ['moveLeft', 'moveRight'], label: 'Влево, вправо' },
   { actions: ['rotateCW', 'rotateCCW'], label: 'Повернуть фигуру' },
   { actions: ['hardDrop', 'softDrop'], label: 'Сбросить, ускорить' },
-  { actions: ['glassLeft', 'glassRight'], label: 'Повернуть крест против часовой и по часовой' },
+  { actions: ['glassLeft', 'glassRight'], label: 'Повернуть крест по часовой и против часовой' },
   { actions: ['tipBack', 'tipFront'], label: 'Скрытые стаканы наверх: задний или передний. Держать — показать, отпустить — повернуть' },
   { actions: ['frontGlass', 'backGlass', 'depthGlass'], label: 'Вести фигуру стакана спереди или сзади; ↑ ↓ двигают её' },
   { actions: ['peek'], label: 'Держать — заглянуть в объём; с A W S D — откуда смотреть' },
@@ -46,8 +43,9 @@ const SLOT_SIGNS: Record<PadSlot, string> = { up: '↑', left: '←', right: '�
 
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
-/** Cube's own screen: what it is, how it is played, and its few options. */
-export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, saved, onResume, progress, onCampaign, onTutorial, onBack, active }: Props) {
+/** Cube's own screen: what it is, how it is played, the endless game's
+ * rules and the picture's look. Its levels are in the campaign. */
+export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, saved, onResume, onTutorial, onBack, active }: Props) {
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, onBack);
   const touch = useTouchControls();
@@ -63,7 +61,7 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, s
       title="Куб"
       onBack={onBack}
       actions={<Button ghost onClick={onTutorial}><T>Обучение</T></Button>}
-      footer={<span><T>Вид куба настраивается в настройках, во вкладке «Интерфейс»</T></span>}
+      footer={<span><T>Уровни куба — в «Кампании», после 2D-уровней</T></span>}
     >
       <div className="form-layout">
         <div className="form">
@@ -72,20 +70,6 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, s
             блок, и линии собираются из того, что видно. Опрокиньте куб — и то, что лежало в глубине, станет новой
             картинкой: она осыплется и лопнет по своим линиям.
           </T></p>
-          <section className="cube-campaign">
-            <div className="cube-campaign__text">
-              <strong><T>Кампания</T></strong>
-              <span><T>
-                {progress.completed
-                  ? `пройдена · ${CUBE_CAMPAIGN_LAST + 1} уровней`
-                  : `уровень ${progress.unlocked + 1} из ${CUBE_CAMPAIGN_LAST + 1} · ${CUBE_CAMPAIGN[progress.unlocked].title}`}
-              </T></span>
-              <div className="progressbar" aria-hidden="true">
-                <i style={{ width: `${(100 * (progress.completed ? CUBE_CAMPAIGN_LAST + 1 : progress.unlocked)) / (CUBE_CAMPAIGN_LAST + 1)}%` }} />
-              </div>
-            </div>
-            <Button primary={!saved} onClick={onCampaign}><T>Уровни</T></Button>
-          </section>
           <h2 className="cube-free"><T>Свободная игра</T></h2>
           <Choice
             label="Цвета"
@@ -115,19 +99,24 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, s
             onChange={(arm) => set({ arm })}
           />
           <Toggle
-            label="Следующие фигуры над стаканами"
-            value={cube.nextPiece}
-            on="показывать"
-            off="скрыть"
-            onChange={(nextPiece) => set({ nextPiece })}
-          />
-          <Toggle
-            label="Стаканы спереди и сзади падают сами"
-            value={cube.depthFalls}
+            label="Фигуры в других стаканах падают сами"
+            value={cube.inactiveFalls}
             on="медленно"
             off="ждут"
-            onChange={(depthFalls) => set({ depthFalls })}
+            onChange={(inactiveFalls) => set({ inactiveFalls })}
           />
+          {cube.inactiveFalls && (
+            <Toggle
+              label="Стаканы спереди и сзади падают сами"
+              value={cube.depthFalls}
+              on="медленно"
+              off="ждут"
+              onChange={(depthFalls) => set({ depthFalls })}
+            />
+          )}
+          <h2 className="cube-free"><T>Вид куба</T></h2>
+          <CubeLookToggles cube={cube} onChange={onChange} />
+          <h2 className="cube-free"><T>Управление</T></h2>
           <dl className="cube-keys">
             {touch
               ? (['left', 'right'] as const).flatMap((side) =>

@@ -82,11 +82,11 @@ const SAVE_EVERY_SECONDS = 5;
 const STILL_FRAMES = 45;
 
 /** While the hub is turned to be looked at, the play keys turn it as they
- * do in play: → clockwise, ← counterclockwise, ↑ ↓ the glass behind or in
+ * do in play: ← clockwise, → counterclockwise, ↑ ↓ the glass behind or in
  * front over the top. The stick's turn shows it from the side. */
 const LOOK_TURNS: Partial<Record<OneShot, [LookAxis, -1 | 1]>> = {
-  glassLeft: ['sight', 1],
-  glassRight: ['sight', -1],
+  glassLeft: ['sight', -1],
+  glassRight: ['sight', 1],
   tipBack: ['across', 1],
   tipFront: ['across', -1],
   rotateCW: ['upright', -1],
@@ -193,6 +193,7 @@ export function CubeScreen(props: Props) {
               arm: live.current.settings.cube.arm,
               numberOfColors: live.current.settings.cube.colours,
               depthFalls: live.current.settings.cube.depthFalls,
+              inactiveFalls: live.current.settings.cube.inactiveFalls,
               ramp: CUBE_RAMP,
             },
       );
@@ -476,9 +477,9 @@ export function CubeScreen(props: Props) {
             break;
           case 'glassLeft':
           case 'glassRight':
-            // As the arrows and the pads' marks say: → (↷) clockwise, ← (↶)
-            // counterclockwise.
-            view.turnCross(action === 'glassRight' ? -1 : 1);
+            // As in the flat game: ← clockwise, the glass on the left coming
+            // to the top; → counterclockwise.
+            view.turnCross(action === 'glassLeft' ? -1 : 1);
             if (lesson === 2) didLesson();
             break;
           case 'tipBack':
@@ -611,7 +612,12 @@ export function CubeScreen(props: Props) {
       view.look = s.cube;
       view.turnSeconds = (s.effects.turnMs / 1000) * TURN_SLOWER;
       view.tiltSeconds = (TILT_SECONDS * s.effects.turnMs) / DEFAULT_TURN_MS;
-      game.config.depthFalls = s.cube.depthFalls;
+      // The endless game takes these as set; a level and the lessons keep
+      // their own.
+      if (level === null && !tutorial) {
+        game.config.depthFalls = s.cube.depthFalls;
+        game.config.inactiveFalls = s.cube.inactiveFalls;
+      }
       const play = current === 'playing' && !frozen;
       if (play) {
         keyboard.update(seconds);

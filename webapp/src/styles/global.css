@@ -2394,6 +2394,20 @@ select:focus-visible {
 }
 .cube-saved { margin: 18px 0 0; text-align: right; }
 .levels--cube { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+/* The campaign's two parts, flat and Cube, one under the other. */
+.campaign-part + .campaign-part { margin-top: 30px; }
+.campaign-part__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+}
+.campaign-part__head h2 { margin: 0; font-size: 20px; font-weight: 900; font-style: italic; text-transform: uppercase; color: var(--accent); }
+.campaign-part__head span { font-size: 13px; color: var(--text-dim); }
+.campaign-part__head .progressbar { flex: 1 0 100%; }
+.campaign-part--cube { scroll-margin-top: 12px; }
 .level-card__title { font-size: 12.5px; font-weight: 800; line-height: 1.2; }
 /* Cube's screen: the campaign first, then the endless game. */
 .cube-campaign {
@@ -2463,7 +2477,6 @@ select:focus-visible {
   place-items: center;
   color: var(--accent);
 }
-.navitem__icon { width: 26px; height: 26px; }
 .navitem__done {
   display: block;
   height: 3px;
@@ -2485,6 +2498,14 @@ select:focus-visible {
     inset 0 -2px 0 color-mix(in srgb, var(--block), #000 35%);
 }
 .blocks i.blocks__faint { opacity: 0.32; }
+.blocks i.blocks__track {
+  width: 100%;
+  height: 9%;
+  margin-top: 11%;
+  border-radius: 9px;
+  opacity: 0.35;
+  box-shadow: none;
+}
 /* Picked, a tile's blocks hop, one after another. */
 .navitem--tile:hover .blocks i,
 .navitem--tile:focus-visible .blocks i { animation: block-hop 420ms var(--ease-snap) both; }
@@ -2492,6 +2513,7 @@ select:focus-visible {
 .navitem--tile .blocks i:nth-child(3) { animation-delay: 100ms; }
 .navitem--tile .blocks i:nth-child(4) { animation-delay: 150ms; }
 .navitem--tile .blocks i:nth-child(n + 5) { animation-delay: 200ms; }
+.navitem--tile .blocks i.blocks__track { animation: none; }
 @keyframes block-hop { 40% { transform: translateY(-22%); } }
 /* A phone held upright: one column, a little larger type. A square or low
    window keeps the two columns. */
@@ -2509,7 +2531,6 @@ select:focus-visible {
   .navitem--tile:hover .blocks i,
   .navitem--tile:focus-visible .blocks i { animation: none; }
 }
-.navitem__icon--play { width: 30px; height: 30px; color: var(--accent); }
 @media (max-width: 359px) {
   .navitem--tile.navitem--small .navitem__picture { display: none; }
 }
