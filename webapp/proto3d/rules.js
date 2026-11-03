@@ -529,7 +529,7 @@ export class Game {
     // the glass on top is the one steered then.
     settled.pieces = new Map([...this.pieces].map(([side, piece]) => [side, { ...piece, pivot: [...piece.pivot], dir: [...piece.dir] }]));
     settled.active = sideOfNormal(viewFrame.up);
-    settled.reseat();
+    settled.reseat({ plane: this.plane, viewFrame: this.viewFrame });
     const first = view.findMatches();
     let match = first;
     let rounds = 0;
@@ -603,9 +603,10 @@ export class Game {
         const from = this.active;
         this.down = input.down;
         this.active = input.down;
+        const previous = { plane: this.plane, viewFrame: this.viewFrame };
         this.plane = input.plane;
         this.viewFrame = input.viewFrame;
-        this.reseat();
+        this.reseat(previous);
         this.events.push({ type: 'switched', from, to: input.down });
         if (input.settle) this.resolve();
         return;
@@ -689,14 +690,28 @@ export class Game {
    * have left the middle layer. Each is laid flat again — in the middle
    * layer for a glass across the screen, across the line of sight for the
    * one in front or behind — and backs off towards its far end if it no
-   * longer fits; failing that it starts again from there. */
-  reseat() {
+   * longer fits; failing that it starts again from there.
+   *
+   * A glass that lies across the screen both before and after the tip (on
+   * its axis: the left and right ones for ↑/↓) keeps its stick where the
+   * screen showed it, lying the same way on the screen, so that it need not
+   * turn at all. `previous` is the plane and frame looked along before. */
+  reseat(previous = null) {
     const k = this.plane.findIndex((v) => v !== 0);
+    const middle = this.middle;
     for (const piece of this.pieces.values()) {
       const n = normalOf(piece.side);
       let dir = piece.dir;
-      const pivot = [...piece.pivot];
-      if (this.inPlane(piece.side)) {
+      let pivot = [...piece.pivot];
+      if (previous && this.inPlane(piece.side) && dot(n, previous.plane) === 0) {
+        const { right, up } = previous.viewFrame;
+        const at = pivot.map((v) => v - middle);
+        const [sx, sy] = [dot(at, right), dot(at, up)];
+        const [dx, dy] = [dot(dir, right), dot(dir, up)];
+        const now = this.viewFrame;
+        pivot = [0, 1, 2].map((i) => middle + sx * now.right[i] + sy * now.up[i]);
+        dir = [0, 1, 2].map((i) => dx * now.right[i] + dy * now.up[i]);
+      } else if (this.inPlane(piece.side)) {
         if (dot(dir, this.plane) !== 0) dir = cross(n, this.plane);
         pivot[k] = this.middle;
       } else if (dot(dir, n) !== 0) {

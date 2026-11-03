@@ -375,12 +375,12 @@ const clear = cubeLayer(new THREE.ShaderMaterial({
  * while the picture is flat: the sticks in front of and behind the screen
  * are drawn over and under it. `nudge` shifts it on the screen, for the
  * small marks in the corners of cells. */
-function pushSolid(at, color, { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null } = {}) {
-  solid.items.push({ at: at.clone(), size: [size, size, size], lift, nudge, tone: TONES[color], brightness, flash });
+function pushSolid(at, color, { brightness = 1, flash = 0, size = TILE, lift = 0, nudge = null, spin = null, frame = null } = {}) {
+  solid.items.push({ at: at.clone(), size: [size, size, size], lift, nudge, spin, frame, tone: TONES[color], brightness, flash });
 }
 
-function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0, nudge = null } = {}) {
-  clear.items.push({ at: at.clone(), size, lift, nudge, color, alpha, fill, edge, depth: 0 });
+function pushClear(at, color, alpha, fill, edge, { size = [0.91, 0.91, 0.91], lift = 0, nudge = null, spin = null, frame = null } = {}) {
+  clear.items.push({ at: at.clone(), size, lift, nudge, spin, frame, color, alpha, fill, edge, depth: 0 });
 }
 
 /** A mark in a corner of a cell, over the picture: `x`, `y` say which. */
@@ -397,17 +397,25 @@ let depthShown = FLAT;
 
 /** Where a cube of the hub's frame is drawn in the scene. */
 function place(item) {
-  const at = item.at.applyQuaternion(hubGroup.quaternion);
+  const at = item.at.applyQuaternion(item.frame ?? hubGroup.quaternion);
   at.z = at.z * depthShown + item.lift * (1 - depthShown);
   if (item.nudge) at.add(item.nudge);
   return at;
+}
+
+/** How a cube is turned on the screen: with the hub (or the frame it is
+ * drawn in), and then by its own turn, if it is a stick turning. */
+const turnScratch = new THREE.Quaternion();
+function turnOf(item) {
+  const frame = item.frame ?? hubGroup.quaternion;
+  return item.spin ? turnScratch.copy(frame).multiply(item.spin) : frame;
 }
 
 function flushLayers() {
   solid.items.forEach((item, i) => {
     // A size in the hub's frame: turn it the way the hub is turned.
     scaleVector.set(...item.size);
-    matrix.compose(place(item), hubGroup.quaternion, scaleVector);
+    matrix.compose(place(item), turnOf(item), scaleVector);
     solid.mesh.setMatrixAt(i, matrix);
     const { base, light, dark } = item.tone;
     const { buffers } = solid;
@@ -423,7 +431,7 @@ function flushLayers() {
   clear.items.sort((a, b) => b.depth - a.depth);
   clear.items.forEach((item, i) => {
     scaleVector.set(...item.size);
-    matrix.compose(item.at, hubGroup.quaternion, scaleVector);
+    matrix.compose(item.at, turnOf(item), scaleVector);
     clear.mesh.setMatrixAt(i, matrix);
     clear.buffers.aColor.setXYZ(i, item.color.r, item.color.g, item.color.b);
     clear.buffers.aLook.setXYZ(i, item.alpha, item.fill, item.edge);
@@ -475,7 +483,7 @@ const turnFrom = new THREE.Quaternion();
 const turned = new THREE.Quaternion();
 /** The turn under way: `tilt` when it leans the hub over rather than turning
  * the cross in the screen. */
-const turn = { t: 1, tilt: false };
+const turn = { t: 1, tilt: false, carry: false };
 /** 0 when the picture is the game, 1 while V is held. */
 let peek = 0;
 const SCENE_RIGHT = new THREE.Vector3(1, 0, 0);
@@ -517,10 +525,35 @@ const viewAt = (q, hub = game.hub) =>
  * and opens up into depth on the way, flattening again as it lands; the
  * game holds still meanwhile. Turned in the screen it stays flat, as the 2D
  * cross turns. */
-function transition(axis) {
+function transition(axis, { carry = false } = {}) {
   turnFrom.copy(turned);
   turn.t = 0;
   turn.tilt = axis !== SCENE_TOWARD;
+  turn.carry = carry && turn.tilt;
+}
+
+/** Where the turn under way ends. */
+const goalQ = () => preview?.q ?? inspect ?? targetQ;
+/** A tip of the game (or its preview) under way: the rules lay the sticks
+ * on the new side, and those on its axis stay put on the screen. */
+const carrying = () => turn.t < 1 && turn.carry;
+/** The hub's frame as the tip began, with the look V adds: what the sticks
+ * that stay put are drawn in meanwhile. */
+const tiltFrom = new THREE.Quaternion();
+
+/** Once a tip that carried the sticks has landed, the views of those that
+ * stayed put are moved into the hub's new frame, where they show the same:
+ * the rules have laid them just there. */
+function landCarried() {
+  const to = goalQ();
+  const shift = to.clone().invert().multiply(turnFrom);
+  for (const [side, view] of pieceViews) {
+    if (!staysPut(side, turnFrom, to)) continue;
+    view.at.applyQuaternion(shift);
+    view.dir.applyQuaternion(shift).round();
+    view.aim.premultiply(shift);
+    view.spin.premultiply(shift);
+  }
 }
 
 /** Turns the hub a quarter turn about a scene axis: about the line of sight
@@ -530,7 +563,7 @@ function transition(axis) {
  * steered. `shown`: a preview has already shown it, settled. */
 function turnHub(axis, quarters, { shown = false } = {}) {
   const to = quarterTurned(axis, quarters);
-  if (!shown) transition(axis);
+  if (!shown) transition(axis, { carry: true });
   targetQ.copy(to);
   const tipped = axis !== SCENE_TOWARD;
   game.turn(topGlass(), toData(SCENE_TOWARD), { right: toData(SCENE_RIGHT), up: toData(SCENE_UP) }, tipped);
@@ -567,7 +600,7 @@ function startPreview(code) {
   const quarters = code === 'ArrowUp' ? 1 : -1;
   preview = { code, quarters, q: quarterTurned(SCENE_RIGHT, quarters), version: -1, result: null };
   refreshPreview();
-  transition(SCENE_RIGHT);
+  transition(SCENE_RIGHT, { carry: true });
 }
 
 /** Works the preview out again when the board has changed under it. */
@@ -588,7 +621,7 @@ function commitPreview(code) {
 function cancelPreview() {
   if (!preview) return;
   preview = null;
-  transition(SCENE_RIGHT);
+  transition(SCENE_RIGHT, { carry: true });
 }
 
 /** A number key: a glass around the cross is turned to the top, as in the
@@ -755,28 +788,54 @@ function pushBehindMarks(view, key) {
   for (const { at, color } of behindCache.marks) pushSolid(at, color, { size: MARK, nudge: corner(1, -1) });
 }
 
-/** Falling sticks ease into their cells and turn towards their new way, so
- * that a stick a tip lays somewhere else slides and turns there instead of
- * jumping. While the hub leans over they hold still in it, so that they turn
- * with it as one body with the blocks, and slide only once it has landed.
- * One view per glass, kept while its stick is the same one. */
-function stickViews(pieces, dt) {
-  const k = turn.t < 1 && turn.tilt ? 0 : 1 - Math.exp(-dt * 18);
+/** Falling sticks ease into their cells and turn towards their new way as
+ * one body about their middle square, so that a stick turned by the player
+ * or laid somewhere else by a tip turns and slides there instead of
+ * jumping. While the hub leans over they hold still in it, turning with it
+ * like the blocks, and move on only once it has landed. One view per glass,
+ * kept while its stick is the same one: `base` is the way it lay when first
+ * seen, `aim` the turn that takes `base` to the way it lies now, `spin` the
+ * turn drawn, easing towards `aim`. `plane` looks at the eye, in the hub's
+ * frame: a half turn spins about it, flat on the screen. */
+function stickViews(pieces, dt, plane) {
+  const k = turn.t < 1 && turn.tilt ? 0 : 1 - Math.exp(-dt * 18 * options.transitionScale);
   for (const [side, view] of pieceViews) if (pieces.get(side)?.colors !== view.colors) pieceViews.delete(side);
   return [...pieces.values()].map((piece) => {
     const goal = local(piece.pivot);
     const dir = new THREE.Vector3(...piece.dir);
     let view = pieceViews.get(piece.side);
     if (!view) {
-      view = { colors: piece.colors, at: goal.clone(), dir: dir.clone() };
+      view = { colors: piece.colors, at: goal.clone(), base: dir.clone(), dir: dir.clone(), aim: new THREE.Quaternion(), spin: new THREE.Quaternion() };
       pieceViews.set(piece.side, view);
     }
+    if (view.dir.distanceToSquared(dir) > 1e-6) {
+      const by = new THREE.Quaternion();
+      if (view.dir.dot(dir) > -0.5) by.setFromUnitVectors(view.dir, dir);
+      else {
+        const axis = new THREE.Vector3(...plane);
+        if (Math.abs(axis.dot(dir)) > 0.5) axis.set(dir.y, dir.z, dir.x);
+        by.setFromAxisAngle(axis, Math.PI);
+      }
+      view.aim.premultiply(by);
+      view.dir.copy(dir);
+    }
     view.at.lerp(goal, k);
-    // A half turn would pass through nothing: that one snaps.
-    if (view.dir.dot(dir) < -0.5) view.dir.copy(dir);
-    else view.dir.lerp(dir, k).normalize();
-    return { piece, at: view.at, dir: view.dir };
+    view.spin.slerp(view.aim, k);
+    return { piece, at: view.at, spin: view.spin, base: view.base };
   });
+}
+
+/** A stick seen as it lies in its glass, not turned to a view: for the one
+ * dropping, whose view is gone. */
+const plainStick = (piece, at) => ({ piece, at, spin: new THREE.Quaternion(), base: new THREE.Vector3(...piece.dir) });
+
+/** The glasses that lie across the screen both before and after a tip (on
+ * its axis): their sticks stay where the screen shows them rather than turn
+ * with the hub, and the rules lay them there on the new side too. */
+function staysPut(side, from, to) {
+  const before = new THREE.Vector3(...normalOf(side)).applyQuaternion(from);
+  const after = new THREE.Vector3(...normalOf(side)).applyQuaternion(to);
+  return Math.abs(before.z) < 0.5 && Math.abs(after.z) < 0.5 && before.dot(after) > 0.5;
 }
 
 /** Draws sticks of `source` (the game, or a view of it) seen from the side
@@ -791,26 +850,29 @@ function stickViews(pieces, dt) {
  * be seen, an empty outline and a dark hole if it will hide. */
 function drawSticks(source, q, sticks, { marks = true, solid = false } = {}) {
   const open = solid || !flat();
-  for (const { piece, at, dir } of sticks) {
+  for (const { piece, at, spin, base } of sticks) {
     const steered = piece.side === source.active;
+    // While a tip carries the sticks, those on its axis stay on the screen
+    // as they were, drawn in the hub's frame from before the tip.
+    const frame = carrying() && staysPut(piece.side, turnFrom, goalQ()) ? tiltFrom : null;
+    const cell = (i) => at.clone().addScaledVector(base.clone().applyQuaternion(spin), i - 1);
     if (open || source.inPlane(piece.side)) {
-      piece.colors.forEach((color, i) => pushSolid(at.clone().addScaledVector(dir, i - 1), color));
+      piece.colors.forEach((color, i) => pushSolid(cell(i), color, { spin, frame }));
       continue;
     }
     if (!steered && !options.depthSticks && !options.paused) continue;
     const lift = new THREE.Vector3(...normalOf(piece.side)).applyQuaternion(q).z * 0.6;
     const landing = steered && marks ? source.landing(piece.side) : null;
     piece.colors.forEach((color, i) => {
-      const cell = at.clone().addScaledVector(dir, i - 1);
       if (!steered) {
-        pushClear(cell, TONES[color].base, 0.8, 0.06, 0.5, { lift });
+        pushClear(cell(i), TONES[color].base, 0.8, 0.06, 0.5, { lift, spin });
         return;
       }
       const seen = landing?.seen[i] ?? true;
-      pushClear(cell, TONES[color].light, 1, seen ? 0.42 : 0, 1, { lift });
+      pushClear(cell(i), TONES[color].light, 1, seen ? 0.42 : 0, 1, { lift, spin });
       if (!landing || !flat()) return;
-      if (seen) pushSolid(cell, color, { size: MARK, lift: 0.6, nudge: corner(-1, 1) });
-      else pushClear(cell, HOLE, 1, 0.8, 1, { size: [MARK, MARK, MARK], lift: 0.6, nudge: corner(-1, 1) });
+      if (seen) pushSolid(cell(i), color, { size: MARK, lift: 0.6, nudge: corner(-1, 1) });
+      else pushClear(cell(i), HOLE, 1, 0.8, 1, { size: [MARK, MARK, MARK], lift: 0.6, nudge: corner(-1, 1) });
     });
   }
 }
@@ -822,7 +884,7 @@ function buildPreview(dt) {
   const { view, match } = preview.result;
   const blink = 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(performance.now() / 110));
   view.hub.forEachBlock((p, color, index) => pushSolid(local(p), color, { flash: match.cells.has(index) ? blink : 0 }));
-  drawSticks(view, preview.q, stickViews(view.pieces, dt));
+  drawSticks(view, preview.q, stickViews(view.pieces, dt, view.plane));
   pushBehindMarks(view, `preview:${preview.code}:${preview.version}`);
   flushLayers();
 }
@@ -847,7 +909,7 @@ function buildInspect(dt) {
   game.hub.forEachBlock((p, color, index) => pushSolid(local(p), color, { flash: cells.has(index) ? blink : 0 }));
   // The sticks in flight turn with the hub, all of them solid: from here the
   // glasses in front and behind may well be across the screen.
-  drawSticks(game, inspect, stickViews(game.pieces, dt), { marks: false, solid: true });
+  drawSticks(game, inspect, stickViews(game.pieces, dt, game.plane), { marks: false, solid: true });
   pushBehindMarks(viewAt(inspect), `inspect:${linesCache.key}`);
   flushLayers();
 }
@@ -895,11 +957,10 @@ function buildBlocks(dt) {
     for (const move of game.moves) pushSolid(local(move.from).lerp(local(move.to, to), t * t), move.color);
   }
 
-  const sticks = stickViews(game.pieces, dt);
+  const sticks = stickViews(game.pieces, dt, game.plane);
   if (phase === 'dropping' && game.drop) {
     const { piece, from } = game.drop;
-    const at = local(from).lerp(local(piece.pivot), progress * progress);
-    sticks.push({ piece, at, dir: new THREE.Vector3(...piece.dir) });
+    sticks.push(plainStick(piece, local(from).lerp(local(piece.pivot), progress * progress)));
   }
   drawSticks(game, targetQ, sticks);
 
@@ -1056,7 +1117,10 @@ function frame(now) {
     game.update(dt);
   }
   consumeEvents();
-  if (turn.t < 1) turn.t = Math.min(1, turn.t + (dt * options.transitionScale) / (turn.tilt ? TILT_SECONDS : TURN_SECONDS));
+  if (turn.t < 1) {
+    turn.t = Math.min(1, turn.t + (dt * options.transitionScale) / (turn.tilt ? TILT_SECONDS : TURN_SECONDS));
+    if (turn.t >= 1 && turn.carry) landCarried();
+  }
   refreshPreview();
   const goal = preview?.q ?? inspect ?? targetQ;
   if (turn.t < 1) turned.slerpQuaternions(turnFrom, goal, ease(turn.t));
@@ -1065,6 +1129,7 @@ function frame(now) {
   peekTo.setFromEuler(new THREE.Euler(PEEK_PITCH * options.peekPitch, -PEEK_YAW * options.peekYaw, 0));
   peekFrom.slerp(peekTo, 1 - Math.exp(-dt * 8));
   hubGroup.quaternion.slerpQuaternions(IDENTITY, peekFrom, ease(peek)).multiply(turned);
+  tiltFrom.slerpQuaternions(IDENTITY, peekFrom, ease(peek)).multiply(turnFrom);
   // Depth opens while V is held and half-way through a tip: the cross of
   // the screen fades meanwhile, and the edges of the hub stand out.
   const opened = Math.max(peek, turn.t < 1 && turn.tilt ? Math.sin(Math.PI * turn.t) : 0);

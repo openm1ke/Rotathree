@@ -70,6 +70,14 @@ try {
   await key('KeyW');
   await wait(250);
   await shot('02-top-aimed');
+  // A turn of the stick, caught half-way: it turns as one body.
+  await slow(0.03);
+  await key('KeyW');
+  await wait(1100);
+  await snap('02b-stick-turning');
+  await slow(1);
+  await wait(300);
+  await key('KeyW', 3);
   await drop();
 
   // The glass in front (4), steered in place: an outline over the picture,

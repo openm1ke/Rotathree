@@ -78,7 +78,8 @@ After review the rules follow what the screen shows.
   small square in a corner of a cell gives the colour of the block behind it:
   what a pop there would show (`01`).
 - **Sticks of the side glasses** live in the middle layer and stop on whatever
-  the picture shows, at any depth (`02`).
+  the picture shows, at any depth (`02`). A stick turns as one body about its
+  middle square, its tiles turning with it (`02b`).
 - **Lines pop in the picture**: three or more of a colour across or up the
   screen, whatever their depths. Popping a block shows what was behind it.
 - **Falling is in the picture too.** In the glass on top, a cell that shows
@@ -100,7 +101,10 @@ After review the rules follow what the screen shows.
   depth half-way before landing flat on its new side (`08`). The game holds
   still for the 0.65 s it takes. The sticks in flight turn with it as one
   body with the blocks, those of the glasses in front and behind too, solid,
-  as they are whenever the hub is open (`08`). The preview shows them where
+  as they are whenever the hub is open (`08`) — all but those of the glasses
+  on the tip's axis (left and right for ↑/↓): they stay on the screen as they
+  are, upright, and the rules lay them in just those cells on the new side,
+  so they never turn at all. The preview shows them where
   the tip lays them (`09`); a stick laid somewhere else slides and turns there
   once the hub has landed, rather than jumping. (A wave of cubes each rolling over to its
   new colour was tried in its place and dropped on review: it read as window
