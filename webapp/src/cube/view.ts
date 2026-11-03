@@ -40,6 +40,8 @@ export interface CubeLook {
   numbers: boolean;
   /** The aiming lane under the stick on top. */
   lane: boolean;
+  /** The stick that comes next, beside the far end of the glass on top. */
+  nextPiece: boolean;
 }
 
 /** Which way the hub is turned to be looked at, while paused. */
@@ -248,7 +250,7 @@ const CLEAR_FRAGMENT = /* glsl */ `
  * the hub looks like as it tips. The screen owns the game loop and calls
  * `frame` once per animation frame. */
 export class CubeView {
-  look: CubeLook = { depthSticks: false, behind: true, edges: false, numbers: false, lane: true };
+  look: CubeLook = { depthSticks: false, behind: true, edges: false, numbers: false, lane: true, nextPiece: true };
   /** How long the cross takes to turn in the screen; 0 turns it at once. */
   turnSeconds = 0.36;
   /** Paused: the sticks in front and behind all show. */
@@ -298,6 +300,15 @@ export class CubeView {
   private readonly turn = { t: 1, tilt: false, carry: false, steeredFrom: 0 };
   /** 0 when the picture is the game, 1 while the volume is looked into. */
   private peek = 0;
+  /** 0 to 1: the edges of the glasses show while the volume is looked into,
+   * or the hub is turned to be looked at, whatever the setting says. */
+  private edgesShown = 0;
+  /** How much the cross shows: less while the hub is open. */
+  private crossShown = 1;
+  /** The box beside the far end of the glass on top where the next stick
+   * shows, and where its squares go. */
+  private readonly nextGroup = new THREE.Group();
+  private readonly nextAt: THREE.Vector3[] = [];
   private readonly peekFrom = new THREE.Quaternion();
   private readonly peekTo = new THREE.Quaternion();
   /** Turned to be looked at, while paused or once the game is over. */
@@ -335,8 +346,9 @@ export class CubeView {
     this.camera = new THREE.PerspectiveCamera(30, 1, 1, this.distance * 3);
     this.camera.position.set(0, 0, this.distance);
     this.camera.lookAt(0, 0, 0);
-    this.scene.add(this.hubGroup, this.crossGroup);
+    this.scene.add(this.hubGroup, this.crossGroup, this.nextGroup);
     this.buildCross();
+    this.buildNext();
     this.buildHub();
     const maxCubes = this.n * this.n * this.n + 64;
     const tileAttributes = { aBase: 3, aLight: 3, aDark: 3, aLook: 3 };
@@ -411,6 +423,24 @@ export class CubeView {
     // The glass on top: its outline in the accent.
     arms[0].material.color.copy(ACCENT);
     arms[0].material.userData.opacity = arms[0].material.opacity = 0.6;
+  }
+
+  /** The box of the next stick: in the empty corner right of the far end of
+   * the glass on top, fixed to the screen as the flat game's is to its arm. */
+  private buildNext(): void {
+    const { h, reach } = this;
+    const width = 3.6;
+    const height = 1.6;
+    const left = h + 0.9;
+    const middle = reach - height / 2;
+    const z = -0.5;
+    this.makePane(left + width / 2, middle, width, height, 0.05, this.nextGroup);
+    const [x0, x1, y0, y1] = [left, left + width, middle - height / 2, middle + height / 2];
+    this.makeLines([x0, y0, z, x1, y0, z, x1, y0, z, x1, y1, z, x1, y1, z, x0, y1, z, x0, y1, z, x0, y0, z], this.nextGroup, {
+      opacity: 0.3,
+      width: 1.2,
+    });
+    for (let i = 0; i < this.game.config.pieceLength; i++) this.nextAt.push(new THREE.Vector3(left + 0.3 + (i + 0.5) * 1, middle, 0));
   }
 
   /** The hub itself: the edges of all six glasses and of the centre cube,
@@ -943,18 +973,26 @@ export class CubeView {
     // tip: the cross of the screen fades meanwhile.
     const opened = Math.max(this.peek, this.tilting ? Math.sin(Math.PI * turn.t) : 0);
     this.depthShown = FLAT + (1 - FLAT) * opened;
-    const shown = (1 - opened) ** 2;
-    this.crossGroup.traverse((object) => {
-      const material = (object as THREE.Mesh).material as THREE.Material | undefined;
-      if (material) material.opacity = (material.userData.opacity as number) * shown;
-    });
+    const shown = (this.crossShown = (1 - opened) ** 2);
+    const fade = (group: THREE.Object3D, by: number) =>
+      group.traverse((object) => {
+        const material = (object as THREE.Mesh).material as THREE.Material | undefined;
+        if (material) material.opacity = (material.userData.opacity as number) * by;
+      });
+    fade(this.crossGroup, shown);
+    // The next stick stays in sight, dimmed, while the hub is open.
+    this.nextGroup.visible = this.look.nextPiece;
+    fade(this.nextGroup, 0.35 + 0.65 * shown);
     this.project(opened);
-    // The edges of the hub and the glasses' numbers only when asked for:
-    // with them off it looks like the flat game, and the other glasses are
-    // kept in mind.
+    // The edges of the hub show the glasses' bounds whenever the hub is
+    // looked at in the open; while playing on the flat picture, only when
+    // asked for: with them off it looks like the flat game, and the other
+    // glasses are kept in mind. The numbers only when asked for.
+    this.edgesShown += ((this.peeking || this.inspect ? 1 : 0) - this.edgesShown) * (1 - Math.exp(-dt * 10));
+    const edges = Math.max(this.look.edges ? 0.1 + 0.25 * opened : 0, 0.45 * ease(this.edgesShown));
     for (const line of this.hubLines) {
-      line.visible = this.look.edges;
-      line.material.opacity = 0.1 + 0.25 * opened;
+      line.visible = edges > 0.01;
+      line.material.opacity = edges;
     }
     this.labels.forEach(({ sprite }, side) => {
       sprite.visible = this.look.numbers;
@@ -997,6 +1035,9 @@ export class CubeView {
    * it, flat on the screen. */
   private stickViews(pieces: Map<number, Stick>, dt: number, plane: Vec): DrawnStick[] {
     const k = this.tilting ? 0 : 1 - Math.exp(-dt * 18);
+    // A stick turns quicker than it slides: a turn is a decision made in a
+    // flash, and the picture must not lag behind it.
+    const turnK = this.tilting ? 0 : 1 - Math.exp(-dt * 38);
     for (const [side, view] of this.pieceViews) if (pieces.get(side)?.colors !== view.colors) this.pieceViews.delete(side);
     return [...pieces.values()].map((piece) => {
       const goal = this.local(piece.pivot);
@@ -1039,7 +1080,7 @@ export class CubeView {
         view.spin.copy(this.turned).invert().multiply(onScreen);
       } else {
         view.at.lerp(goal, k);
-        view.spin.slerp(view.aim, k);
+        view.spin.slerp(view.aim, turnK);
       }
       return { piece, at: view.at, spin: view.spin, base: view.base };
     });
@@ -1106,6 +1147,7 @@ export class CubeView {
     view.hub.forEachBlock((p, color, index) => this.pushSolid(this.local(p), color, { flash: match.cells.has(index) ? blink : 0 }));
     this.drawSticks(view, preview.q, this.stickViews(view.pieces, dt, view.plane));
     this.pushBehindMarks(view, `preview:${preview.up}:${preview.version}`);
+    this.pushNext();
     this.flushLayers();
   }
 
@@ -1132,6 +1174,7 @@ export class CubeView {
     // the glasses in front and behind may well be across the screen.
     this.drawSticks(game, inspect, this.stickViews(game.pieces, dt, game.plane), { marks: false, solid: true });
     this.pushBehindMarks(this.viewAt(inspect), `inspect:${this.linesCache.key}`);
+    this.pushNext();
     this.flushLayers();
   }
 
@@ -1207,7 +1250,17 @@ export class CubeView {
       }
     }
     this.pushBehindMarks(game, `game:${hub.version}:${this.targetQ.toArray().join()}`);
+    this.pushNext();
     this.flushLayers();
+  }
+
+  /** The squares of the next stick in its box, flat to the eye. */
+  private pushNext(): void {
+    if (!this.look.nextPiece) return;
+    const alpha = 0.35 + 0.65 * this.crossShown;
+    this.game.nextColors.forEach((color, i) => {
+      if (this.nextAt[i]) this.pushSolid(this.nextAt[i], color, { size: 0.86, frame: IDENTITY, alpha });
+    });
   }
 
   /** A faint column under each lane of the stick, down to the landing spot —

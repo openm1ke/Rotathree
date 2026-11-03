@@ -2,8 +2,8 @@ import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import type { Action } from '../input/bindings';
 import { useTouchControls } from '../input/touch';
-import type { CubeOptions, Settings, Stats } from '../services/storage';
-import { formatNumber } from './format';
+import { CUBE_LIMITS, type CubeOptions, type Settings, type Stats } from '../services/storage';
+import { formatCells, formatNumber } from './format';
 import { Keys } from './Keycap';
 import { Button, Choice, Screen, Toggle } from './ui';
 import { useScreenKeys } from './nav';
@@ -82,6 +82,27 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, o
             options={range(3, 6).map((n) => [n, String(n)] as const)}
             onChange={(colours) => set({ colours })}
           />
+          <Choice
+            label="Ширина стакана"
+            note="нечётная: в среднем слое куба падают фигуры"
+            value={cube.width}
+            options={range(...CUBE_LIMITS.width).filter((n) => n % 2 === 1).map((n) => [n, String(n)] as const)}
+            onChange={(width) => set({ width })}
+          />
+          <Choice
+            label="Длина рукава"
+            note="в клетках"
+            value={cube.arm}
+            options={range(...CUBE_LIMITS.arm).map((n) => [n, String(n)] as const)}
+            onChange={(arm) => set({ arm })}
+          />
+          <Toggle
+            label="Следующая фигура"
+            value={cube.nextPiece}
+            on="показывать"
+            off="скрыть"
+            onChange={(nextPiece) => set({ nextPiece })}
+          />
           <Toggle
             label="Стаканы спереди и сзади падают сами"
             value={cube.depthFalls}
@@ -108,7 +129,9 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, o
 
         <div className="summary">
           <strong><T>{best > 0 ? `Рекорд: ${formatNumber(best)}` : 'Рекорда ещё нет'}</T></strong>
-          <span><T>Бесконечная игра, скорость растёт с очками</T></span>
+          <span><T>
+            куб {cube.width}×{cube.width}×{cube.width} · рукав: {formatCells(cube.arm)} · скорость растёт с очками
+          </T></span>
         </div>
         <div className="form__start">
           <Button primary onClick={onStart}><T>

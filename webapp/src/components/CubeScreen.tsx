@@ -148,6 +148,8 @@ export function CubeScreen(props: Props) {
     let game = tutorial
       ? lessonGame(0)
       : new CubeGame({
+          centre: live.current.settings.cube.width,
+          arm: live.current.settings.cube.arm,
           numberOfColors: live.current.settings.cube.colours,
           depthFalls: live.current.settings.cube.depthFalls,
           ramp: CUBE_RAMP,

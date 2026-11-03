@@ -41,7 +41,8 @@ const TABS: readonly (readonly [Tab, string])[] = [
 const GROUPS: readonly ActionGroup[] = ['piece', 'glass', 'game', 'cube'];
 
 /** What Cube's picture shows besides the game, each one a switch. */
-const CUBE_LOOK: readonly (readonly [Exclude<keyof CubeOptions, 'colours' | 'depthFalls'>, string])[] = [
+const CUBE_LOOK: readonly (readonly [Exclude<keyof CubeOptions, 'colours' | 'width' | 'arm' | 'depthFalls'>, string])[] = [
+  ['nextPiece', 'Следующая фигура'],
   ['behind', 'Метка: цвет блока за клеткой'],
   ['lane', 'Дорожка до места посадки'],
   ['depthSticks', 'Фигуры спереди и сзади, которыми не управляете'],
@@ -486,7 +487,13 @@ export function SettingsScreen({ settings, stored, overlay, active, onChange, on
               ...settings,
               hud: defaults.hud,
               effects: defaults.effects,
-              cube: { ...defaults.cube, colours: settings.cube.colours, depthFalls: settings.cube.depthFalls },
+              cube: {
+                ...defaults.cube,
+                colours: settings.cube.colours,
+                width: settings.cube.width,
+                arm: settings.cube.arm,
+                depthFalls: settings.cube.depthFalls,
+              },
             })}><T>
               Сбросить интерфейс
             </T></Button>

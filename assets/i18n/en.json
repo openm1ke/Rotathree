@@ -431,7 +431,6 @@
   "Держать — заглянуть в объём": "Hold to look into the volume",
   "Рекорд: {score}": "Best: {score}",
   "Рекорда ещё нет": "No record yet",
-  "Бесконечная игра, скорость растёт с очками": "An endless game; the speed rises with the score",
   "Что показывать поверх креста в режиме «Куб»": "What to show over the cross in Cube",
   "Метка: цвет блока за клеткой": "Mark: the color of the block behind a cell",
   "Дорожка до места посадки": "Lane down to the landing spot",
@@ -453,5 +452,8 @@
   "Теперь сам": "Your turn",
   "Крест поворачивается, как в 2D. ↑ ↓ — опрокинуть куб": "The cross turns as in 2D. ↑ ↓ tip the cube over",
   "Сначала возьми стакан спереди": "Take the front glass first",
-  "Мимо — попробуй ещё раз": "Missed. Try again"
+  "Мимо — попробуй ещё раз": "Missed. Try again",
+  "Ширина стакана": "Glass width",
+  "нечётная: в среднем слое куба падают фигуры": "odd: pieces fall in the cube's middle layer",
+  "куб {a}×{b}×{c} · рукав: {arm} · скорость растёт с очками": "cube {a}×{b}×{c} · arm: {arm} · the speed rises with the score"
 }

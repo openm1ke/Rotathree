@@ -84,6 +84,11 @@ export interface Settings {
 export interface CubeOptions {
   /** Colours in the sticks: 3 to 6. */
   colours: number;
+  /** Cells across a glass, and so the side of the cube in the middle: odd,
+   * 5 to 11, so that the cube has a middle layer for the sticks to fall in. */
+  width: number;
+  /** Length of each arm, the glass's height above the cube: 4 to 12. */
+  arm: number;
   /** The sticks in front and behind that are not being steered. */
   depthSticks: boolean;
   /** Let the glasses in front and behind drop their sticks by themselves. */
@@ -96,16 +101,23 @@ export interface CubeOptions {
   numbers: boolean;
   /** The aiming lane under the stick on top. */
   lane: boolean;
+  /** The stick that comes next, in a box beside the glass on top. */
+  nextPiece: boolean;
 }
+
+export const CUBE_LIMITS = { width: [5, 11], arm: [4, 12] } as const;
 
 export const DEFAULT_CUBE: CubeOptions = {
   colours: 4,
+  width: 9,
+  arm: 9,
   depthSticks: false,
   depthFalls: false,
   behind: true,
   edges: false,
   numbers: false,
   lane: true,
+  nextPiece: true,
 };
 
 export const BUILTIN_PALETTES: PaletteSet[] = [
@@ -180,6 +192,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   const pads = (stored.pads ?? {}) as Record<string, unknown>;
   const audio = (stored.audio ?? {}) as Record<string, unknown>;
   const cube = (stored.cube ?? {}) as Record<string, unknown>;
+  const odd = (n: number) => (n % 2 === 1 ? n : n - 1);
   const flag = (key: keyof CubeOptions) => (typeof cube[key] === 'boolean' ? (cube[key] as boolean) : (DEFAULT_CUBE[key] as boolean));
   const pad = (raw: unknown, fallback: PadLayout): PadLayout => {
     const p = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
@@ -224,12 +237,15 @@ export function sanitizeSettings(raw: unknown): Settings {
     },
     cube: {
       colours: Math.round(numberIn(cube.colours, 3, 6, DEFAULT_CUBE.colours)),
+      width: odd(Math.round(numberIn(cube.width, ...CUBE_LIMITS.width, DEFAULT_CUBE.width))),
+      arm: Math.round(numberIn(cube.arm, ...CUBE_LIMITS.arm, DEFAULT_CUBE.arm)),
       depthSticks: flag('depthSticks'),
       depthFalls: flag('depthFalls'),
       behind: flag('behind'),
       edges: flag('edges'),
       numbers: flag('numbers'),
       lane: flag('lane'),
+      nextPiece: flag('nextPiece'),
     },
   };
 }
