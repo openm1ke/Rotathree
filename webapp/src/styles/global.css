@@ -1387,6 +1387,10 @@ input:focus-visible {
 .stage__canvas {
   display: block;
 }
+.game--cube .stage__canvas {
+  width: 100%;
+  height: 100%;
+}
 .stage__canvas:focus { outline: none; box-shadow: none; }
 
 @keyframes stage-in {
@@ -2388,3 +2392,4 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.cube-saved { margin: 18px 0 0; text-align: right; }

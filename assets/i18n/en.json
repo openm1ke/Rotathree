@@ -388,7 +388,6 @@
   "Шесть стаканов вокруг куба, скорость растёт": "Six glasses around a cube, speed rises",
   "Опрокинуть: задний наверх": "Tip over: back to the top",
   "Опрокинуть: передний наверх": "Tip over: front to the top",
-  "Держите — посмотреть, как ляжет куб; отпустите — опрокинуть": "Hold to see how the cube will lie; release to tip it over",
   "Передний стакан": "Front glass",
   "Задний стакан": "Back glass",
   "Вести его фигуру; ещё раз — назад к верхнему": "Steer its piece; again to go back to the top one",
@@ -405,7 +404,6 @@
   "К итогам": "Back to results",
   "линий отсюда нет": "no lines from here",
   "линий отсюда: {runs}, блоков {blocks}": "lines from here: {runs}, blocks {blocks}",
-  "Осмотр · {lines} · стрелки и W — повернуть · Esc — назад": "Looking around · {lines} · arrows and W turn it · Esc back",
   "Осмотр · {lines}": "Looking around · {lines}",
   "ничего не лопнет": "nothing will pop",
   "лопнет {count}, каскад ×{rounds}": "{count} will pop, cascade ×{rounds}",
@@ -457,5 +455,10 @@
   "Рёбра стаканов и во время игры": "Glass edges during play too",
   "и сторона куба в середине": "and the side of the cube in the middle",
   "Следующие фигуры над стаканами": "Next pieces over the glasses",
-  "Линии объёма вокруг креста": "Depth lines around the cross"
+  "Линии объёма вокруг креста": "Depth lines around the cross",
+  "Осмотр · {lines} · стрелки и W — повернуть · {key} — назад": "Looking around · {lines} · arrows and W turn it · {key} back",
+  "Держите — посмотреть, как ляжет куб с задним стаканом наверху; отпустите — опрокинуть": "Hold to see how the cube will lie with the back glass on top; release to tip it over",
+  "Держите — посмотреть, как ляжет куб с передним стаканом наверху; отпустите — опрокинуть": "Hold to see how the cube will lie with the front glass on top; release to tip it over",
+  "Новая игра": "New game",
+  "Партия не закончена: {points} · {time}": "Game in progress: {points} · {time}"
 }

@@ -205,7 +205,13 @@ const TILE_VERTEX = /* glsl */ `
     vFaceNormal = normalize(turn * face);
     // How far up the screen this point is from the cube's centre.
     vUp = dot(turn * position, screenUp) / length(turn[0]);
-    gl_Position = projectionMatrix * viewMatrix * model * vec4(position, 1.0);
+    vec4 world = model * vec4(position, 1.0);
+  #ifdef XRAY
+    // Drawn as if nearer by most of a cell: a stick shows through what is
+    // well in front of it, never through its own squares beside it.
+    world.xyz += normalize(cameraPosition - world.xyz) * 0.8;
+  #endif
+    gl_Position = projectionMatrix * viewMatrix * world;
   }`;
 const TILE_FRAGMENT = /* glsl */ `
   varying vec3 vObjectNormal;
@@ -331,7 +337,7 @@ export class CubeView {
   private readonly hintGroup = new THREE.Group();
   /** The canvas size, to fit the cross to it again when the boxes of the
    * next sticks come or go. */
-  private size = { width: 0, height: 0, withNext: false };
+  private size = { width: 0, height: 0, withNext: false, withHint: false };
   /** Sticks hidden behind blocks, drawn again where they are hidden. */
   private readonly xray: Layer<TileItem>;
   private readonly xrayOpacity = { value: 0 };
@@ -391,6 +397,20 @@ export class CubeView {
       fragmentShader: CLEAR_FRAGMENT,
     });
     this.clear = this.cubeLayer(clearMaterial, { aColor: 3, aLook: 3 }, 6, 512, new THREE.BoxGeometry(1, 1, 1));
+    this.alignToGame();
+  }
+
+  /** The hub turned as the game looks at it: a new game straight on, a kept
+   * one as it was left. */
+  private alignToGame(): void {
+    const { plane, viewFrame } = this.game;
+    const basis = new THREE.Matrix4().makeBasis(
+      new THREE.Vector3(...viewFrame.right),
+      new THREE.Vector3(...viewFrame.up),
+      new THREE.Vector3(...plane),
+    );
+    this.targetQ.setFromRotationMatrix(basis).invert();
+    for (const q of [this.turnFrom, this.turned, this.tiltFrom]) q.copy(this.targetQ);
   }
 
   // ------------------------------------------------------------ the scene
@@ -537,7 +557,10 @@ export class CubeView {
       fragmentShader: TILE_FRAGMENT,
     });
     // Only where something nearer has been drawn already.
-    if (kind === 'xray') material.depthFunc = THREE.GreaterDepth;
+    if (kind === 'xray') {
+      material.depthFunc = THREE.GreaterDepth;
+      material.defines = { XRAY: '' };
+    }
     return material;
   }
 
@@ -673,7 +696,7 @@ export class CubeView {
       m.resolution.set(width * dpr, height * dpr);
       m.linewidth = (m.userData.width as number) * dpr;
     }
-    this.size = { width, height, withNext: this.look.nextPiece };
+    this.size = { width, height, withNext: this.look.nextPiece, withHint: this.look.depthHint };
     this.fit();
     // A canvas sized anew is blank: what was drawn is drawn again at once,
     // or a field that changes size frame after frame would flicker.
@@ -685,9 +708,12 @@ export class CubeView {
    * beyond its arms when they show. */
   private fit(): void {
     const { camera } = this;
-    const { width, height, withNext } = this.size;
+    const { width, height, withNext, withHint } = this.size;
     camera.aspect = width / height;
-    const half = this.reach + (withNext ? NEXT_GAP + NEXT_BOX[1] / 2 + 0.4 : 0.6);
+    // The depth hint reaches a little past the arms' ends: their near faces.
+    const eye = HINT_DISTANCE * this.reach;
+    const hinted = withHint ? (this.reach * eye) / (eye - this.h) - this.reach + 0.2 : 0;
+    const half = this.reach + Math.max(withNext ? NEXT_GAP + NEXT_BOX[1] / 2 + 0.4 : 0.6, hinted);
     const tan = half / (this.distance - this.h) / Math.min(1, camera.aspect);
     camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tan));
     camera.updateProjectionMatrix();
@@ -713,7 +739,7 @@ export class CubeView {
    * the tutorial's lessons. */
   reset(game: CubeGame): void {
     this.game = game;
-    for (const q of [this.targetQ, this.turnFrom, this.turned, this.tiltFrom]) q.identity();
+    this.alignToGame();
     Object.assign(this.turn, { t: 1, tilt: false, carry: false, steeredFrom: game.active });
     this.preview = null;
     this.inspect = null;
@@ -726,6 +752,7 @@ export class CubeView {
   dispose(): void {
     for (const item of this.disposables) item.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 
   // ------------------------------------------------------------ the turns
@@ -1018,8 +1045,9 @@ export class CubeView {
     fade(this.crossGroup, shown);
     this.hintGroup.visible = this.look.depthHint;
     fade(this.hintGroup, shown);
-    if (this.look.nextPiece !== this.size.withNext && this.size.width > 0) {
-      this.size.withNext = this.look.nextPiece;
+    const { nextPiece, depthHint } = this.look;
+    if ((nextPiece !== this.size.withNext || depthHint !== this.size.withHint) && this.size.width > 0) {
+      Object.assign(this.size, { withNext: nextPiece, withHint: depthHint });
       this.fit();
     }
     this.project(opened);

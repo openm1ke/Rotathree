@@ -43,6 +43,8 @@ interface Props {
   /** False while the settings are open over the menu. */
   active: boolean;
   savedRuns?: SavedRuns;
+  /** A game of Cube left unfinished. */
+  cubeSaved?: boolean;
   tutorialDone?: boolean;
   onResume?: () => void;
   onTutorial?: () => void;
@@ -50,7 +52,7 @@ interface Props {
 }
 
 /** A centered menu with an optional campaign shortcut on phones. */
-export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, onResume, onTutorial, onPlayCampaign }: Props) {
+export function MainMenu({ progress, onOpen, active, savedRuns, cubeSaved, tutorialDone, onResume, onTutorial, onPlayCampaign }: Props) {
   const { t } = useI18n();
   const touch = useTouchControls();
   const rootRef = useRef<HTMLElement>(null);
@@ -84,7 +86,7 @@ export function MainMenu({ progress, onOpen, active, savedRuns, tutorialDone, on
         </header>
 
         <nav className="home__nav" aria-label={t("Главное меню")}>
-          {savedRuns && Object.keys(savedRuns).length > 0 && (
+          {((savedRuns && Object.keys(savedRuns).length > 0) || cubeSaved) && (
             <button type="button" data-nav className="navitem navitem--resume" onClick={onResume}>
               <span className="navitem__text">
                 <span className="navitem__title"><T>Продолжить</T></span>

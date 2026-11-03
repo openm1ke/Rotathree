@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGame, EMPTY, SIDES, type Vec } from '../cube/rules';
 import { CUBE_LESSON_LAST, lessonGame } from '../cube/tutorial';
+import { sanitizeCubeSave } from '../cube/save';
 
 const run = (game: CubeGame, seconds: number) => {
   for (let t = 0; t < seconds; t += 0.02) game.update(0.02);
@@ -191,6 +192,46 @@ describe('Cube: sizes and the next sticks', () => {
     }
     expect(game.isGameOver).toBe(true);
     expect(game.placed).toBeGreaterThan(5);
+  });
+});
+
+describe('Cube: a game kept between visits', () => {
+  const tipped = { right: [1, 0, 0] as Vec, up: [0, 0, -1] as Vec };
+  const played = () => {
+    const game = new CubeGame({ seed: 14, centre: 10, arm: 6 });
+    for (let i = 0; i < 6; i++) {
+      game.dropActive();
+      run(game, 0.6);
+    }
+    game.turn(BACK, [0, 1, 0], tipped, true);
+    run(game, 2);
+    return game;
+  };
+
+  it('comes back as it was left, turned and all, and plays on', () => {
+    const game = played();
+    const snapshot = game.snapshot()!;
+    expect(snapshot).not.toBeNull();
+    const back = CubeGame.restore(JSON.parse(JSON.stringify(snapshot)));
+    expect([...back.hub.cells]).toEqual([...game.hub.cells]);
+    expect([back.plane, back.viewFrame, back.down, back.active]).toEqual([game.plane, game.viewFrame, game.down, game.active]);
+    expect([...back.pieces.values()]).toEqual([...game.pieces.values()]);
+    expect([...back.next]).toEqual([...game.next]);
+    expect([back.score, back.placed, back.matches, back.seconds, back.speedLevel]).toEqual([game.score, game.placed, game.matches, game.seconds, game.speedLevel]);
+    back.dropActive();
+    run(back, 1);
+    expect(back.placed).toBe(game.placed + 1);
+  });
+
+  it('keeps nothing in the middle of a move, and refuses what is not a game', () => {
+    const game = played();
+    const snapshot = game.snapshot()!;
+    game.dropActive();
+    expect(game.snapshot()).toBeNull();
+    expect(() => CubeGame.restore({ ...snapshot, blocks: [1e9, 0] })).toThrow();
+    expect(() => CubeGame.restore({ ...snapshot, plane: [0, 1, 1] })).toThrow();
+    expect(sanitizeCubeSave({ version: 1, id: 'x', savedAt: 1, game: {} })).toBeNull();
+    expect(sanitizeCubeSave({ version: 1, id: 'x', savedAt: 1, game: snapshot })?.game).toEqual(snapshot);
   });
 });
 

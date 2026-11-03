@@ -3,7 +3,8 @@ import { useRef } from 'react';
 import type { Action } from '../input/bindings';
 import { useTouchControls } from '../input/touch';
 import { CUBE_LIMITS, type CubeOptions, type Settings, type Stats } from '../services/storage';
-import { formatCells, formatNumber } from './format';
+import { formatCells, formatDuration, formatNumber, formatPoints } from './format';
+import type { CubeSave } from '../cube/save';
 import { Keys } from './Keycap';
 import { Button, Choice, Screen, Toggle } from './ui';
 import { useScreenKeys } from './nav';
@@ -14,6 +15,9 @@ interface Props {
   colours: string[];
   onChange: (cube: CubeOptions) => void;
   onStart: () => void;
+  /** The game left unfinished, to go on with instead of a new one. */
+  saved?: CubeSave | null;
+  onResume?: () => void;
   /** Cube's lessons, again. */
   onTutorial: () => void;
   onBack: () => void;
@@ -44,7 +48,7 @@ const PADS: readonly { where: string; label: string }[] = [
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 /** Cube's own screen: what it is, how it is played, and its few options. */
-export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, onTutorial, onBack, active }: Props) {
+export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, saved, onResume, onTutorial, onBack, active }: Props) {
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, onBack);
   const touch = useTouchControls();
@@ -133,10 +137,22 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, o
             куб {cube.width}×{cube.width}×{cube.width} · рукав: {formatCells(cube.arm)} · скорость растёт с очками
           </T></span>
         </div>
+        {saved && (
+          <p className="hint cube-saved"><T>
+            Партия не закончена: {formatPoints(saved.game.score)} · {formatDuration(saved.game.seconds)}
+          </T></p>
+        )}
         <div className="form__start">
-          <Button primary onClick={onStart}><T>
-            Играть
-          </T></Button>
+          {saved ? (
+            <>
+              <Button onClick={onStart}><T>Новая игра</T></Button>
+              <Button primary onClick={() => onResume?.()}><T>Продолжить</T></Button>
+            </>
+          ) : (
+            <Button primary onClick={onStart}><T>
+              Играть
+            </T></Button>
+          )}
         </div>
       </div>
     </Screen>

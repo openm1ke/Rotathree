@@ -21,6 +21,7 @@
 // an N³ grid, N = centre + 2·arm. Turning the hub only changes which glass is
 // on top and which way the eye looks; the view turns the picture. The first
 // version of these rules is the prototype in proto3d/rules.js.
+import { integer, list, number, record } from '../game/snapshotReader';
 
 export const EMPTY = -1;
 
@@ -311,6 +312,29 @@ type CubeInput =
   | { kind: 'move'; vector: Vec }
   | { kind: 'rotate'; axis: Vec }
   | { kind: 'drop' };
+
+/** A game at rest, as it is kept between visits (`snapshot`). */
+export interface CubeSnapshot {
+  centre: number;
+  arm: number;
+  numberOfColors: number;
+  depthFalls: boolean;
+  ramp: CubeRamp | null;
+  /** The blocks, as index and colour one after the other. */
+  blocks: number[];
+  down: number;
+  active: number;
+  plane: Vec;
+  viewFrame: ViewFrame;
+  pieces: { side: number; colors: number[]; pivot: Vec; dir: Vec; progress: number }[];
+  next: [number, number[]][];
+  score: number;
+  bestCombo: number;
+  placed: number;
+  matches: number;
+  cleared: number;
+  seconds: number;
+}
 
 /** What tipping the hub over would give (`previewTurn`). */
 export interface TurnPreview {
@@ -1015,6 +1039,114 @@ export class CubeGame {
     this.phase = phase;
     this.phaseElapsed = 0;
     this.phaseDuration = duration;
+  }
+
+  // ---------------------------------------------------------- keeping
+
+  /** The game as it can be kept, while it is at rest between moves; null
+   * in the middle of a drop or a cascade, or once it is over. */
+  snapshot(): CubeSnapshot | null {
+    if (this.phase !== 'playing' || this.inputs.length > 0) return null;
+    const blocks: number[] = [];
+    this.hub.forEachBlock((_p, color, index) => blocks.push(index, color));
+    const { centre, arm, numberOfColors, depthFalls, ramp } = this.config;
+    return {
+      centre,
+      arm,
+      numberOfColors,
+      depthFalls,
+      ramp,
+      blocks,
+      down: this.down,
+      active: this.active,
+      plane: [...this.plane],
+      viewFrame: { right: [...this.viewFrame.right], up: [...this.viewFrame.up] },
+      pieces: [...this.pieces.values()].map(({ side, colors, pivot, dir, progress }) => ({
+        side,
+        colors: [...colors],
+        pivot: [...pivot],
+        dir: [...dir],
+        progress,
+      })),
+      next: [...this.next].map(([side, colors]) => [side, [...colors]]),
+      score: this.score,
+      bestCombo: this.bestCombo,
+      placed: this.placed,
+      matches: this.matches,
+      cleared: this.cleared,
+      seconds: this.seconds,
+    };
+  }
+
+  /** A game kept by `snapshot`, checked piece by piece: throws on anything
+   * that does not make a game. */
+  static restore(raw: unknown): CubeGame {
+    const r = record(raw);
+    const rampRaw = r.ramp === null ? null : record(r.ramp);
+    const ramp: CubeRamp | null = rampRaw && {
+      everyPoints: number(rampRaw.everyPoints, 1, 1e9),
+      factor: number(rampRaw.factor, 0.1, 1),
+      minActive: number(rampRaw.minActive, 0.01, 10),
+      minInactive: number(rampRaw.minInactive, 0.01, 30),
+    };
+    if (typeof r.depthFalls !== 'boolean') throw new Error('Invalid game save');
+    const game = new CubeGame({
+      centre: integer(r.centre, 3, 15),
+      arm: integer(r.arm, 2, 16),
+      numberOfColors: integer(r.numberOfColors, 2, 9),
+      depthFalls: r.depthFalls,
+      ramp,
+    });
+    const { hub } = game;
+    const colours = game.config.numberOfColors;
+    const axis = (raw: unknown): Vec => {
+      const v = list(raw, 3).map((c) => integer(c, -1, 1)) as Vec;
+      if (v.length !== 3 || v.reduce((sum, c) => sum + Math.abs(c), 0) !== 1) throw new Error('Invalid saved axis');
+      return v;
+    };
+    const stick = (raw: unknown): number[] => {
+      const colors = list(raw, game.config.pieceLength).map((c) => integer(c, 0, colours - 1));
+      if (colors.length !== game.config.pieceLength) throw new Error('Invalid saved stick');
+      return colors;
+    };
+    const blocks = list(r.blocks, 2 * hub.cells.length);
+    hub.cells.fill(EMPTY);
+    for (let i = 0; i + 1 < blocks.length; i += 2) {
+      const index = integer(blocks[i], 0, hub.cells.length - 1);
+      if (!hub.isInside(hub.cellOf(index))) throw new Error('Invalid saved block');
+      hub.cells[index] = integer(blocks[i + 1], 0, colours - 1);
+    }
+    hub.version++;
+    const frame = record(r.viewFrame);
+    game.plane = axis(r.plane);
+    game.viewFrame = { right: axis(frame.right), up: axis(frame.up) };
+    if (dot(game.plane, game.viewFrame.right) !== 0 || dot(game.plane, game.viewFrame.up) !== 0 || dot(game.viewFrame.right, game.viewFrame.up) !== 0) {
+      throw new Error('Invalid saved view');
+    }
+    game.down = sideOfNormal(game.viewFrame.up);
+    game.active = integer(r.active, 0, SIDES.length - 1);
+    if (integer(r.down, 0, SIDES.length - 1) !== game.down) throw new Error('Invalid saved view');
+    game.pieces.clear();
+    for (const raw of list(r.pieces, SIDES.length)) {
+      const p = record(raw);
+      const side = integer(p.side, 0, SIDES.length - 1);
+      const piece: Stick = { side, colors: stick(p.colors), pivot: list(p.pivot, 3).map((c) => integer(c, 0, hub.size - 1)) as Vec, dir: axis(p.dir), progress: number(p.progress, 0, 1) };
+      if (piece.pivot.length !== 3 || game.pieces.has(side) || !game.allowed(side, piece.pivot, piece.dir)) throw new Error('Invalid saved stick');
+      game.pieces.set(side, piece);
+    }
+    for (const raw of list(r.next, SIDES.length)) {
+      const [side, colors] = list(raw, 2);
+      game.next.set(integer(side, 0, SIDES.length - 1), stick(colors));
+    }
+    game.score = integer(r.score);
+    game.bestCombo = integer(r.bestCombo);
+    game.placed = integer(r.placed);
+    game.matches = integer(r.matches);
+    game.cleared = integer(r.cleared);
+    game.seconds = number(r.seconds);
+    game.applyRamp();
+    game.events.length = 0;
+    return game;
   }
 
   private endGame(side: number): void {

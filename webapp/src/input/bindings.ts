@@ -48,8 +48,8 @@ export const ACTIONS: readonly ActionInfo[] = [
   { id: 'pause', label: 'Пауза', hint: 'Пауза и меню', group: 'game' },
   { id: 'restart', label: 'Заново', hint: 'Начать партию сначала', group: 'game' },
   // Cube's own come last: a key a player gave to a shared action stays there.
-  { id: 'tipBack', label: 'Опрокинуть: задний наверх', hint: 'Держите — посмотреть, как ляжет куб; отпустите — опрокинуть', group: 'cube', scope: 'cube' },
-  { id: 'tipFront', label: 'Опрокинуть: передний наверх', hint: 'Держите — посмотреть, как ляжет куб; отпустите — опрокинуть', group: 'cube', scope: 'cube' },
+  { id: 'tipBack', label: 'Опрокинуть: задний наверх', hint: 'Держите — посмотреть, как ляжет куб с задним стаканом наверху; отпустите — опрокинуть', group: 'cube', scope: 'cube' },
+  { id: 'tipFront', label: 'Опрокинуть: передний наверх', hint: 'Держите — посмотреть, как ляжет куб с передним стаканом наверху; отпустите — опрокинуть', group: 'cube', scope: 'cube' },
   { id: 'frontGlass', label: 'Передний стакан', hint: 'Вести его фигуру; ещё раз — назад к верхнему', group: 'cube', scope: 'cube' },
   { id: 'backGlass', label: 'Задний стакан', hint: 'Вести его фигуру; ещё раз — назад к верхнему', group: 'cube', scope: 'cube' },
   { id: 'depthGlass', label: 'Стакан глубины', hint: 'По кругу: верхний, передний, задний', group: 'cube', scope: 'cube' },

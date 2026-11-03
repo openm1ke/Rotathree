@@ -2,17 +2,18 @@ import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
 import { useEffect, useRef, useState } from 'react';
 import { CubeGame } from '../cube/rules';
+import type { CubeSave } from '../cube/save';
 import { CUBE_LESSONS, CUBE_LESSON_LAST, LESSON_KEYS, LESSON_PADS, lessonGame } from '../cube/tutorial';
 import { CubeView, type LookAxis, type Steering } from '../cube/view';
 import { CUBE_RAMP, MODE_NAMES } from '../game/modes';
 import { KeyboardController } from '../input/keyboard';
-import type { Action } from '../input/bindings';
+import { keyLabel, type Action } from '../input/bindings';
 import { CUBE_PADS, PadController, type PadAction } from '../input/pads';
 import { useTouchControls } from '../input/touch';
 import type { RunRecord, Settings } from '../services/storage';
 import { sounds } from '../services/sounds';
 import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
-import { PLAYGAMA_BUILD } from '../platform/target';
+import { PLAYGAMA_BUILD, USES_ESCAPE } from '../platform/target';
 import { showInterstitial } from '../platform/playgama';
 import { reportAbandoned, reportLevel } from '../platform/telemetry';
 import { Hud } from './Hud';
@@ -39,6 +40,10 @@ interface Props {
   /** A new game. */
   onRetry: () => void;
   onRecord: (run: RunRecord) => void;
+  /** A game kept from before, to go on with: it opens paused. */
+  restore?: CubeSave | null;
+  /** Keeps the game as it is now, or forgets it (null) once it is over. */
+  onCheckpoint?: (save: CubeSave | null) => void;
   /** The tutorial's lessons instead of a game. */
   tutorial?: boolean;
   /** `played`: Play on the last lesson; false when the player skipped. */
@@ -100,14 +105,14 @@ export function CubeScreen(props: Props) {
   const { settings, blocked, tutorial = false } = props;
   const touch = useTouchControls();
   const touchMode = useRef(touch);
-  const runId = useRef(newId());
+  const runId = useRef(props.restore?.id ?? newId());
   const frameRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const actions = useRef({
     togglePause: () => {},
     retry: () => {},
     look: (_on: boolean) => {},
-    leave: (_destination: () => void) => {},
+    leave: (_destination: () => void, _keep?: boolean) => {},
     down: (_action: PadAction) => {},
     up: (_action: PadAction) => {},
     nextLesson: () => {},
@@ -119,6 +124,9 @@ export function CubeScreen(props: Props) {
   const [status, setStatus] = useState<Status>('playing');
   /** Paused, or over, with the hub turned to be looked at: no dialog. */
   const [looking, setLooking] = useState(false);
+  /** The results were looked away from and back: they answer at once, as
+   * no press meant for the game can reach them now. */
+  const [resultsSeen, setResultsSeen] = useState(false);
   const [result, setResult] = useState<RunRecord | null>(null);
   const [overGlass, setOverGlass] = useState('');
   const [line, setLine] = useState<Status3d>({ steering: 'top', tip: null, look: null });
@@ -142,22 +150,41 @@ export function CubeScreen(props: Props) {
 
   useEffect(() => {
     const frame = frameRef.current!;
-    const canvas = canvasRef.current!;
+    // A canvas of its own for every game: the drawing context is let go of
+    // with it, rather than whenever the browser gets round to it.
+    const canvas = document.createElement('canvas');
+    canvas.className = 'stage__canvas';
+    canvas.tabIndex = -1;
+    canvas.setAttribute('aria-label', t('Игровое поле'));
+    stageRef.current!.prepend(canvas);
     /** The lesson shown, or −1 in a game. */
     let lesson = tutorial ? 0 : -1;
-    let game = tutorial
-      ? lessonGame(0)
-      : new CubeGame({
-          centre: live.current.settings.cube.width,
-          arm: live.current.settings.cube.arm,
-          numberOfColors: live.current.settings.cube.colours,
-          depthFalls: live.current.settings.cube.depthFalls,
-          ramp: CUBE_RAMP,
-        });
+    const fresh = () =>
+      new CubeGame({
+        centre: live.current.settings.cube.width,
+        arm: live.current.settings.cube.arm,
+        numberOfColors: live.current.settings.cube.colours,
+        depthFalls: live.current.settings.cube.depthFalls,
+        ramp: CUBE_RAMP,
+      });
+    let restored = false;
+    let game: CubeGame;
+    if (tutorial) game = lessonGame(0);
+    else if (props.restore) {
+      try {
+        game = CubeGame.restore(props.restore.game);
+        restored = true;
+      } catch {
+        // Not a game after all: a new one, under a run of its own.
+        game = fresh();
+        runId.current = newId();
+      }
+    } else game = fresh();
     let view: CubeView;
     try {
       view = new CubeView(canvas, game);
     } catch {
+      canvas.remove();
       setFailed(true);
       return;
     }
@@ -187,9 +214,12 @@ export function CubeScreen(props: Props) {
     observer.observe(frame);
 
     const place = { world: 'cube' as const };
-    let current: Status = 'playing';
+    // A kept game opens paused: the player looks first, then goes on.
+    let current: Status = restored ? 'paused' : 'playing';
     let isLooking = false;
     let finished = false;
+    setStatus(current);
+    view.paused = current !== 'playing';
     const setRunStatus = (next: Status) => {
       const before = current;
       current = next;
@@ -204,8 +234,16 @@ export function CubeScreen(props: Props) {
       setLooking(on);
       if (!on) view.endInspect();
     };
-    if (!tutorial) reportLevel('level_started', place);
-    live.current.onPauseChanged?.(false);
+    if (!tutorial && !restored) reportLevel('level_started', place);
+    live.current.onPauseChanged?.(current === 'paused');
+
+    /** Keeps the game as it is, when it is at rest; otherwise the last one
+     * kept stands, a moment older. */
+    const checkpoint = () => {
+      if (tutorial || finished) return;
+      const snapshot = game.snapshot();
+      if (snapshot) live.current.onCheckpoint?.({ version: 1, id: runId.current, savedAt: Date.now(), game: snapshot });
+    };
 
     const recordRun = (interrupted: boolean) => {
       if (interrupted) reportAbandoned(place);
@@ -223,6 +261,7 @@ export function CubeScreen(props: Props) {
         interrupted,
       };
       live.current.onRecord(record);
+      live.current.onCheckpoint?.(null);
       setResult(record);
     };
 
@@ -238,6 +277,7 @@ export function CubeScreen(props: Props) {
       letGo();
       if (isLooking) setLook(false);
       setRunStatus(current === 'playing' ? 'paused' : 'playing');
+      checkpoint();
     };
     const retry = () => {
       if (tutorial) return;
@@ -251,10 +291,14 @@ export function CubeScreen(props: Props) {
       look: (on) => {
         letGo();
         setLook(on);
+        if (current === 'over') setResultsSeen(true);
       },
-      leave: (destination) => {
+      leave: (destination, keep = true) => {
         letGo();
-        if (!finished && (game.placed > 0 || game.seconds > 5)) recordRun(true);
+        // Kept to go on with later, or given up and recorded.
+        if (keep) checkpoint();
+        else if (!finished && (game.placed > 0 || game.seconds > 5)) recordRun(true);
+        else live.current.onCheckpoint?.(null);
         finished = true;
         destination();
       },
@@ -483,6 +527,7 @@ export function CubeScreen(props: Props) {
     };
     const onBlur = () => {
       letGo();
+      checkpoint();
       if (current === 'playing' && !tutorial) setRunStatus('paused');
     };
     window.addEventListener('keydown', onKeyDown);
@@ -504,6 +549,10 @@ export function CubeScreen(props: Props) {
     let shown = EMPTY_HUD;
     let said = '';
     let wasFrozen = false;
+    /** Seconds of play since the game was last kept, and whether it has
+     * changed since. */
+    let unsaved = 0;
+    let changed = false;
     const tick = (now: number) => {
       const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, (now - last) / 1000));
       last = now;
@@ -557,6 +606,14 @@ export function CubeScreen(props: Props) {
       }
 
       if (tutorial && !frozen) checkLesson(seconds, now);
+      // Kept every two seconds of play, and as soon as a move is over.
+      if (play) unsaved += seconds;
+      if (events.some((event) => event.type === 'landed' || event.type === 'switched' || event.type === 'matched')) changed = true;
+      if ((changed || unsaved >= 2) && game.phase === 'playing' && !view.tilting) {
+        checkpoint();
+        changed = false;
+        unsaved = 0;
+      }
 
       // The readout: only when a number changed.
       const next: HudState = {
@@ -594,6 +651,7 @@ export function CubeScreen(props: Props) {
       keyboard.releaseAll();
       pads.releaseAll();
       view.dispose();
+      canvas.remove();
     };
     // The game, or the tutorial, is fixed for the life of this component;
     // the parent re-keys it for every new one.
@@ -618,15 +676,16 @@ export function CubeScreen(props: Props) {
   };
   const mode = MODE_NAMES.cube;
   const keyboard = !touch;
+  /** The key that brings the dialog back after a look around: Esc where the
+   * game may use it, else the pause key. */
+  const backKey = keyLabel(USES_ESCAPE ? 'Escape' : settings.bindings.pause[0] ?? 'Escape');
   // A done lesson keeps its keys, dimmed: the panel keeps its size.
   const lessonKeys = tutorial ? LESSON_KEYS[tutorialStep] ?? [] : [];
   const field = (
     <div className="game__frame" ref={frameRef}>
-      <div className="stage" style={{ width: size, height: size, fontSize: Math.max(9, size / 58) }}>
-        <canvas ref={canvasRef} className="stage__canvas" tabIndex={-1} aria-label={t('Игровое поле')}
-          style={{ width: size, height: size }} />
+      <div className="stage" ref={stageRef} style={{ width: size, height: size, fontSize: Math.max(9, size / 58) }}>
         <div className="cube-bar">
-          <CubeLine line={line} looking={looking} keyboard={keyboard} />
+          <CubeLine line={line} looking={looking} keyboard={keyboard} back={backKey} />
           {looking && !blocked && (
             <Button primary onClick={() => (status === 'paused' ? actions.current.togglePause() : actions.current.look(false))}><T>
               {status === 'paused' ? 'Продолжить' : 'К итогам'}
@@ -724,14 +783,15 @@ export function CubeScreen(props: Props) {
               <Button onClick={() => actions.current.retry()}><T>Заново</T></Button>
               <Button onClick={props.onSettings}><T>Настройки</T></Button>
               <Button onClick={() => actions.current.leave(props.onSetup)}><T>К режиму</T></Button>
-              <Button ghost onClick={() => actions.current.leave(props.onExit)}><T>Завершить партию</T></Button>
+              <Button onClick={() => actions.current.leave(props.onExit)}><T>В меню</T></Button>
+              <Button ghost onClick={() => actions.current.leave(props.onExit, false)}><T>Завершить партию</T></Button>
             </div>
           </div>
         </Overlay>
       )}
 
       {status === 'over' && result && !looking && !blocked && (
-        <Overlay armAfterMs={RESULT_ARM_MS}>
+        <Overlay armAfterMs={resultsSeen ? 0 : RESULT_ARM_MS}>
           <div className="dialog dialog--narrow">
             <span className="kicker"><T>{mode}</T></span>
             <h2 className="dialog__title dialog__title--danger"><T>Игра окончена</T></h2>
@@ -774,11 +834,11 @@ export function CubeScreen(props: Props) {
 /** The one line of words over the bottom of the field: which glass is
  * steered when it is not the one on top, what a tip held would pop, what
  * shows from where the hub is looked at. Nothing while plain play goes on. */
-function CubeLine({ line, looking, keyboard }: { line: Status3d; looking: boolean; keyboard: boolean }) {
+function CubeLine({ line, looking, keyboard, back }: { line: Status3d; looking: boolean; keyboard: boolean; back: string }) {
   let text: string | null = null;
   if (looking) {
     const lines = !line.look || line.look.runs === 0 ? 'линий отсюда нет' : `линий отсюда: ${line.look.runs}, блоков ${line.look.blocks}`;
-    text = keyboard ? `Осмотр · ${lines} · стрелки и W — повернуть · Esc — назад` : `Осмотр · ${lines}`;
+    text = keyboard ? `Осмотр · ${lines} · стрелки и W — повернуть · ${back} — назад` : `Осмотр · ${lines}`;
   } else if (line.tip) {
     const { popped, rounds } = line.tip;
     const pops = popped === 0 ? 'ничего не лопнет' : rounds > 1 ? `лопнет ${popped}, каскад ×${rounds}` : `лопнет ${popped}`;

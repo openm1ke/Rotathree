@@ -29,12 +29,15 @@ import {
   saveTutorial,
   loadCubeTutorial,
   saveCubeTutorial,
+  loadCubeRun,
+  saveCubeRun,
   type Progress,
   type RunRecord,
   type Settings,
   type Stats,
 } from './services/storage';
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
+import { abandonedCube, type CubeSave } from './cube/save';
 import { MusicPlayer } from './services/music';
 import { sounds } from './services/sounds';
 import { isPlatformHidden, isPlatformMuted, subscribeMute, subscribeVisibility } from './platform/lifecycle';
@@ -59,7 +62,7 @@ type Route =
   | { name: 'cube' }
   /** `then`: where the tutorial leads when it is skipped — into a game, when
    * it came before the first one, or back to Cube's screen. */
-  | { name: 'cubePlay'; tutorial?: boolean; then?: 'game' | 'setup' }
+  | { name: 'cubePlay'; tutorial?: boolean; then?: 'game' | 'setup'; restore?: CubeSave }
   | { name: 'statistics' }
   | { name: 'settings' }
   | { name: 'play'; session: Session; from: From; restore?: RunSave; resumeImmediately?: boolean; tutorial?: boolean };
@@ -93,6 +96,13 @@ export default function App() {
   const savedRef = useRef(savedRuns);
   const [tutorialDone, setTutorialDone] = useState(() => loadTutorial());
   const [cubeTutorialDone, setCubeTutorialDone] = useState(() => loadCubeTutorial());
+  /** The game of Cube left unfinished: one at a time, as for each mode of
+   * the flat game. One whose run is recorded already is over. */
+  const [cubeRun, setCubeRun] = useState<CubeSave | null>(() => {
+    const save = loadCubeRun();
+    return save && !stats.recent.some((run) => run.id === save.id) ? save : null;
+  });
+  const cubeRunRef = useRef(cubeRun);
   const afterTutorial = useRef<{ session: Session; from: From } | null>(null);
   const stored = failedWrites.length === 0;
   const written = useCallback((key: string, ok: boolean) => {
@@ -208,6 +218,7 @@ export default function App() {
     written('run', saveRuns(savedRef.current));
     written('tutorial', saveTutorial(tutorialDone));
     written('cubeTutorial', saveCubeTutorial(cubeTutorialDone));
+    written('cubeRun', saveCubeRun(cubeRunRef.current));
   };
 
   const openTutorial = useCallback((after: { session: Session; from: From } | null = null) => {
@@ -296,10 +307,29 @@ export default function App() {
     [written],
   );
   const home = useCallback(() => setRoute({ name: 'home' }), []);
+  const cubeCheckpoint = useCallback(
+    (save: CubeSave | null) => {
+      cubeRunRef.current = save;
+      setCubeRun(save);
+      written('cubeRun', saveCubeRun(save));
+    },
+    [written],
+  );
+  /** A new game of Cube: one left unfinished is given up, and recorded. */
   const playCube = useCallback(() => {
+    if (cubeRunRef.current) {
+      recordRun(abandonedCube(cubeRunRef.current));
+      cubeCheckpoint(null);
+    }
     setNonce((n) => n + 1);
     setSettingsOpen(false);
     setRoute({ name: 'cubePlay' });
+  }, [recordRun, cubeCheckpoint]);
+  const resumeCube = useCallback(() => {
+    if (!cubeRunRef.current) return;
+    setNonce((n) => n + 1);
+    setSettingsOpen(false);
+    setRoute({ name: 'cubePlay', restore: cubeRunRef.current });
   }, []);
   const openCubeTutorial = useCallback((then: 'game' | 'setup') => {
     setNonce((n) => n + 1);
@@ -340,6 +370,7 @@ export default function App() {
         <MainMenu
           progress={progress}
           savedRuns={savedRuns}
+          cubeSaved={cubeRun !== null}
           tutorialDone={tutorialDone}
           onTutorial={() => openTutorial()}
           onResume={() => setRoute({ name: 'resume' })}
@@ -351,7 +382,8 @@ export default function App() {
       break;
     case 'resume':
       screen = (
-        <ResumeScreen runs={savedRuns} onResume={(save) => openGame(save.session, 'home', save)} onBack={home} />
+        <ResumeScreen runs={savedRuns} onResume={(save) => openGame(save.session, 'home', save)}
+          cube={cubeRun} onResumeCube={resumeCube} onBack={home} />
       );
       break;
     case 'campaign':
@@ -386,6 +418,8 @@ export default function App() {
           colours={activeColours}
           onChange={(cube) => setSettings((current) => ({ ...current, cube }))}
           onStart={startCube}
+          saved={cubeRun}
+          onResume={resumeCube}
           onTutorial={() => openCubeTutorial('setup')}
           onBack={home}
           active={!settingsOpen}
@@ -408,6 +442,8 @@ export default function App() {
               setRoute({ name: 'cube' });
             }}
             onRetry={playCube}
+            restore={route.restore}
+            onCheckpoint={cubeCheckpoint}
             tutorial={route.tutorial}
             onTutorialDone={(played) => finishCubeTutorial(played, route.then)}
             onRecord={recordRun}

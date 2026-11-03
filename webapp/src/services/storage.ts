@@ -4,6 +4,7 @@ import { defaultBindings, cloneBindings, sanitizeBindings, type Bindings } from 
 import { defaultHandling, type Handling } from '../input/keyboard';
 import { CAMPAIGN } from '../game/campaign';
 import { DEFAULT_CUSTOM, sanitizeCustom, type CustomSetup, type ModeId } from '../game/modes';
+import { sanitizeCubeSave, type CubeSave } from '../cube/save';
 import { sanitizeRunSave, sanitizeSavedRuns, type RunSave, type SavedRuns } from './runSave';
 import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
 import { DEFAULT_POSITIONS, sanitizePositions, type PadPositions } from '../input/padPlacement';
@@ -425,6 +426,7 @@ export const STORAGE_KEYS = {
   run: 'rotathree.run.web.v1',
   tutorial: 'rotathree.tutorial.v1',
   cubeTutorial: 'rotathree.cube-tutorial.v1',
+  cubeRun: 'rotathree.cube-run.v1',
 } as const;
 const KEYS = STORAGE_KEYS;
 
@@ -480,3 +482,6 @@ export const saveTutorial = (value: boolean, storage = browserStorage()) => writ
 /** Whether Cube's own lessons have been seen (or skipped). */
 export const loadCubeTutorial = (storage = browserStorage()) => read(KEYS.cubeTutorial, (raw) => raw === true, storage);
 export const saveCubeTutorial = (value: boolean, storage = browserStorage()) => write(KEYS.cubeTutorial, value, storage);
+/** The game of Cube left unfinished, if any. */
+export const loadCubeRun = (storage = browserStorage()) => read(KEYS.cubeRun, sanitizeCubeSave, storage);
+export const saveCubeRun = (save: CubeSave | null, storage = browserStorage()) => write(KEYS.cubeRun, save, storage);
