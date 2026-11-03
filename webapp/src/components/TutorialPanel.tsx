@@ -21,6 +21,7 @@ export const TUTORIAL_LESSONS = [
 ] as const;
 
 export function TutorialPanel({
+  lessons = TUTORIAL_LESSONS,
   step,
   performed,
   controls,
@@ -32,6 +33,8 @@ export function TutorialPanel({
   onNext,
   onSkip,
 }: {
+  /** Title and line of each lesson: the flat game's unless given. */
+  lessons?: readonly (readonly [string, string])[];
   step: number;
   performed: boolean;
   controls: readonly TutorialControl[];
@@ -61,8 +64,8 @@ export function TutorialPanel({
     observer.observe(content);
     return () => observer.disconnect();
   }, []);
-  const [title, body] = TUTORIAL_LESSONS[step];
-  const last = step === TUTORIAL_LESSONS.length - 1;
+  const [title, body] = lessons[step];
+  const last = step === lessons.length - 1;
   const waitsForButton = step === 0 || last;
   // The button waits for Enter; a lesson with an action keeps the focus on
   // itself, so Enter cannot press some other button by surprise.
@@ -80,7 +83,7 @@ export function TutorialPanel({
     >
       <div className="tutorial__inner" ref={inner}>
       <div className="tutorial__top">
-        <span className="tutorial__count"><T>{step + 1} / {TUTORIAL_LESSONS.length}</T></span>
+        <span className="tutorial__count"><T>{step + 1} / {lessons.length}</T></span>
         <button type="button" className="tutorial__skip" aria-keyshortcuts="Backspace" onClick={onSkip}>
           <T>Пропустить</T>
           {keyboard && <span aria-hidden="true"><Keycap code="Backspace" /></span>}

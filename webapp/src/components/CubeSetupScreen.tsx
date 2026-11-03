@@ -14,6 +14,8 @@ interface Props {
   colours: string[];
   onChange: (cube: CubeOptions) => void;
   onStart: () => void;
+  /** Cube's lessons, again. */
+  onTutorial: () => void;
   onBack: () => void;
   active: boolean;
 }
@@ -42,7 +44,7 @@ const PADS: readonly { where: string; label: string }[] = [
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 /** Cube's own screen: what it is, how it is played, and its few options. */
-export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, onBack, active }: Props) {
+export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, onTutorial, onBack, active }: Props) {
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, onBack);
   const touch = useTouchControls();
@@ -57,6 +59,7 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, o
       kicker="Режим"
       title="Куб"
       onBack={onBack}
+      actions={<Button ghost onClick={onTutorial}><T>Обучение</T></Button>}
       footer={<span><T>Вид куба настраивается в настройках, во вкладке «Интерфейс»</T></span>}
     >
       <div className="form-layout">

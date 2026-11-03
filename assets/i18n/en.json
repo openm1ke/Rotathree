@@ -439,5 +439,19 @@
   "Рёбра стаканов в объёме": "Edges of the glasses in 3D",
   "Номера стаканов": "Glass numbers",
   "Куб не запустился": "Cube could not start",
-  "Браузеру не хватает WebGL — 3D-графики, которой нарисован куб.": "This browser lacks WebGL, the 3D graphics the cube is drawn with."
+  "Браузеру не хватает WebGL — 3D-графики, которой нарисован куб.": "This browser lacks WebGL, the 3D graphics the cube is drawn with.",
+  "Это куб": "This is a cube",
+  "Шесть стаканов вокруг него. Крест на экране — вид спереди": "Six glasses around it. The cross on the screen is its front view",
+  "Линия — из того, что видно": "A line is what you see",
+  "Блоки лежат на разной глубине, а считается картинка. Брось фигуру": "The blocks lie at different depths, but the picture is what counts. Drop the piece",
+  "Стакан спереди": "The front glass",
+  "Возьми его и брось: фигура летит вглубь. Метка в углу — будет ли её видно": "Take it and drop: the piece flies into the depth. The corner mark says whether it will be seen",
+  "Опрокинь куб": "Tip the cube over",
+  "Держи — покажет, как ляжет и что лопнет. Отпусти — опрокинет": "Hold to see how it will lie and what will pop. Release to tip it over",
+  "Загляни в объём": "Look into the volume",
+  "Держи — куб раскроется в 3D": "Hold, and the cube opens up in 3D",
+  "Теперь сам": "Your turn",
+  "Крест поворачивается, как в 2D. ↑ ↓ — опрокинуть куб": "The cross turns as in 2D. ↑ ↓ tip the cube over",
+  "Сначала возьми стакан спереди": "Take the front glass first",
+  "Мимо — попробуй ещё раз": "Missed. Try again"
 }

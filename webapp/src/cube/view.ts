@@ -320,7 +320,7 @@ export class CubeView {
 
   constructor(
     canvas: HTMLCanvasElement,
-    readonly game: CubeGame,
+    public game: CubeGame,
   ) {
     const { centre, arm } = game.config;
     this.n = centre + 2 * arm;
@@ -627,6 +627,10 @@ export class CubeView {
     const high = this.distance * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const wide = high * camera.aspect;
     this.orthographic.makeOrthographic(-wide, wide, high, -high, camera.near, camera.far);
+    // A canvas sized anew is blank: what was drawn is drawn again at once,
+    // or a field that changes size frame after frame would flicker.
+    this.project(this.depthShown === FLAT ? 0 : (this.depthShown - FLAT) / (1 - FLAT));
+    this.renderer.render(this.scene, this.camera);
   }
 
   /** The flat picture is drawn straight on, like the flat game — no block
@@ -638,6 +642,20 @@ export class CubeView {
     const p = this.perspective.elements;
     for (let i = 0; i < 16; i++) e[i] = o[i] + (p[i] - o[i]) * opened;
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+  }
+
+  /** Shows another game of the same size from scratch, as a new game lies:
+   * the tutorial's lessons. */
+  reset(game: CubeGame): void {
+    this.game = game;
+    for (const q of [this.targetQ, this.turnFrom, this.turned, this.tiltFrom]) q.identity();
+    Object.assign(this.turn, { t: 1, tilt: false, carry: false, steeredFrom: game.active });
+    this.preview = null;
+    this.inspect = null;
+    this.pieceViews.clear();
+    this.flashes.clear();
+    this.behindCache.key = '';
+    this.linesCache.key = '';
   }
 
   dispose(): void {
@@ -844,10 +862,12 @@ export class CubeView {
     this.transition(SCENE_RIGHT, { carry: true });
   }
 
-  commitTip(up: boolean): void {
-    if (this.preview?.up !== up) return;
+  /** True when the hub was tipped. */
+  commitTip(up: boolean): boolean {
+    if (this.preview?.up !== up) return false;
     this.preview = null;
     this.turnHub(SCENE_RIGHT, up ? 1 : -1, true);
+    return true;
   }
 
   cancelTip(): void {

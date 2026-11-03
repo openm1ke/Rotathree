@@ -27,6 +27,8 @@ import {
   saveRuns,
   loadTutorial,
   saveTutorial,
+  loadCubeTutorial,
+  saveCubeTutorial,
   type Progress,
   type RunRecord,
   type Settings,
@@ -55,7 +57,9 @@ type Route =
   | { name: 'campaign' }
   | { name: 'custom' }
   | { name: 'cube' }
-  | { name: 'cubePlay' }
+  /** `then`: where the tutorial leads when it is skipped — into a game, when
+   * it came before the first one, or back to Cube's screen. */
+  | { name: 'cubePlay'; tutorial?: boolean; then?: 'game' | 'setup' }
   | { name: 'statistics' }
   | { name: 'settings' }
   | { name: 'play'; session: Session; from: From; restore?: RunSave; resumeImmediately?: boolean; tutorial?: boolean };
@@ -88,6 +92,7 @@ export default function App() {
   );
   const savedRef = useRef(savedRuns);
   const [tutorialDone, setTutorialDone] = useState(() => loadTutorial());
+  const [cubeTutorialDone, setCubeTutorialDone] = useState(() => loadCubeTutorial());
   const afterTutorial = useRef<{ session: Session; from: From } | null>(null);
   const stored = failedWrites.length === 0;
   const written = useCallback((key: string, ok: boolean) => {
@@ -202,6 +207,7 @@ export default function App() {
     written('custom', saveCustom(custom));
     written('run', saveRuns(savedRef.current));
     written('tutorial', saveTutorial(tutorialDone));
+    written('cubeTutorial', saveCubeTutorial(cubeTutorialDone));
   };
 
   const openTutorial = useCallback((after: { session: Session; from: From } | null = null) => {
@@ -295,6 +301,28 @@ export default function App() {
     setSettingsOpen(false);
     setRoute({ name: 'cubePlay' });
   }, []);
+  const openCubeTutorial = useCallback((then: 'game' | 'setup') => {
+    setNonce((n) => n + 1);
+    setSettingsOpen(false);
+    setRoute({ name: 'cubePlay', tutorial: true, then });
+  }, []);
+  /** Cube's first game begins with its lessons. */
+  const startCube = useCallback(() => {
+    if (cubeTutorialDone) playCube();
+    else openCubeTutorial('game');
+  }, [cubeTutorialDone, playCube, openCubeTutorial]);
+  const finishCubeTutorial = useCallback(
+    (played: boolean, then: 'game' | 'setup' = 'setup') => {
+      setCubeTutorialDone(true);
+      written('cubeTutorial', saveCubeTutorial(true));
+      if (played || then === 'game') playCube();
+      else {
+        setSettingsOpen(false);
+        setRoute({ name: 'cube' });
+      }
+    },
+    [written, playCube],
+  );
   /** The quick sound switch mutes music and effects together, and turns both
    * back on. */
   const toggleMusic = useCallback(
@@ -357,7 +385,8 @@ export default function App() {
           stats={stats}
           colours={activeColours}
           onChange={(cube) => setSettings((current) => ({ ...current, cube }))}
-          onStart={playCube}
+          onStart={startCube}
+          onTutorial={() => openCubeTutorial('setup')}
           onBack={home}
           active={!settingsOpen}
         />
@@ -379,6 +408,8 @@ export default function App() {
               setRoute({ name: 'cube' });
             }}
             onRetry={playCube}
+            tutorial={route.tutorial}
+            onTutorialDone={(played) => finishCubeTutorial(played, route.then)}
             onRecord={recordRun}
           />
         </Suspense>

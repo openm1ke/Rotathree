@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGame, EMPTY, SIDES, type Vec } from '../cube/rules';
+import { CUBE_LESSON_LAST, lessonGame } from '../cube/tutorial';
 
 const run = (game: CubeGame, seconds: number) => {
   for (let t = 0; t < seconds; t += 0.02) game.update(0.02);
@@ -149,5 +150,57 @@ describe('Cube: a whole game', () => {
     game.softDrop = true;
     run(game, 0.3);
     expect(start - game.activePiece!.pivot[1]).toBeGreaterThan(3);
+  });
+});
+
+describe('Cube: the tutorial', () => {
+  const settle = (game: CubeGame) => {
+    for (let i = 0; i < 400 && game.phase !== 'playing'; i++) game.update(0.02);
+  };
+
+  it('holds the sticks still in the lessons, and lets them fall in free play', () => {
+    const held = lessonGame(1);
+    const start = [...held.activePiece!.pivot];
+    run(held, 3);
+    expect(held.activePiece!.pivot).toEqual(start);
+    const free = lessonGame(CUBE_LESSON_LAST);
+    const top = free.activePiece!.pivot[1];
+    run(free, 3);
+    expect(free.activePiece!.pivot[1]).toBeLessThan(top);
+  });
+
+  it('pops a line with the stick on top dropped where it is', () => {
+    const game = lessonGame(1);
+    expect(game.findMatches().runs).toHaveLength(0);
+    game.dropActive();
+    run(game, 0.3);
+    expect(game.matches).toBe(1);
+  });
+
+  it('pops a line with the stick in front dropped to the back of the cube', () => {
+    const game = lessonGame(2);
+    game.control(FRONT);
+    expect(game.landing()).toMatchObject({ count: 3 });
+    game.dropActive();
+    run(game, 0.3);
+    expect(game.matches).toBe(1);
+  });
+
+  it('pops the tops of the columns when tipped back over the top', () => {
+    const game = lessonGame(3);
+    expect(game.findMatches().runs).toHaveLength(0);
+    expect(game.previewTurn([0, 1, 0], { right: [1, 0, 0], up: [0, 0, -1] }).popped).toBe(3);
+    game.turn(BACK, [0, 1, 0], { right: [1, 0, 0], up: [0, 0, -1] }, true);
+    settle(game);
+    run(game, 1);
+    expect(game.matches).toBe(1);
+  });
+
+  it('starts every lesson with nothing to pop', () => {
+    for (let lesson = 0; lesson <= CUBE_LESSON_LAST; lesson++) {
+      const game = lessonGame(lesson);
+      expect(game.findMatches().runs, `lesson ${lesson}`).toHaveLength(0);
+      expect(game.settle(), `lesson ${lesson}`).toHaveLength(0);
+    }
   });
 });

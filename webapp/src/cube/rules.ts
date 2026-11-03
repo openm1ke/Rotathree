@@ -347,6 +347,8 @@ export class CubeGame {
   seconds = 0;
   speedLevel = 0;
   softDrop = false;
+  /** The tutorial's sticks hold still: they move only when moved. */
+  stepsHeld = false;
   drop: { piece: Stick; from: Vec; cells: number } | null = null;
   activeMatch: Match | null = null;
   moves: BlockMove[] = [];
@@ -805,6 +807,7 @@ export class CubeGame {
   }
 
   private advancePieces(seconds: number): void {
+    if (this.stepsHeld) return;
     for (const piece of this.pieces.values()) {
       if (!this.fallsAlone(piece)) continue;
       piece.progress = Math.min(1, piece.progress + seconds / this.stepSeconds(piece));

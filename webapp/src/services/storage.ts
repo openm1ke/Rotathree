@@ -405,6 +405,7 @@ export const STORAGE_KEYS = {
   custom: 'rotathree.custom.v1',
   run: 'rotathree.run.web.v1',
   tutorial: 'rotathree.tutorial.v1',
+  cubeTutorial: 'rotathree.cube-tutorial.v1',
 } as const;
 const KEYS = STORAGE_KEYS;
 
@@ -457,3 +458,6 @@ export const loadRuns = (storage = browserStorage()) => read(KEYS.run, sanitizeS
 export const saveRuns = (runs: SavedRuns, storage = browserStorage()) => write(KEYS.run, { version: 2, runs }, storage);
 export const loadTutorial = (storage = browserStorage()) => read(KEYS.tutorial, (raw) => raw === true, storage);
 export const saveTutorial = (value: boolean, storage = browserStorage()) => write(KEYS.tutorial, value, storage);
+/** Whether Cube's own lessons have been seen (or skipped). */
+export const loadCubeTutorial = (storage = browserStorage()) => read(KEYS.cubeTutorial, (raw) => raw === true, storage);
+export const saveCubeTutorial = (value: boolean, storage = browserStorage()) => write(KEYS.cubeTutorial, value, storage);
