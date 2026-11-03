@@ -2422,13 +2422,15 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 1fr;
-  gap: 12px;
+  gap: clamp(6px, 1.6svh, 12px);
   max-width: 680px;
 }
+/* Sized by the height too: the whole menu, Continue included, fits a low or
+   square window (1:1) without scrolling. */
 .navitem--tile {
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  padding: 14px 16px;
+  gap: clamp(8px, 1.6vw, 14px);
+  padding: clamp(6px, 1.5svh, 14px) clamp(10px, 2vw, 16px);
   border: 1px solid var(--line-strong);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.035);
@@ -2446,17 +2448,17 @@ select:focus-visible {
 .home__more {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: inherit;
 }
 /* Names in the accent of the round buttons beside the logo; a picked tile's
    name turns white, its border takes the accent. */
-.navitem--tile .navitem__title { font-size: clamp(20px, min(3vw, 4.2svh), 30px); color: var(--accent); }
+.navitem--tile .navitem__title { font-size: clamp(15px, min(3vw, 4.2svh), 30px); color: var(--accent); }
 .navitem--tile:hover .navitem__title,
 .navitem--tile:focus-visible .navitem__title { color: #fff; text-shadow: none; }
-.navitem--tile .navitem__caption { opacity: 1; font-size: 13px; }
+.navitem--tile .navitem__caption { opacity: 1; font-size: clamp(11px, 2.3svh, 13px); }
 .navitem__picture {
-  width: 44px;
-  height: 44px;
+  width: clamp(26px, 6.5svh, 44px);
+  height: clamp(26px, 6.5svh, 44px);
   display: grid;
   place-items: center;
   color: var(--accent);
@@ -2465,7 +2467,7 @@ select:focus-visible {
 .navitem__done {
   display: block;
   height: 3px;
-  margin-top: 7px;
+  margin-top: clamp(3px, 0.9svh, 7px);
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -2491,15 +2493,17 @@ select:focus-visible {
 .navitem--tile .blocks i:nth-child(4) { animation-delay: 150ms; }
 .navitem--tile .blocks i:nth-child(n + 5) { animation-delay: 200ms; }
 @keyframes block-hop { 40% { transform: translateY(-22%); } }
+/* A phone held upright: one column, a little larger type. A square or low
+   window keeps the two columns. */
+@media (max-width: 520px) and (min-height: 560px) {
+  .home__nav { grid-template-columns: minmax(0, 1fr); }
+  .navitem--tile .navitem__title { font-size: clamp(17px, 3.4svh, 26px); }
+}
 @media (max-width: 520px) {
-  .home__nav { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .navitem--tile { padding: 10px 14px; }
-  .navitem--tile .navitem__picture { width: 36px; height: 36px; }
   /* Side by side on a phone, the two smaller tiles fit their names in. */
   .navitem--small { gap: 10px; padding-inline: 12px; }
   .navitem--tile.navitem--small .navitem__picture { width: 26px; height: 26px; }
   .navitem--small .navitem__title { font-size: clamp(13px, 3.9vw, 17px); }
-  .home__more { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .navitem--tile:hover .blocks i,

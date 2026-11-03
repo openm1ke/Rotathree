@@ -75,6 +75,8 @@ const TURN_SLOWER = 1.4;
 /** The flat game's own turn, by default: the hub leans over in TILT_SECONDS
  * then, and as much quicker or slower as the player sets the turns. */
 const DEFAULT_TURN_MS = 260;
+/** Seconds of play between two keepings of the game, at least. */
+const SAVE_EVERY_SECONDS = 5;
 /** Frames a still picture is drawn for (a turn or a fade finishing) before
  * the drawing stops: a paused game, the results, burn no battery. */
 const STILL_FRAMES = 45;
@@ -553,8 +555,9 @@ export function CubeScreen(props: Props) {
       if (current === 'over' && !isLooking) return;
       if (target?.closest('input, select, textarea, [contenteditable], [role="dialog"]')) return;
       if (target?.closest('button') && ['Space', 'Enter', 'NumpadEnter'].includes(event.code)) return;
-      // Looking around: Esc, or the pause key, brings the dialog back.
-      if (isLooking && (event.code === 'Escape' || live.current.settings.bindings.pause.includes(event.code))) {
+      // Looking around: Esc, where the game may use it, or the pause key
+      // brings the dialog back.
+      if (isLooking && ((USES_ESCAPE && event.code === 'Escape') || live.current.settings.bindings.pause.includes(event.code))) {
         event.preventDefault();
         if (current === 'paused') togglePause();
         else setLook(false);
@@ -667,10 +670,12 @@ export function CubeScreen(props: Props) {
         setRunStatus('done');
         sounds.play('level');
       }
-      // Kept every two seconds of play, and as soon as a move is over.
+      // Kept once a move is over, at most every few seconds (the platform's
+      // storage is not to be written all the time), and on a pause or when
+      // the page goes, at once.
       if (play) unsaved += seconds;
       if (events.some((event) => event.type === 'landed' || event.type === 'switched' || event.type === 'matched')) changed = true;
-      if ((changed || unsaved >= 2) && game.phase === 'playing' && !view.tilting) {
+      if (((changed && unsaved >= SAVE_EVERY_SECONDS) || unsaved >= 3 * SAVE_EVERY_SECONDS) && game.phase === 'playing' && !view.tilting) {
         checkpoint();
         changed = false;
         unsaved = 0;
