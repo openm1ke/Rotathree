@@ -82,11 +82,11 @@ const SAVE_EVERY_SECONDS = 5;
 const STILL_FRAMES = 45;
 
 /** While the hub is turned to be looked at, the play keys turn it as they
- * do in play: ← → round like a clock, ↑ ↓ the glass behind or in front over
- * the top. The stick's turn shows it from the side. */
+ * do in play: → clockwise, ← counterclockwise, ↑ ↓ the glass behind or in
+ * front over the top. The stick's turn shows it from the side. */
 const LOOK_TURNS: Partial<Record<OneShot, [LookAxis, -1 | 1]>> = {
-  glassLeft: ['sight', -1],
-  glassRight: ['sight', 1],
+  glassLeft: ['sight', 1],
+  glassRight: ['sight', -1],
   tipBack: ['across', 1],
   tipFront: ['across', -1],
   rotateCW: ['upright', -1],
@@ -388,7 +388,7 @@ export function CubeScreen(props: Props) {
       if (lessonDone || lesson === 0) return false;
       if (lesson === 1) return PIECE_ACTIONS.includes(action);
       if (lesson === 2) return action === 'glassLeft' || action === 'glassRight';
-      if (lesson === 3) return action === 'tipBack';
+      if (lesson === 3) return action === 'tipBack' || action === 'tipFront';
       return action === 'peek' || (view.peeking && PIECE_ACTIONS.includes(action));
     };
     const wrongInput = () => {
@@ -476,7 +476,9 @@ export function CubeScreen(props: Props) {
             break;
           case 'glassLeft':
           case 'glassRight':
-            view.turnCross(action === 'glassLeft' ? -1 : 1);
+            // As the arrows and the pads' marks say: → (↷) clockwise, ← (↶)
+            // counterclockwise.
+            view.turnCross(action === 'glassRight' ? -1 : 1);
             if (lesson === 2) didLesson();
             break;
           case 'tipBack':
@@ -956,7 +958,7 @@ function CubeLine({ line, looking, keyboard, back }: { line: Status3d; looking: 
   } else if (line.tip) {
     const { popped, rounds } = line.tip;
     const pops = popped === 0 ? 'ничего не лопнет' : rounds > 1 ? `лопнет ${popped}, каскад ×${rounds}` : `лопнет ${popped}`;
-    text = `Отпустите — опрокинуть · ${pops}`;
+    text = `Отпустите — повернуть куб · ${pops}`;
   } else if (line.steering !== 'top') {
     text = line.steering === 'front' ? 'Передний стакан' : 'Задний стакан';
   }

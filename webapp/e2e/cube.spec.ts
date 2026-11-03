@@ -50,7 +50,7 @@ test('every lesson is done with the keys it teaches, and a miss lays it out agai
   await page.keyboard.press('Space');
   await expect(page.locator('.tutorial__hint')).toHaveText('Нажми подсвеченную клавишу');
   await page.keyboard.press('ArrowLeft');
-  await expect(page.getByRole('heading', { name: 'Опрокинь куб' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни скрытые стаканы' })).toBeVisible();
   await page.keyboard.down('ArrowUp');
   await expect(line(page)).toContainText('лопнет 3');
   await page.keyboard.up('ArrowUp');
@@ -80,7 +80,7 @@ test('the keys play the cube: move, turn, tip, the glass in front', async ({ pag
   // ↑ held shows the tip; let go, it is made: the cube is seen from above.
   await expect.poll(() => cube(page, (game) => game.phase)).toBe('playing');
   await page.keyboard.down('ArrowUp');
-  await expect(line(page)).toContainText('Отпустите — опрокинуть');
+  await expect(line(page)).toContainText('Отпустите — повернуть куб');
   await page.keyboard.up('ArrowUp');
   await expect.poll(() => cube(page, (game) => game.plane.map(Math.abs).join())).not.toBe('0,0,1');
   await expect(line(page)).toHaveCount(0);
@@ -98,7 +98,8 @@ test('quick presses turn the cross all the way round the way they were pressed, 
   await page.evaluate(() => {
     (window as unknown as { __rotathreeCube: { game: CubeGame } }).__rotathreeCube.game.stepsHeld = true;
   });
-  for (const [code, way] of [['ArrowLeft', -1], ['ArrowRight', 1]] as const) {
+  // → clockwise, ← counterclockwise, as the arrows and the pads' marks say.
+  for (const [code, way] of [['ArrowLeft', 1], ['ArrowRight', -1]] as const) {
     const turned = await page.evaluate(async ({ code }) => {
       // The view's insides, as a development build lets them be read.
       type Turning = { pieceViews: Map<number, { at: { clone(): { applyQuaternion(q: unknown): { x: number; y: number } }; length(): number } }>; hubGroup: { quaternion: unknown }; crossGroup: { rotation: { z: number } } };

@@ -9,8 +9,8 @@ import { CubeGame, SIDES, type Vec } from './rules';
 export const CUBE_LESSONS = [
   ['Это куб', 'Шесть стаканов вокруг него. Крест на экране — вид спереди'],
   ['Линия — из того, что видно', 'Блоки лежат на разной глубине, а считается картинка. Брось фигуру'],
-  ['Поверни крест', 'Как в 2D: наверх выходит стакан слева или справа, весь куб поворачивается'],
-  ['Опрокинь куб', 'Держи — покажет, как ляжет и что лопнет. Отпусти — опрокинет'],
+  ['Поверни крест', '→ по часовой, ← против часовой. Весь куб поворачивается вместе с ним'],
+  ['Поверни скрытые стаканы', '↑ — наверх задний стакан, ↓ — передний. Держи — покажет, что лопнет. Отпусти — повернёт'],
   ['Загляни в объём', 'Держи — куб раскроется в 3D'],
   ['Теперь сам', 'Собирай линии. На паузе куб можно осмотреть со всех сторон'],
 ] as const;
@@ -21,7 +21,7 @@ export const CUBE_LESSON_LAST = CUBE_LESSONS.length - 1;
 export const LESSON_KEYS: Record<number, readonly Action[]> = {
   1: ['hardDrop'],
   2: ['glassLeft', 'glassRight'],
-  3: ['tipBack'],
+  3: ['tipBack', 'tipFront'],
   4: ['peek'],
 };
 
@@ -30,7 +30,7 @@ export const LESSON_KEYS: Record<number, readonly Action[]> = {
 export const LESSON_PADS: Record<number, readonly (readonly Action[])[]> = {
   1: [['hardDrop']],
   2: [['glassLeft', 'glassRight']],
-  3: [['tipBack']],
+  3: [['tipBack', 'tipFront']],
   4: [['peek']],
 };
 

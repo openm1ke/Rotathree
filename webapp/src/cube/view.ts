@@ -952,8 +952,8 @@ export class CubeView {
     this.game.softDrop = held;
   }
 
-  /** The cross turns in the screen, as in 2D: the glass on the left (−1) or
-   * right (+1) comes to the top, and nothing falls. */
+  /** The cross turns in the screen like the hands of a clock: −1 clockwise,
+   * +1 counterclockwise. Nothing falls. */
   turnCross(quarters: -1 | 1): void {
     if (this.preview || this.inspect) return;
     this.turnHub(SCENE_TOWARD, quarters);
