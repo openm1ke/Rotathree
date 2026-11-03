@@ -90,9 +90,11 @@ After review the rules follow what the screen shows.
 - **The change of side is a real turn.** The hub leans over as one body,
   like a tower of blocks tipping the way the arrow says, and opens up into
   depth half-way before landing flat on its new side (`08`). The game holds
-  still for the 0.65 s it takes. The sticks in flight turn with it; the
-  preview shows them where the tip lays them (`09`), and a stick laid
-  somewhere else slides and turns there rather than jumping. (A wave of cubes each rolling over to its
+  still for the 0.65 s it takes. The sticks in flight turn with it as one
+  body with the blocks, those of the glasses in front and behind too, solid,
+  as they are whenever the hub is open (`08`). The preview shows them where
+  the tip lays them (`09`); a stick laid somewhere else slides and turns there
+  once the hub has landed, rather than jumping. (A wave of cubes each rolling over to its
   new colour was tried in its place and dropped on review: it read as window
   blinds, not as the hub turning.)
 - **V (held)** opens the depth up to look at (`05`). With V held, W/A/S/D
@@ -102,8 +104,10 @@ After review the rules follow what the screen shows.
   way to be looked at: about the screen's upright, its horizontal or the line
   of sight. Nothing in the game changes, the blocks that would make lines
   from that side blink, and the panel counts them (`12`; in the open with V,
-  `13`). Esc or going on rolls it back to where the game is; the play keys
-  rest meanwhile. Once the game is over the same keys look around at once,
+  `13`). Every stick in flight is there, solid, turning with the hub; on the
+  flat paused picture the sticks in front and behind show as outlines
+  whatever the setting. Esc or going on rolls it back to where the game is;
+  the play keys rest meanwhile. Once the game is over the same keys look around at once,
   to see how it was lost; the banner hides while the hub is turned or V is
   held, and a setting (K) hides it for good (`18`).
 - **Keys, one meaning each.**

@@ -734,9 +734,11 @@ function pushBehindMarks(view, key) {
 
 /** Falling sticks ease into their cells and turn towards their new way, so
  * that a stick a tip lays somewhere else slides and turns there instead of
- * jumping. One view per glass, kept while its stick is the same one. */
+ * jumping. While the hub leans over they hold still in it, so that they turn
+ * with it as one body with the blocks, and slide only once it has landed.
+ * One view per glass, kept while its stick is the same one. */
 function stickViews(pieces, dt) {
-  const k = 1 - Math.exp(-dt * 18);
+  const k = turn.t < 1 && turn.tilt ? 0 : 1 - Math.exp(-dt * 18);
   for (const [side, view] of pieceViews) if (pieces.get(side)?.colors !== view.colors) pieceViews.delete(side);
   return [...pieces.values()].map((piece) => {
     const goal = local(piece.pivot);
@@ -756,19 +758,23 @@ function stickViews(pieces, dt) {
 
 /** Draws sticks of `source` (the game, or a view of it) seen from the side
  * `q` turns to the eye. Those of the glasses across the screen are solid.
- * Those of the glasses in front and behind fly along the line of sight:
- * outlines over the picture (in front) or under it (behind), and only the
- * steered one unless the setting asks for all. The steered one says, square
- * by square, how it will land (`marks`): filled and with a mark of its colour
- * if it will be seen, an empty outline and a dark hole if it will hide. */
-function drawSticks(source, q, sticks, { marks = true } = {}) {
+ * So is every stick while the hub is open — leaning over, held open with V,
+ * or turned to be looked at (`solid`): they are blocks like the others,
+ * wherever they are. On the flat picture those of the glasses in front and
+ * behind fly along the line of sight: outlines over the picture (in front)
+ * or under it (behind), and only the steered one unless the setting asks
+ * for all, or the game is paused. The steered one says, square by square,
+ * how it will land (`marks`): filled and with a mark of its colour if it will
+ * be seen, an empty outline and a dark hole if it will hide. */
+function drawSticks(source, q, sticks, { marks = true, solid = false } = {}) {
+  const open = solid || !flat();
   for (const { piece, at, dir } of sticks) {
     const steered = piece.side === source.active;
-    if (source.inPlane(piece.side)) {
+    if (open || source.inPlane(piece.side)) {
       piece.colors.forEach((color, i) => pushSolid(at.clone().addScaledVector(dir, i - 1), color));
       continue;
     }
-    if (!steered && !options.depthSticks) continue;
+    if (!steered && !options.depthSticks && !options.paused) continue;
     const lift = new THREE.Vector3(...normalOf(piece.side)).applyQuaternion(q).z * 0.6;
     const landing = steered && marks ? source.landing(piece.side) : null;
     piece.colors.forEach((color, i) => {
@@ -816,9 +822,9 @@ function buildInspect(dt) {
   const { cells } = inspectLines();
   const blink = 0.2 + 0.3 * (0.5 + 0.5 * Math.sin(performance.now() / 110));
   game.hub.forEachBlock((p, color, index) => pushSolid(local(p), color, { flash: cells.has(index) ? blink : 0 }));
-  // The sticks in flight turn with the hub; their landing marks belong to
-  // the game's side, not this one.
-  drawSticks(game, inspect, stickViews(game.pieces, dt), { marks: false });
+  // The sticks in flight turn with the hub, all of them solid: from here the
+  // glasses in front and behind may well be across the screen.
+  drawSticks(game, inspect, stickViews(game.pieces, dt), { marks: false, solid: true });
   pushBehindMarks(viewAt(inspect), `inspect:${linesCache.key}`);
   flushLayers();
 }
