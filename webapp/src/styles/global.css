@@ -2415,11 +2415,13 @@ select:focus-visible {
 .cube-free { margin: 6px 0 4px; font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim); }
 
 /* The main menu's tiles: a picture of the game's blocks, the name, and a line
-   that says where the player is; the records and the settings smaller, in a
-   row under them. Two columns where there is room, one on a narrow phone. */
+   that says where the player is; the records and the settings side by side
+   under them. Every tile as tall as the tallest. Two columns where there is
+   room, one on a narrow phone. */
 .home__nav {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: 12px;
   max-width: 680px;
 }
@@ -2452,8 +2454,6 @@ select:focus-visible {
 .navitem--tile:hover .navitem__title,
 .navitem--tile:focus-visible .navitem__title { color: #fff; text-shadow: none; }
 .navitem--tile .navitem__caption { opacity: 1; font-size: 13px; }
-.navitem--small { padding: 10px 14px; gap: 12px; }
-.navitem--small .navitem__title { font-size: 17px; }
 .navitem__picture {
   width: 44px;
   height: 44px;
@@ -2461,7 +2461,6 @@ select:focus-visible {
   place-items: center;
   color: var(--accent);
 }
-.navitem--small .navitem__picture { width: 28px; height: 28px; }
 .navitem__icon { width: 26px; height: 26px; }
 .navitem__done {
   display: block;
@@ -2496,7 +2495,10 @@ select:focus-visible {
   .home__nav { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .navitem--tile { padding: 10px 14px; }
   .navitem--tile .navitem__picture { width: 36px; height: 36px; }
-  .navitem--small .navitem__picture { width: 24px; height: 24px; }
+  /* Side by side on a phone, the two smaller tiles fit their names in. */
+  .navitem--small { gap: 10px; padding-inline: 12px; }
+  .navitem--tile.navitem--small .navitem__picture { width: 26px; height: 26px; }
+  .navitem--small .navitem__title { font-size: clamp(13px, 3.9vw, 17px); }
   .home__more { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2504,3 +2506,6 @@ select:focus-visible {
   .navitem--tile:focus-visible .blocks i { animation: none; }
 }
 .navitem__icon--play { width: 30px; height: 30px; color: var(--accent); }
+@media (max-width: 359px) {
+  .navitem--tile.navitem--small .navitem__picture { display: none; }
+}
