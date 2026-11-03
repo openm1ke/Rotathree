@@ -46,7 +46,7 @@ const CUBE_LOOK: readonly (readonly [Exclude<keyof CubeOptions, 'colours' | 'wid
   ['behind', 'Метка: цвет блока за клеткой'],
   ['lane', 'Дорожка до места посадки'],
   ['depthSticks', 'Фигуры спереди и сзади, которыми не управляете'],
-  ['edges', 'Рёбра стаканов в объёме'],
+  ['edges', 'Рёбра стаканов и во время игры'],
   ['numbers', 'Номера стаканов'],
 ];
 

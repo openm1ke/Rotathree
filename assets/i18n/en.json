@@ -435,7 +435,6 @@
   "Метка: цвет блока за клеткой": "Mark: the color of the block behind a cell",
   "Дорожка до места посадки": "Lane down to the landing spot",
   "Фигуры спереди и сзади, которыми не управляете": "Front and back pieces you are not steering",
-  "Рёбра стаканов в объёме": "Edges of the glasses in 3D",
   "Номера стаканов": "Glass numbers",
   "Куб не запустился": "Cube could not start",
   "Браузеру не хватает WebGL — 3D-графики, которой нарисован куб.": "This browser lacks WebGL, the 3D graphics the cube is drawn with.",
@@ -455,5 +454,6 @@
   "Мимо — попробуй ещё раз": "Missed. Try again",
   "Ширина стакана": "Glass width",
   "нечётная: в среднем слое куба падают фигуры": "odd: pieces fall in the cube's middle layer",
-  "куб {a}×{b}×{c} · рукав: {arm} · скорость растёт с очками": "cube {a}×{b}×{c} · arm: {arm} · the speed rises with the score"
+  "куб {a}×{b}×{c} · рукав: {arm} · скорость растёт с очками": "cube {a}×{b}×{c} · arm: {arm} · the speed rises with the score",
+  "Рёбра стаканов и во время игры": "Glass edges during play too"
 }
