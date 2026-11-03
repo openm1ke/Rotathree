@@ -14,13 +14,14 @@ interface Props {
   active: boolean;
 }
 
-const MODES: ModeId[] = ['campaign', 'insane', 'custom', 'cube'];
+const MODES: ModeId[] = ['campaign', 'insane', 'custom', 'cube', 'cubeCampaign'];
 
 const DESCRIPTIONS: Record<ModeId, string> = {
   campaign: 'Шестнадцать уровней, каждый со своей целью очков',
   insane: 'Шесть цветов, четыре стакана, скорость растёт',
   custom: 'Своя настройка, скорость — по желанию',
   cube: 'Шесть стаканов вокруг куба, скорость растёт',
+  cubeCampaign: 'Восемь уровней куба, каждый со своей целью очков',
 };
 
 /** Totals and records of every mode, and the last runs. */
@@ -82,7 +83,7 @@ export function StatisticsScreen({ stats, progress, onBack, active }: Props) {
 
 function outcome(run: RunRecord): string {
   if (run.interrupted) return 'партия прервана';
-  if (run.mode === 'campaign') return run.completed ? 'кампания пройдена' : `уровень ${run.level}`;
+  if (run.mode === 'campaign' || run.mode === 'cubeCampaign') return run.completed ? 'кампания пройдена' : `уровень ${run.level}`;
   return `скорость ${run.level}`;
 }
 
@@ -99,7 +100,7 @@ function ModeCard({ mode, stats, progress }: { mode: ModeId; stats: ModeStats; p
       </header>
       <dl>
         <Line label="Партий" value={String(stats.games)} />
-        {mode === 'campaign' && (
+        {(mode === 'campaign' || mode === 'cubeCampaign') && (
           <Line label="Кампания пройдена" value={stats.completed > 0 ? formatTimes(stats.completed) : 'нет'} />
         )}
         <Line label="Лучший счёт" value={formatNumber(stats.bestScore)} main />
@@ -109,8 +110,8 @@ function ModeCard({ mode, stats, progress }: { mode: ModeId; stats: ModeStats; p
         <Line label="Матчей всего" value={formatNumber(stats.totalMatches)} />
         <Line label="Лучшее комбо" value={`×${stats.bestCombo}`} />
         <Line
-          label={mode === 'campaign' ? 'Лучший уровень' : 'Лучшая скорость'}
-          value={mode === 'campaign' ? String(stats.bestLevel) : `×${stats.bestLevel}`}
+          label={mode === 'campaign' || mode === 'cubeCampaign' ? 'Лучший уровень' : 'Лучшая скорость'}
+          value={mode === 'campaign' || mode === 'cubeCampaign' ? String(stats.bestLevel) : `×${stats.bestLevel}`}
         />
         <Line label="Время в играх" value={formatDuration(stats.totalSeconds)} />
       </dl>

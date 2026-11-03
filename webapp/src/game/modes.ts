@@ -2,13 +2,14 @@ import { defaultConfig, type GameConfig, type GravityScope } from './config';
 import type { SpeedRamp } from './engine';
 
 /** The modes a game can be played in. */
-export type ModeId = 'campaign' | 'insane' | 'custom' | 'cube';
+export type ModeId = 'campaign' | 'insane' | 'custom' | 'cube' | 'cubeCampaign';
 
 export const MODE_NAMES: Record<ModeId, string> = {
   campaign: 'Кампания',
   insane: 'Кошмар',
   custom: 'Кастом',
   cube: 'Куб',
+  cubeCampaign: 'Куб: кампания',
 };
 
 /** What the custom mode is set up with; kept between launches. */

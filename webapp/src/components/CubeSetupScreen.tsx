@@ -2,7 +2,8 @@ import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import type { Action } from '../input/bindings';
 import { useTouchControls } from '../input/touch';
-import { CUBE_LIMITS, type CubeOptions, type Settings, type Stats } from '../services/storage';
+import { CUBE_LIMITS, type CubeOptions, type Progress, type Settings, type Stats } from '../services/storage';
+import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST } from '../cube/campaign';
 import { formatCells, formatDuration, formatNumber, formatPoints } from './format';
 import type { CubeSave } from '../cube/save';
 import { Keys } from './Keycap';
@@ -18,6 +19,9 @@ interface Props {
   /** The game left unfinished, to go on with instead of a new one. */
   saved?: CubeSave | null;
   onResume?: () => void;
+  /** How far Cube's campaign has been played; opens its levels. */
+  progress: Progress;
+  onCampaign: () => void;
   /** Cube's lessons, again. */
   onTutorial: () => void;
   onBack: () => void;
@@ -48,7 +52,7 @@ const PADS: readonly { where: string; label: string }[] = [
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 /** Cube's own screen: what it is, how it is played, and its few options. */
-export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, saved, onResume, onTutorial, onBack, active }: Props) {
+export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, saved, onResume, progress, onCampaign, onTutorial, onBack, active }: Props) {
   const rootRef = useRef<HTMLElement>(null);
   useScreenKeys(rootRef, active, onBack);
   const touch = useTouchControls();
@@ -73,6 +77,21 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, s
             блок, и линии собираются из того, что видно. Опрокиньте куб — и то, что лежало в глубине, станет новой
             картинкой: она осыплется и лопнет по своим линиям.
           </T></p>
+          <section className="cube-campaign">
+            <div className="cube-campaign__text">
+              <strong><T>Кампания</T></strong>
+              <span><T>
+                {progress.completed
+                  ? `пройдена · ${CUBE_CAMPAIGN_LAST + 1} уровней`
+                  : `уровень ${progress.unlocked + 1} из ${CUBE_CAMPAIGN_LAST + 1} · ${CUBE_CAMPAIGN[progress.unlocked].title}`}
+              </T></span>
+              <div className="progressbar" aria-hidden="true">
+                <i style={{ width: `${(100 * (progress.completed ? CUBE_CAMPAIGN_LAST + 1 : progress.unlocked)) / (CUBE_CAMPAIGN_LAST + 1)}%` }} />
+              </div>
+            </div>
+            <Button primary={!saved} onClick={onCampaign}><T>Уровни</T></Button>
+          </section>
+          <h2 className="cube-free"><T>Свободная игра</T></h2>
           <Choice
             label="Цвета"
             note={

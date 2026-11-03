@@ -119,7 +119,8 @@ test('a pause lets the cube be looked at; a lost game shows, records and can be 
   await page.getByRole('button', { name: 'К итогам', exact: true }).click();
   await page.getByRole('button', { name: 'В меню', exact: true }).click();
   await page.getByRole('button', { name: /Статистика/ }).click();
-  await expect(page.locator('.mode-card').filter({ hasText: 'Куб' })).toContainText('Партий1');
+  const card = page.locator('.mode-card').filter({ has: page.getByRole('heading', { name: 'Куб', exact: true }) });
+  await expect(card).toContainText('Партий1');
 });
 
 test('a game left for the menu is kept through a reload, goes on paused, and a new one gives it up', async ({ page }) => {
@@ -137,16 +138,49 @@ test('a game left for the menu is kept through a reload, goes on paused, and a n
   await page.getByRole('button', { name: 'Продолжить Куб', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Пауза' })).toBeVisible();
   expect(await cube(page, (game) => game.placed)).toBe(3);
-  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.cube-run.v1')!).id);
+  const endless = () => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.cube-run.v1') ?? 'null')?.runs?.endless?.id ?? null);
+  const kept = await endless();
+  expect(kept).not.toBeNull();
   await page.getByRole('button', { name: 'К режиму', exact: true }).click();
   await expect(page.getByText(/Партия не закончена/)).toBeVisible();
   await page.getByRole('button', { name: 'Новая игра', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.stats.v1')!).recent[0]))
     .toMatchObject({ id: kept, mode: 'cube', pieces: 3, interrupted: true });
-  await expect
-    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rotathree.cube-run.v1') ?? 'null')?.id ?? null))
-    .not.toBe(kept);
+  await expect.poll(endless).not.toBe(kept);
+});
+
+test('the campaign opens its levels one by one, goes on to the next, and keeps a level left unfinished', async ({ page }) => {
+  await openCube(page);
+  await expect(page.locator('.cube-campaign')).toContainText('уровень 1 из 8 · Первые линии');
+  await page.getByRole('button', { name: 'Уровни', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Уровень 2, цель 2000', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Уровень 1, цель 1500', exact: true }).click();
+  await expect(page.getByRole('progressbar', { name: 'Прогресс уровня 1' })).toBeVisible();
+  await expect(page.locator('.game__readout')).toContainText('Уровень 1 / 8');
+  await expect.poll(() => cube(page, (game) => game.config.numberOfColors)).toBe(3);
+  await page.evaluate(() => {
+    (window as unknown as { __rotathreeCube: { game: CubeGame } }).__rotathreeCube.game.score = 1500;
+  });
+  await expect(page.getByRole('heading', { name: 'Уровень 1 пройден' })).toBeVisible();
+  await expect(page.getByText('Дальше: Четыре цвета · цель 2 000')).toBeVisible();
+  const stored = (key: string) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), key);
+  expect(await stored('rotathree.cube-progress.v1')).toMatchObject({ unlocked: 1, best: [1500, 0, 0, 0, 0, 0, 0, 0] });
+  expect((await stored('rotathree.stats.v1')).recent[0]).toMatchObject({ mode: 'cubeCampaign', level: 2, completed: false });
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: 'Следующий уровень', exact: true }).click();
+  await expect(page.locator('.game__readout')).toContainText('Уровень 2 / 8');
+  await expect.poll(() => cube(page, (game) => game.config.numberOfColors)).toBe(4);
+  await page.keyboard.press('Space');
+  await expect.poll(() => cube(page, (game) => game.placed)).toBe(1);
+  await expect.poll(() => cube(page, (game) => game.phase)).toBe('playing');
+  await page.keyboard.press('KeyP');
+  await page.getByRole('button', { name: 'К уровням', exact: true }).click();
+  await expect(page.locator('.cube-campaign')).toContainText('Уровень 2 не закончен');
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Пауза' })).toBeVisible();
+  expect(await cube(page, (game) => [game.placed, game.config.numberOfColors])).toEqual([1, 4]);
+  await expect(page.locator('.game__readout')).toContainText('Уровень 2 / 8');
 });
 
 test('a phone plays Cube with its own pads', async ({ page }) => {

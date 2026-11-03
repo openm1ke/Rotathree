@@ -10,12 +10,14 @@ import { KeyboardController } from '../input/keyboard';
 import { keyLabel, type Action } from '../input/bindings';
 import { CUBE_PADS, PadController, type PadAction } from '../input/pads';
 import { useTouchControls } from '../input/touch';
-import type { RunRecord, Settings } from '../services/storage';
+import type { Progress, RunRecord, Settings } from '../services/storage';
+import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST, cubeLevelConfig, defaultCubeProgress, passCubeLevel } from '../cube/campaign';
+import { CampaignProgress } from './CampaignProgress';
 import { sounds } from '../services/sounds';
 import { isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 import { PLAYGAMA_BUILD, USES_ESCAPE } from '../platform/target';
 import { showInterstitial } from '../platform/playgama';
-import { reportAbandoned, reportLevel } from '../platform/telemetry';
+import { reportAbandoned, reportLevel, type Place } from '../platform/telemetry';
 import { Hud } from './Hud';
 import { TouchControls } from './TouchControls';
 import { EMPTY_HUD, type Callout, type HudState } from './hudState';
@@ -23,7 +25,7 @@ import { TutorialPanel } from './TutorialPanel';
 import { BackButton, Button, GameIconButton, Overlay, SoundButton } from './ui';
 import { formatDuration, formatNumber } from './format';
 
-type Status = 'playing' | 'paused' | 'over';
+type Status = 'playing' | 'paused' | 'over' | 'done';
 type OneShot = Exclude<Action, 'moveLeft' | 'moveRight' | 'softDrop'>;
 
 interface Props {
@@ -37,8 +39,17 @@ interface Props {
   onExit: () => void;
   /** Back to Cube's own screen. */
   onSetup: () => void;
-  /** A new game. */
+  /** A new game: the same level again, or the endless game again. */
   onRetry: () => void;
+  /** A level of the campaign, by index, rather than the endless game. */
+  level?: number | null;
+  /** How far the campaign has been played, and its change once a level is
+   * passed. */
+  progress?: Progress;
+  onProgress?: (progress: Progress) => void;
+  /** The campaign's levels; the next one. */
+  onLevels?: () => void;
+  onNextLevel?: (level: number) => void;
   onRecord: (run: RunRecord) => void;
   /** A game kept from before, to go on with: it opens paused. */
   restore?: CubeSave | null;
@@ -103,6 +114,9 @@ interface Status3d {
 export function CubeScreen(props: Props) {
   const { t } = useI18n();
   const { settings, blocked, tutorial = false } = props;
+  /** The campaign level played, or null for the endless game. */
+  const level = tutorial ? null : props.level ?? props.restore?.level ?? null;
+  const levelPlayed = level === null ? undefined : CUBE_CAMPAIGN[level];
   const touch = useTouchControls();
   const touchMode = useRef(touch);
   const runId = useRef(props.restore?.id ?? newId());
@@ -160,13 +174,17 @@ export function CubeScreen(props: Props) {
     /** The lesson shown, or −1 in a game. */
     let lesson = tutorial ? 0 : -1;
     const fresh = () =>
-      new CubeGame({
-        centre: live.current.settings.cube.width,
-        arm: live.current.settings.cube.arm,
-        numberOfColors: live.current.settings.cube.colours,
-        depthFalls: live.current.settings.cube.depthFalls,
-        ramp: CUBE_RAMP,
-      });
+      new CubeGame(
+        levelPlayed
+          ? cubeLevelConfig(levelPlayed)
+          : {
+              centre: live.current.settings.cube.width,
+              arm: live.current.settings.cube.arm,
+              numberOfColors: live.current.settings.cube.colours,
+              depthFalls: live.current.settings.cube.depthFalls,
+              ramp: CUBE_RAMP,
+            },
+      );
     let restored = false;
     let game: CubeGame;
     if (tutorial) game = lessonGame(0);
@@ -213,7 +231,7 @@ export function CubeScreen(props: Props) {
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
 
-    const place = { world: 'cube' as const };
+    const place: Place = level === null ? { world: 'cube' } : { world: 'cubeCampaign', level: level + 1 };
     // A kept game opens paused: the player looks first, then goes on.
     let current: Status = restored ? 'paused' : 'playing';
     let isLooking = false;
@@ -242,22 +260,27 @@ export function CubeScreen(props: Props) {
     const checkpoint = () => {
       if (tutorial || finished) return;
       const snapshot = game.snapshot();
-      if (snapshot) live.current.onCheckpoint?.({ version: 1, id: runId.current, savedAt: Date.now(), game: snapshot });
+      if (!snapshot) return;
+      const save: CubeSave = { version: 1, id: runId.current, savedAt: Date.now(), game: snapshot };
+      if (level !== null) save.level = level;
+      live.current.onCheckpoint?.(save);
     };
 
-    const recordRun = (interrupted: boolean) => {
+    /** `passed`: the level's target reached. A level's run reports the level
+     * it reached: the next one once passed. */
+    const recordRun = (interrupted: boolean, passed = false) => {
       if (interrupted) reportAbandoned(place);
       const record: RunRecord = {
         id: runId.current,
-        mode: 'cube',
+        mode: level === null ? 'cube' : 'cubeCampaign',
         at: Date.now(),
         score: game.score,
         pieces: game.placed,
         matches: game.matches,
         bestCombo: game.bestCombo,
         seconds: game.seconds,
-        level: game.speedLevel + 1,
-        completed: false,
+        level: level === null ? game.speedLevel + 1 : level + (passed ? 2 : 1),
+        completed: passed && level === CUBE_CAMPAIGN_LAST,
         interrupted,
       };
       live.current.onRecord(record);
@@ -594,7 +617,7 @@ export function CubeScreen(props: Props) {
           // The tutorial's free play has no lost game: the cube empties.
           game = lessonGame(CUBE_LESSON_LAST);
           view.reset(game);
-        } else if (event.type === 'gameEnded' && !finished) {
+        } else if (event.type === 'gameEnded' && !finished && !(levelPlayed && game.score >= levelPlayed.target)) {
           finished = true;
           letGo();
           reportLevel('level_failed', place);
@@ -606,6 +629,16 @@ export function CubeScreen(props: Props) {
       }
 
       if (tutorial && !frozen) checkLesson(seconds, now);
+      // A level is passed once its points are in and the board is at rest.
+      if (levelPlayed && level !== null && !finished && game.score >= levelPlayed.target && (game.phase === 'playing' || game.isGameOver)) {
+        finished = true;
+        letGo();
+        reportLevel('level_completed', place);
+        live.current.onProgress?.(passCubeLevel(live.current.progress ?? defaultCubeProgress(), level, game.score));
+        recordRun(false, true);
+        setRunStatus('done');
+        sounds.play('level');
+      }
       // Kept every two seconds of play, and as soon as a move is over.
       if (play) unsaved += seconds;
       if (events.some((event) => event.type === 'landed' || event.type === 'switched' || event.type === 'matched')) changed = true;
@@ -624,7 +657,10 @@ export function CubeScreen(props: Props) {
         matches: game.matches,
         pieces: game.placed,
         seconds: Math.floor(game.seconds),
-        speed: game.speedLevel + 1,
+        speed: level === null ? game.speedLevel + 1 : 0,
+        level: level === null ? 0 : level + 1,
+        into: game.score,
+        target: levelPlayed?.target ?? 0,
       };
       if ((Object.keys(next) as (keyof HudState)[]).some((key) => next[key] !== shown[key])) {
         shown = next;
@@ -674,7 +710,12 @@ export function CubeScreen(props: Props) {
     if (PLAYGAMA_BUILD) showInterstitial('game_over');
     go();
   };
-  const mode = MODE_NAMES.cube;
+  const mode = level === null ? MODE_NAMES.cube : `${MODE_NAMES.cubeCampaign} · уровень ${level + 1} из ${CUBE_CAMPAIGN_LAST + 1}`;
+  const next = level !== null && level < CUBE_CAMPAIGN_LAST ? level + 1 : null;
+  const retryLabel = level === null ? 'Заново' : 'Повторить уровень';
+  /** Back to where the game was chosen: the levels, or Cube's screen. */
+  const back = (level === null ? props.onSetup : props.onLevels) ?? props.onSetup;
+  const backLabel = level === null ? 'К режиму' : 'К уровням';
   const keyboard = !touch;
   /** The key that brings the dialog back after a look around: Esc where the
    * game may use it, else the pause key. */
@@ -736,10 +777,12 @@ export function CubeScreen(props: Props) {
       ) : (
         <>
           <header className="game__readout" style={{ ['--hud-opacity' as string]: settings.hud.opacity }}>
-            <Hud hud={hud} callout={callout} options={settings.hud}
+            <Hud hud={hud} callout={callout} options={settings.hud} levelCount={CUBE_CAMPAIGN_LAST + 1}
               compact={touch} onPause={() => actions.current.togglePause()} onOpenSettings={props.onSettings}
               sound={props.onToggleMusic && { on: settings.audio.music || settings.audio.sounds, toggle: props.onToggleMusic }} />
           </header>
+          {levelPlayed && <CampaignProgress compact={touch} level={hud.level || (level ?? 0) + 1} into={hud.into} target={levelPlayed.target}
+            animated={status === 'playing' && !blocked && settings.effects.fieldBackground} />}
           {field}
         </>
       )}
@@ -780,9 +823,9 @@ export function CubeScreen(props: Props) {
                 Продолжить
               </T></Button>
               <Button onClick={() => actions.current.look(true)}><T>Осмотреть куб</T></Button>
-              <Button onClick={() => actions.current.retry()}><T>Заново</T></Button>
+              <Button onClick={() => actions.current.retry()}><T>{retryLabel}</T></Button>
               <Button onClick={props.onSettings}><T>Настройки</T></Button>
-              <Button onClick={() => actions.current.leave(props.onSetup)}><T>К режиму</T></Button>
+              <Button onClick={() => actions.current.leave(back)}><T>{backLabel}</T></Button>
               <Button onClick={() => actions.current.leave(props.onExit)}><T>В меню</T></Button>
               <Button ghost onClick={() => actions.current.leave(props.onExit, false)}><T>Завершить партию</T></Button>
             </div>
@@ -809,9 +852,47 @@ export function CubeScreen(props: Props) {
                 <dt><T>Лучшее комбо</T></dt>
                 <dd><T>×{result.bestCombo}</T></dd>
               </div>
+              {level === null && (
+                <div className="stats__row">
+                  <dt><T>Скорость</T></dt>
+                  <dd><T>{result.level}</T></dd>
+                </div>
+              )}
               <div className="stats__row">
-                <dt><T>Скорость</T></dt>
-                <dd><T>{result.level}</T></dd>
+                <dt><T>Время</T></dt>
+                <dd><T>{formatDuration(result.seconds)}</T></dd>
+              </div>
+            </dl>
+            <div className="dialog__actions">
+              <Button primary onClick={afterRun(() => actions.current.retry())}><T>{retryLabel}</T></Button>
+              <Button onClick={() => actions.current.look(true)}><T>Осмотреть куб</T></Button>
+              <Button onClick={afterRun(back)}><T>{backLabel}</T></Button>
+              <Button ghost onClick={afterRun(props.onExit)}><T>В меню</T></Button>
+            </div>
+          </div>
+        </Overlay>
+      )}
+
+      {status === 'done' && result && level !== null && !blocked && (
+        <Overlay armAfterMs={RESULT_ARM_MS}>
+          <div className="dialog dialog--narrow">
+            <span className="kicker"><T>{mode}</T></span>
+            <h2 className="dialog__title"><T>
+              {next === null ? 'Кампания пройдена' : `Уровень ${level + 1} пройден`}
+            </T></h2>
+            <p className="dialog__note"><T>
+              {next === null
+                ? `Все ${CUBE_CAMPAIGN_LAST + 1} уровней куба позади.`
+                : `Дальше: ${CUBE_CAMPAIGN[next].title} · цель ${formatNumber(CUBE_CAMPAIGN[next].target)}`}
+            </T></p>
+            <dl className="stats">
+              <div className="stats__row stats__row--main">
+                <dt><T>Очки</T></dt>
+                <dd><T>{formatNumber(result.score)}</T></dd>
+              </div>
+              <div className="stats__row">
+                <dt><T>Фигуры</T></dt>
+                <dd><T>{result.pieces}</T></dd>
               </div>
               <div className="stats__row">
                 <dt><T>Время</T></dt>
@@ -819,9 +900,10 @@ export function CubeScreen(props: Props) {
               </div>
             </dl>
             <div className="dialog__actions">
-              <Button primary onClick={afterRun(() => actions.current.retry())}><T>Заново</T></Button>
-              <Button onClick={() => actions.current.look(true)}><T>Осмотреть куб</T></Button>
-              <Button onClick={afterRun(props.onSetup)}><T>К режиму</T></Button>
+              {next !== null && (
+                <Button primary onClick={afterRun(() => props.onNextLevel?.(next))}><T>Следующий уровень</T></Button>
+              )}
+              <Button primary={next === null} onClick={afterRun(back)}><T>К уровням</T></Button>
               <Button ghost onClick={afterRun(props.onExit)}><T>В меню</T></Button>
             </div>
           </div>

@@ -3,8 +3,9 @@ import { DEFAULT_COLOURS, COLOUR_NAMES } from '../render/theme';
 import { defaultBindings, cloneBindings, sanitizeBindings, type Bindings } from '../input/bindings';
 import { defaultHandling, type Handling } from '../input/keyboard';
 import { CAMPAIGN } from '../game/campaign';
-import { DEFAULT_CUSTOM, sanitizeCustom, type CustomSetup, type ModeId } from '../game/modes';
-import { sanitizeCubeSave, type CubeSave } from '../cube/save';
+import { DEFAULT_CUSTOM, MODE_NAMES, sanitizeCustom, type CustomSetup, type ModeId } from '../game/modes';
+import { sanitizeCubeRuns, type CubeRuns } from '../cube/save';
+import { sanitizeCubeProgress } from '../cube/campaign';
 import { sanitizeRunSave, sanitizeSavedRuns, type RunSave, type SavedRuns } from './runSave';
 import { DEFAULT_PADS, PAD_SLOTS, type PadLayout } from '../input/pads';
 import { DEFAULT_POSITIONS, sanitizePositions, type PadPositions } from '../input/padPlacement';
@@ -334,7 +335,13 @@ const emptyModeStats = (): ModeStats => ({
 });
 
 export const defaultStats = (): Stats => ({
-  modes: { campaign: emptyModeStats(), insane: emptyModeStats(), custom: emptyModeStats(), cube: emptyModeStats() },
+  modes: {
+    campaign: emptyModeStats(),
+    insane: emptyModeStats(),
+    custom: emptyModeStats(),
+    cube: emptyModeStats(),
+    cubeCampaign: emptyModeStats(),
+  },
   recent: [],
 });
 
@@ -387,11 +394,12 @@ export function sanitizeStats(raw: unknown): Stats {
     ? r.recent.flatMap((item): RunRecord[] => {
         if (typeof item !== 'object' || item === null) return [];
         const run = item as Record<string, unknown>;
-        if (run.mode !== 'campaign' && run.mode !== 'insane' && run.mode !== 'custom' && run.mode !== 'cube') return [];
+        const mode = run.mode;
+        if (typeof mode !== 'string' || !Object.hasOwn(MODE_NAMES, mode)) return [];
         return [
           {
             id: String(run.id ?? ''),
-            mode: run.mode,
+            mode: mode as ModeId,
             at: numberIn(run.at, 0, 1e15, 0),
             score: Math.round(numberIn(run.score, 0, 1e12, 0)),
             pieces: Math.round(numberIn(run.pieces, 0, 1e9, 0)),
@@ -411,6 +419,7 @@ export function sanitizeStats(raw: unknown): Stats {
       insane: sanitizeModeStats(modes.insane),
       custom: sanitizeModeStats(modes.custom),
       cube: sanitizeModeStats(modes.cube),
+      cubeCampaign: sanitizeModeStats(modes.cubeCampaign),
     },
     recent: recent.slice(0, RECENT_LIMIT),
   };
@@ -427,6 +436,7 @@ export const STORAGE_KEYS = {
   tutorial: 'rotathree.tutorial.v1',
   cubeTutorial: 'rotathree.cube-tutorial.v1',
   cubeRun: 'rotathree.cube-run.v1',
+  cubeProgress: 'rotathree.cube-progress.v1',
 } as const;
 const KEYS = STORAGE_KEYS;
 
@@ -482,6 +492,9 @@ export const saveTutorial = (value: boolean, storage = browserStorage()) => writ
 /** Whether Cube's own lessons have been seen (or skipped). */
 export const loadCubeTutorial = (storage = browserStorage()) => read(KEYS.cubeTutorial, (raw) => raw === true, storage);
 export const saveCubeTutorial = (value: boolean, storage = browserStorage()) => write(KEYS.cubeTutorial, value, storage);
-/** The game of Cube left unfinished, if any. */
-export const loadCubeRun = (storage = browserStorage()) => read(KEYS.cubeRun, sanitizeCubeSave, storage);
-export const saveCubeRun = (save: CubeSave | null, storage = browserStorage()) => write(KEYS.cubeRun, save, storage);
+/** The games of Cube left unfinished: one endless, one campaign level. */
+export const loadCubeRuns = (storage = browserStorage()) => read(KEYS.cubeRun, sanitizeCubeRuns, storage);
+export const saveCubeRuns = (runs: CubeRuns, storage = browserStorage()) => write(KEYS.cubeRun, { version: 2, runs }, storage);
+/** How far Cube's campaign has been played. */
+export const loadCubeProgress = (storage = browserStorage()) => read(KEYS.cubeProgress, sanitizeCubeProgress, storage);
+export const saveCubeProgress = (value: Progress, storage = browserStorage()) => write(KEYS.cubeProgress, value, storage);

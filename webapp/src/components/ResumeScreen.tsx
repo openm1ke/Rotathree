@@ -1,7 +1,8 @@
 import { T } from '../i18n/Text';
 import { useRef } from 'react';
 import type { RunSave, SavedRuns } from '../services/runSave';
-import type { CubeSave } from '../cube/save';
+import type { CubeKind, CubeRuns } from '../cube/save';
+import { CUBE_CAMPAIGN_LAST } from '../cube/campaign';
 import { MODE_NAMES } from '../game/modes';
 import { abandonedRun } from '../services/runSave';
 import { Screen, Button } from './ui';
@@ -17,9 +18,9 @@ export function ResumeScreen({
 }: {
   runs: SavedRuns;
   onResume: (save: RunSave) => void;
-  /** The game of Cube left unfinished, if any. */
-  cube?: CubeSave | null;
-  onResumeCube?: () => void;
+  /** The games of Cube left unfinished. */
+  cube?: CubeRuns;
+  onResumeCube?: (kind: CubeKind) => void;
   onBack: () => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
@@ -49,17 +50,23 @@ export function ResumeScreen({
           </section>
         );
       })}
-      {cube && (
-        <section className="group">
-          <h3><T>{MODE_NAMES.cube}</T></h3>
-          <p className="hint"><T>
-            {formatPoints(cube.game.score)} · {formatDuration(cube.game.seconds)}
-          </T></p>
-          <Button primary onClick={() => onResumeCube?.()}><T>
-            Продолжить {MODE_NAMES.cube}
-          </T></Button>
-        </section>
-      )}
+      {(['campaign', 'endless'] as const).map((kind) => {
+        const save = cube?.[kind];
+        if (!save) return null;
+        const mode = kind === 'campaign' ? MODE_NAMES.cubeCampaign : MODE_NAMES.cube;
+        return (
+          <section className="group" key={kind}>
+            <h3><T>{mode}</T></h3>
+            <p className="hint"><T>
+              {save.level !== undefined ? `Уровень ${save.level + 1} из ${CUBE_CAMPAIGN_LAST + 1} · ` : ''}
+              {formatPoints(save.game.score)} · {formatDuration(save.game.seconds)}
+            </T></p>
+            <Button primary onClick={() => onResumeCube?.(kind)}><T>
+              Продолжить {mode}
+            </T></Button>
+          </section>
+        );
+      })}
     </Screen>
   );
 }

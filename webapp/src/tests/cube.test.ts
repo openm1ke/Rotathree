@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGame, EMPTY, SIDES, type Vec } from '../cube/rules';
 import { CUBE_LESSON_LAST, lessonGame } from '../cube/tutorial';
-import { sanitizeCubeSave } from '../cube/save';
+import { abandonedCube, sanitizeCubeRuns, sanitizeCubeSave } from '../cube/save';
+import { CUBE_CAMPAIGN, CUBE_CAMPAIGN_LAST, cubeLevelConfig, defaultCubeProgress, passCubeLevel, sanitizeCubeProgress } from '../cube/campaign';
 
 const run = (game: CubeGame, seconds: number) => {
   for (let t = 0; t < seconds; t += 0.02) game.update(0.02);
@@ -284,5 +285,43 @@ describe('Cube: the tutorial', () => {
       expect(game.findMatches().runs, `lesson ${lesson}`).toHaveLength(0);
       expect(game.settle(), `lesson ${lesson}`).toHaveLength(0);
     }
+  });
+});
+
+describe('Cube: the campaign', () => {
+  it('opens the levels one by one, keeps the best scores, and ends with the last', () => {
+    let progress = defaultCubeProgress();
+    progress = passCubeLevel(progress, 0, 1700);
+    expect(progress).toMatchObject({ unlocked: 1, completed: false });
+    progress = passCubeLevel(progress, 0, 1600);
+    expect(progress.best[0]).toBe(1700);
+    progress = passCubeLevel(progress, CUBE_CAMPAIGN_LAST, 4000);
+    expect(progress).toMatchObject({ unlocked: CUBE_CAMPAIGN_LAST, completed: true });
+    expect(sanitizeCubeProgress(JSON.parse(JSON.stringify(progress)))).toEqual(progress);
+    expect(sanitizeCubeProgress({ unlocked: 99, best: [-5, 'x'] })).toMatchObject({ unlocked: CUBE_CAMPAIGN_LAST, best: [0, 0, 0, 0, 0, 0, 0, 0] });
+  });
+
+  it('plays every level with its own rules and nothing to pop at the start', () => {
+    for (const level of CUBE_CAMPAIGN) {
+      const game = new CubeGame(cubeLevelConfig(level));
+      expect([game.config.centre, game.config.arm, game.config.numberOfColors, game.config.depthFalls, game.config.ramp])
+        .toEqual([level.width, level.arm, level.colours, level.depthFalls, null]);
+      expect(game.findMatches().runs).toHaveLength(0);
+    }
+    const targets = CUBE_CAMPAIGN.map((level) => level.target);
+    expect([...targets].sort((a, b) => a - b)).toEqual(targets);
+  });
+
+  it('keeps an endless game and a level apart, and reads the first kind of save as the endless one', () => {
+    const game = new CubeGame(cubeLevelConfig(CUBE_CAMPAIGN[2]));
+    const snapshot = game.snapshot()!;
+    const level = { version: 1 as const, id: 'a', savedAt: 1, game: snapshot, level: 2 };
+    const endless = { version: 1 as const, id: 'b', savedAt: 1, game: snapshot };
+    expect(sanitizeCubeRuns(endless)).toEqual({ endless });
+    expect(sanitizeCubeRuns(JSON.parse(JSON.stringify({ version: 2, runs: { endless, campaign: level } })))).toEqual({ endless, campaign: level });
+    expect(sanitizeCubeRuns({ version: 2, runs: { endless: level, campaign: endless } })).toEqual({});
+    expect(abandonedCube(level)).toMatchObject({ mode: 'cubeCampaign', level: 3, interrupted: true });
+    expect(abandonedCube(endless)).toMatchObject({ mode: 'cube', level: 1 });
+    expect(sanitizeCubeSave({ ...level, level: 99 })).toBeNull();
   });
 });

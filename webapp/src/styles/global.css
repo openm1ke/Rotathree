@@ -2393,3 +2393,23 @@ select:focus-visible {
   text-overflow: ellipsis;
 }
 .cube-saved { margin: 18px 0 0; text-align: right; }
+.levels--cube { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.level-card__title { font-size: 12.5px; font-weight: 800; line-height: 1.2; }
+/* Cube's screen: the campaign first, then the endless game. */
+.cube-campaign {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: rgba(120, 205, 255, 0.06);
+}
+.cube-campaign__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 220px; }
+.cube-campaign__text strong { font-size: 18px; font-weight: 900; font-style: italic; text-transform: uppercase; }
+.cube-campaign__text span { font-size: 13.5px; color: var(--text-dim); }
+.cube-campaign .progressbar { margin-top: 4px; }
+.cube-free { margin: 6px 0 4px; font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim); }

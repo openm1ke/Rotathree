@@ -14,10 +14,12 @@ interface Props {
   /** The music switch beside the gear. */
   sound?: { on: boolean; toggle: () => void };
   compact?: boolean;
+  /** Levels in the campaign played: the flat game's unless given. */
+  levelCount?: number;
 }
 
 /** One compact row shares the canvas width and keeps the playfield clear. */
-export function Hud({ hud, callout, options, onPause, onOpenSettings, sound, compact = false }: Props) {
+export function Hud({ hud, callout, options, onPause, onOpenSettings, sound, compact = false, levelCount = CAMPAIGN_LAST + 1 }: Props) {
   const { t } = useI18n();
   const soundButton = sound && <SoundButton on={sound.on} onToggle={sound.toggle} />;
   if (compact) return <>
@@ -27,8 +29,8 @@ export function Hud({ hud, callout, options, onPause, onOpenSettings, sound, com
         <strong>{formatScore(hud.score)}</strong>
         {callout?.kind === 'score' && <span className="hud__gain" key={callout.id}>+{callout.score}</span>}
       </div>}
-      {options.score && hud.level > 0 && <CompactStat icon="level" value={`${hud.level}/${CAMPAIGN_LAST + 1}`}
-        label={t(`Уровень ${hud.level} / ${CAMPAIGN_LAST + 1}`)} accent />}
+      {options.score && hud.level > 0 && <CompactStat icon="level" value={`${hud.level}/${levelCount}`}
+        label={t(`Уровень ${hud.level} / ${levelCount}`)} accent />}
       {options.score && hud.speed > 0 && <CompactStat icon="level" value={`${hud.speed}`} label={t(`Скорость ${hud.speed}`)} accent />}
       {options.stats && <>
         <CompactStat icon="time" value={formatClock(hud.seconds)} label={t('Время')} />
@@ -47,7 +49,7 @@ export function Hud({ hud, callout, options, onPause, onOpenSettings, sound, com
         <strong className="hud__value hud__value--score"><T>{formatScore(hud.score)}</T></strong>
         {callout?.kind === 'score' && <span className="hud__gain" key={callout.id}><T>+{callout.score}</T></span>}
       </div>
-      {hud.level > 0 && <span className="hud__level"><T>Уровень {hud.level} / {CAMPAIGN_LAST + 1}</T></span>}
+      {hud.level > 0 && <span className="hud__level"><T>Уровень {hud.level} / {levelCount}</T></span>}
       {hud.speed > 0 && <span className="hud__level"><T>Скорость {hud.speed}</T></span>}
     </section>}
     {options.stats && <section className="hud__stats">

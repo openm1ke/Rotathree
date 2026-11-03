@@ -4,6 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { CampaignScreen } from './components/CampaignScreen';
 import { CustomScreen } from './components/CustomScreen';
 import { CubeSetupScreen } from './components/CubeSetupScreen';
+import { CubeCampaignScreen } from './components/CubeCampaignScreen';
 import { GameScreen } from './components/GameScreen';
 import { ResumeScreen } from './components/ResumeScreen';
 import { MainMenu, type MenuTarget } from './components/MainMenu';
@@ -29,15 +30,17 @@ import {
   saveTutorial,
   loadCubeTutorial,
   saveCubeTutorial,
-  loadCubeRun,
-  saveCubeRun,
+  loadCubeRuns,
+  saveCubeRuns,
+  loadCubeProgress,
+  saveCubeProgress,
   type Progress,
   type RunRecord,
   type Settings,
   type Stats,
 } from './services/storage';
 import { abandonedRun, type SavedRuns, type RunSave } from './services/runSave';
-import { abandonedCube, type CubeSave } from './cube/save';
+import { abandonedCube, kindOf, type CubeKind, type CubeRuns, type CubeSave } from './cube/save';
 import { MusicPlayer } from './services/music';
 import { sounds } from './services/sounds';
 import { isPlatformHidden, isPlatformMuted, subscribeMute, subscribeVisibility } from './platform/lifecycle';
@@ -54,15 +57,21 @@ const routeOf = (target: MenuTarget): Route => ({ name: target }) as Route;
 /** Where a game was opened from, so that leaving it goes back there. */
 type From = 'home' | 'campaign' | 'custom';
 
+/** What Cube's lessons lead to: the endless game, a campaign level, or
+ * Cube's screen. */
+type CubeThen = 'game' | 'setup' | number;
+
 type Route =
   | { name: 'home' }
   | { name: 'resume' }
   | { name: 'campaign' }
   | { name: 'custom' }
   | { name: 'cube' }
-  /** `then`: where the tutorial leads when it is skipped — into a game, when
-   * it came before the first one, or back to Cube's screen. */
-  | { name: 'cubePlay'; tutorial?: boolean; then?: 'game' | 'setup'; restore?: CubeSave }
+  | { name: 'cubeLevels' }
+  /** `level`: a level of the campaign, rather than the endless game. `then`:
+   * where the tutorial leads when it is skipped — into the game or the level
+   * it came before, or back to Cube's screen. */
+  | { name: 'cubePlay'; level?: number; tutorial?: boolean; then?: CubeThen; restore?: CubeSave }
   | { name: 'statistics' }
   | { name: 'settings' }
   | { name: 'play'; session: Session; from: From; restore?: RunSave; resumeImmediately?: boolean; tutorial?: boolean };
@@ -96,13 +105,16 @@ export default function App() {
   const savedRef = useRef(savedRuns);
   const [tutorialDone, setTutorialDone] = useState(() => loadTutorial());
   const [cubeTutorialDone, setCubeTutorialDone] = useState(() => loadCubeTutorial());
-  /** The game of Cube left unfinished: one at a time, as for each mode of
-   * the flat game. One whose run is recorded already is over. */
-  const [cubeRun, setCubeRun] = useState<CubeSave | null>(() => {
-    const save = loadCubeRun();
-    return save && !stats.recent.some((run) => run.id === save.id) ? save : null;
-  });
-  const cubeRunRef = useRef(cubeRun);
+  /** The games of Cube left unfinished: the endless one and a campaign
+   * level, as each mode of the flat game keeps one. One whose run is
+   * recorded already is over. */
+  const [cubeRuns, setCubeRuns] = useState<CubeRuns>(() =>
+    Object.fromEntries(
+      Object.entries(loadCubeRuns()).filter(([, save]) => !stats.recent.some((run) => run.id === save.id)),
+    ),
+  );
+  const cubeRunsRef = useRef(cubeRuns);
+  const [cubeProgress, setCubeProgress] = useState<Progress>(() => loadCubeProgress());
   const afterTutorial = useRef<{ session: Session; from: From } | null>(null);
   const stored = failedWrites.length === 0;
   const written = useCallback((key: string, ok: boolean) => {
@@ -218,7 +230,8 @@ export default function App() {
     written('run', saveRuns(savedRef.current));
     written('tutorial', saveTutorial(tutorialDone));
     written('cubeTutorial', saveCubeTutorial(cubeTutorialDone));
-    written('cubeRun', saveCubeRun(cubeRunRef.current));
+    written('cubeRun', saveCubeRuns(cubeRunsRef.current));
+    written('cubeProgress', saveCubeProgress(cubeProgress));
   };
 
   const openTutorial = useCallback((after: { session: Session; from: From } | null = null) => {
@@ -308,44 +321,65 @@ export default function App() {
   );
   const home = useCallback(() => setRoute({ name: 'home' }), []);
   const cubeCheckpoint = useCallback(
-    (save: CubeSave | null) => {
-      cubeRunRef.current = save;
-      setCubeRun(save);
-      written('cubeRun', saveCubeRun(save));
+    (kind: CubeKind, save: CubeSave | null) => {
+      const next = { ...cubeRunsRef.current };
+      if (save) next[kind] = save;
+      else delete next[kind];
+      cubeRunsRef.current = next;
+      setCubeRuns(next);
+      written('cubeRun', saveCubeRuns(next));
     },
     [written],
   );
-  /** A new game of Cube: one left unfinished is given up, and recorded. */
-  const playCube = useCallback(() => {
-    if (cubeRunRef.current) {
-      recordRun(abandonedCube(cubeRunRef.current));
-      cubeCheckpoint(null);
-    }
+  const updateCubeProgress = useCallback(
+    (next: Progress) => {
+      written('cubeProgress', saveCubeProgress(next));
+      setCubeProgress(next);
+    },
+    [written],
+  );
+  /** A new game of Cube, endless or a campaign level: one of the same kind
+   * left unfinished is given up, and recorded. */
+  const playCube = useCallback(
+    (level: number | null = null) => {
+      const kind = kindOf(level);
+      const kept = cubeRunsRef.current[kind];
+      if (kept) {
+        recordRun(abandonedCube(kept));
+        cubeCheckpoint(kind, null);
+      }
+      setNonce((n) => n + 1);
+      setSettingsOpen(false);
+      setRoute(level === null ? { name: 'cubePlay' } : { name: 'cubePlay', level });
+    },
+    [recordRun, cubeCheckpoint],
+  );
+  const resumeCube = useCallback((kind: CubeKind) => {
+    const save = cubeRunsRef.current[kind];
+    if (!save) return;
     setNonce((n) => n + 1);
     setSettingsOpen(false);
-    setRoute({ name: 'cubePlay' });
-  }, [recordRun, cubeCheckpoint]);
-  const resumeCube = useCallback(() => {
-    if (!cubeRunRef.current) return;
-    setNonce((n) => n + 1);
-    setSettingsOpen(false);
-    setRoute({ name: 'cubePlay', restore: cubeRunRef.current });
+    setRoute({ name: 'cubePlay', restore: save, level: save.level });
   }, []);
-  const openCubeTutorial = useCallback((then: 'game' | 'setup') => {
+  const openCubeTutorial = useCallback((then: CubeThen) => {
     setNonce((n) => n + 1);
     setSettingsOpen(false);
     setRoute({ name: 'cubePlay', tutorial: true, then });
   }, []);
-  /** Cube's first game begins with its lessons. */
-  const startCube = useCallback(() => {
-    if (cubeTutorialDone) playCube();
-    else openCubeTutorial('game');
-  }, [cubeTutorialDone, playCube, openCubeTutorial]);
+  /** Cube's first game, endless or a level, begins with its lessons. */
+  const startCube = useCallback(
+    (level: number | null = null) => {
+      if (cubeTutorialDone) playCube(level);
+      else openCubeTutorial(level ?? 'game');
+    },
+    [cubeTutorialDone, playCube, openCubeTutorial],
+  );
   const finishCubeTutorial = useCallback(
-    (played: boolean, then: 'game' | 'setup' = 'setup') => {
+    (played: boolean, then: CubeThen = 'setup') => {
       setCubeTutorialDone(true);
       written('cubeTutorial', saveCubeTutorial(true));
-      if (played || then === 'game') playCube();
+      if (typeof then === 'number') playCube(then);
+      else if (played || then === 'game') playCube();
       else {
         setSettingsOpen(false);
         setRoute({ name: 'cube' });
@@ -370,7 +404,7 @@ export default function App() {
         <MainMenu
           progress={progress}
           savedRuns={savedRuns}
-          cubeSaved={cubeRun !== null}
+          cubeSaved={Object.keys(cubeRuns).length > 0}
           tutorialDone={tutorialDone}
           onTutorial={() => openTutorial()}
           onResume={() => setRoute({ name: 'resume' })}
@@ -383,7 +417,7 @@ export default function App() {
     case 'resume':
       screen = (
         <ResumeScreen runs={savedRuns} onResume={(save) => openGame(save.session, 'home', save)}
-          cube={cubeRun} onResumeCube={resumeCube} onBack={home} />
+          cube={cubeRuns} onResumeCube={resumeCube} onBack={home} />
       );
       break;
     case 'campaign':
@@ -417,11 +451,26 @@ export default function App() {
           stats={stats}
           colours={activeColours}
           onChange={(cube) => setSettings((current) => ({ ...current, cube }))}
-          onStart={startCube}
-          saved={cubeRun}
-          onResume={resumeCube}
+          onStart={() => startCube()}
+          saved={cubeRuns.endless}
+          onResume={() => resumeCube('endless')}
+          progress={cubeProgress}
+          onCampaign={() => setRoute({ name: 'cubeLevels' })}
           onTutorial={() => openCubeTutorial('setup')}
           onBack={home}
+          active={!settingsOpen}
+        />
+      );
+      break;
+    case 'cubeLevels':
+      screen = (
+        <CubeCampaignScreen
+          progress={cubeProgress}
+          colours={activeColours}
+          saved={cubeRuns.campaign}
+          onResume={() => resumeCube('campaign')}
+          onStart={(level) => startCube(level)}
+          onBack={() => setRoute({ name: 'cube' })}
           active={!settingsOpen}
         />
       );
@@ -441,9 +490,17 @@ export default function App() {
               setSettingsOpen(false);
               setRoute({ name: 'cube' });
             }}
-            onRetry={playCube}
+            onRetry={() => playCube(route.level ?? null)}
+            level={route.level ?? null}
+            progress={cubeProgress}
+            onProgress={updateCubeProgress}
+            onLevels={() => {
+              setSettingsOpen(false);
+              setRoute({ name: 'cubeLevels' });
+            }}
+            onNextLevel={(level) => playCube(level)}
             restore={route.restore}
-            onCheckpoint={cubeCheckpoint}
+            onCheckpoint={(save) => cubeCheckpoint(kindOf(route.level), save)}
             tutorial={route.tutorial}
             onTutorialDone={(played) => finishCubeTutorial(played, route.then)}
             onRecord={recordRun}
