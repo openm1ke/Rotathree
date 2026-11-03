@@ -405,10 +405,10 @@ export default function App() {
           progress={progress}
           savedRuns={savedRuns}
           cubeSaved={Object.keys(cubeRuns).length > 0}
+          cubeProgress={cubeProgress}
           tutorialDone={tutorialDone}
           onTutorial={() => openTutorial()}
           onResume={() => setRoute({ name: 'resume' })}
-          onPlayCampaign={() => playCampaign(start)}
           onOpen={(target: MenuTarget) => setRoute(routeOf(target))}
           active={!settingsOpen}
         />

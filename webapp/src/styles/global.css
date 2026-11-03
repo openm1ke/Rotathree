@@ -2413,3 +2413,90 @@ select:focus-visible {
 .cube-campaign__text span { font-size: 13.5px; color: var(--text-dim); }
 .cube-campaign .progressbar { margin-top: 4px; }
 .cube-free { margin: 6px 0 4px; font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim); }
+
+/* The main menu's tiles: a picture of the game's blocks, the name, and a line
+   that says where the player is; the records and the settings smaller, in a
+   row under them. Two columns where there is room, one on a narrow phone. */
+.home__nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 680px;
+}
+.navitem--tile {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.navitem--tile::before { display: none; }
+.navitem--tile:hover,
+.navitem--tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: rgba(120, 205, 255, 0.07);
+}
+.navitem--wide,
+.home__more { grid-column: 1 / -1; }
+.navitem--resume { background: rgba(120, 205, 255, 0.08); }
+.home__more {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.navitem--tile .navitem__title { font-size: clamp(20px, min(3vw, 4.2svh), 30px); color: rgba(236, 239, 249, 0.86); }
+.navitem--tile .navitem__caption { opacity: 1; font-size: 13px; }
+.navitem--small { padding: 10px 14px; gap: 12px; }
+.navitem--small .navitem__title { font-size: 17px; }
+.navitem__picture {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.navitem--small .navitem__picture { width: 28px; height: 28px; }
+.navitem__icon { width: 26px; height: 26px; }
+.navitem__done {
+  display: block;
+  height: 3px;
+  margin-top: 7px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.navitem__done i { display: block; height: 100%; background: var(--accent); }
+.blocks { position: relative; display: block; width: 100%; height: 100%; }
+.blocks i {
+  position: absolute;
+  width: 31%;
+  height: 31%;
+  border-radius: 22%;
+  background: var(--block);
+  box-shadow:
+    inset 0 2px 0 color-mix(in srgb, var(--block), #fff 45%),
+    inset 0 -2px 0 color-mix(in srgb, var(--block), #000 35%);
+}
+.blocks i.blocks__faint { opacity: 0.32; }
+/* Picked, a tile's blocks hop, one after another. */
+.navitem--tile:hover .blocks i,
+.navitem--tile:focus-visible .blocks i { animation: block-hop 420ms var(--ease-snap) both; }
+.navitem--tile .blocks i:nth-child(2) { animation-delay: 50ms; }
+.navitem--tile .blocks i:nth-child(3) { animation-delay: 100ms; }
+.navitem--tile .blocks i:nth-child(4) { animation-delay: 150ms; }
+.navitem--tile .blocks i:nth-child(n + 5) { animation-delay: 200ms; }
+@keyframes block-hop { 40% { transform: translateY(-22%); } }
+@media (max-width: 520px) {
+  .home__nav { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .navitem--tile { padding: 10px 14px; }
+  .navitem--tile .navitem__picture { width: 36px; height: 36px; }
+  .navitem--small .navitem__picture { width: 24px; height: 24px; }
+  .home__more { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navitem--tile:hover .blocks i,
+  .navitem--tile:focus-visible .blocks i { animation: none; }
+}
+.navitem__icon--play { width: 30px; height: 30px; color: #2fd985; }

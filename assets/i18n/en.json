@@ -480,5 +480,6 @@
   "куб {width} · рукав {arm} · глубина": "cube {width} · arm {arm} · depth",
   "Уровень {n} из {total} · {points} · {time}": "Level {n} of {total} · {points} · {time}",
   "Крестовины для": "Pads for",
-  "Обычная игра": "Regular game"
+  "Обычная игра": "Regular game",
+  "пройдена · Кошмар открыт": "complete · Nightmare unlocked"
 }
