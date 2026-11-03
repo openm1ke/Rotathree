@@ -106,7 +106,8 @@ After review the rules follow what the screen shows.
   are, upright, and the rules lay them in just those cells on the new side,
   so they never turn at all. A stick the flat picture stops showing — the top
   one going in front of the eye, the bottom one behind — fades out as the hub
-  leans, and one it starts showing fades in. ← → move no stick: each goes
+  leans, and the one that takes its place (from behind, or from in front)
+  fades in at the same pace. ← → move no stick: each goes
   round with its glass, as in 2D. The preview shows them where
   the tip lays them (`09`); a stick laid somewhere else slides and turns there
   once the hub has landed, rather than jumping. (A wave of cubes each rolling over to its

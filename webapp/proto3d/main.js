@@ -542,12 +542,13 @@ const viewAt = (q, hub = game.hub) =>
  * and opens up into depth on the way, flattening again as it lands; the
  * game holds still meanwhile. Turned in the screen it stays flat, as the 2D
  * cross turns. */
-function transition(axis, { carry = false } = {}) {
+/** `steered`: the glass steered on the side the turn starts from. */
+function transition(axis, { carry = false, steered = game.active } = {}) {
   turnFrom.copy(turned);
   turn.t = 0;
   turn.tilt = axis !== SCENE_TOWARD;
   turn.carry = carry && turn.tilt;
-  turn.steeredFrom = preview?.result?.view.active ?? game.active;
+  turn.steeredFrom = steered;
 }
 
 /** Whether the flat picture shows the stick of `side` with the hub turned
@@ -647,7 +648,7 @@ function commitPreview(code) {
 function cancelPreview() {
   if (!preview) return;
   // From the preview's side, where its top glass was the one steered.
-  transition(SCENE_RIGHT, { carry: true });
+  transition(SCENE_RIGHT, { carry: true, steered: preview.result.view.active });
   preview = null;
 }
 
