@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CubeGame } from '../cube/rules';
 import type { CubeSave } from '../cube/save';
 import { CUBE_LESSONS, CUBE_LESSON_LAST, LESSON_KEYS, LESSON_PADS, lessonGame } from '../cube/tutorial';
-import { CubeView, type LookAxis, type Steering } from '../cube/view';
+import { CubeView, TILT_SECONDS, type LookAxis, type Steering } from '../cube/view';
+import { AdaptiveQuality } from '../render/quality';
 import { CUBE_RAMP, MODE_NAMES } from '../game/modes';
 import { KeyboardController } from '../input/keyboard';
 import { keyLabel, type Action } from '../input/bindings';
@@ -71,15 +72,23 @@ const RESULT_ARM_MS = 700;
 /** A turn of the cross takes this much longer than in the flat game: the
  * hub is a heavier thing to turn. */
 const TURN_SLOWER = 1.4;
+/** The flat game's own turn, by default: the hub leans over in TILT_SECONDS
+ * then, and as much quicker or slower as the player sets the turns. */
+const DEFAULT_TURN_MS = 260;
+/** Frames a still picture is drawn for (a turn or a fade finishing) before
+ * the drawing stops: a paused game, the results, burn no battery. */
+const STILL_FRAMES = 45;
 
-/** While the hub is turned to be looked at, the play keys turn it. */
+/** While the hub is turned to be looked at, the play keys turn it as they
+ * do in play: ← → round like a clock, ↑ ↓ the glass behind or in front over
+ * the top. The stick's turn shows it from the side. */
 const LOOK_TURNS: Partial<Record<OneShot, [LookAxis, -1 | 1]>> = {
-  glassLeft: ['upright', 1],
-  glassRight: ['upright', -1],
+  glassLeft: ['sight', -1],
+  glassRight: ['sight', 1],
   tipBack: ['across', 1],
   tipFront: ['across', -1],
-  rotateCW: ['sight', -1],
-  rotateCCW: ['sight', 1],
+  rotateCW: ['upright', -1],
+  rotateCCW: ['upright', 1],
 };
 
 /** A lesson done moves on once the board has been at rest this long. */
@@ -224,9 +233,12 @@ export function CubeScreen(props: Props) {
       const height = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       const next = Math.floor(Math.max(0, Math.min(width, height)));
       setSize(next);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2, MAX_CANVAS_PIXELS / Math.max(1, next));
+      // Fewer pixels on a machine that cannot keep up (render/quality.ts).
+      const dpr = Math.min(window.devicePixelRatio || 1, 2, MAX_CANVAS_PIXELS / Math.max(1, next)) * quality.scale;
       view.resize(next, next, dpr);
+      quality.restart();
     };
+    const quality = new AdaptiveQuality();
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
@@ -572,19 +584,25 @@ export function CubeScreen(props: Props) {
     let shown = EMPTY_HUD;
     let said = '';
     let wasFrozen = false;
+    /** Frames in a row whose picture could not have changed. */
+    let still = 0;
     /** Seconds of play since the game was last kept, and whether it has
      * changed since. */
     let unsaved = 0;
     let changed = false;
     const tick = (now: number) => {
-      const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, (now - last) / 1000));
+      const frameMs = now - last;
+      const seconds = Math.min(MAX_FRAME_SECONDS, Math.max(0, frameMs / 1000));
       last = now;
       const s = live.current.settings;
       const frozen = live.current.blocked || document.hidden || isPlatformHidden();
       if (frozen && !wasFrozen) letGo();
+      // Back from the settings, a still picture is drawn again as now set.
+      if (frozen !== wasFrozen) still = 0;
       wasFrozen = frozen;
       view.look = s.cube;
       view.turnSeconds = (s.effects.turnMs / 1000) * TURN_SLOWER;
+      view.tiltSeconds = (TILT_SECONDS * s.effects.turnMs) / DEFAULT_TURN_MS;
       game.config.depthFalls = s.cube.depthFalls;
       const play = current === 'playing' && !frozen;
       if (play) {
@@ -592,7 +610,10 @@ export function CubeScreen(props: Props) {
         pads.update(seconds);
       }
       // Under the settings the picture holds still; looking around, it turns.
-      const events = frozen ? [] : view.frame(seconds, play);
+      // Paused, or over, it is drawn until what moved has come to rest.
+      still = current === 'playing' || isLooking ? 0 : still + 1;
+      const events = frozen || still > STILL_FRAMES ? [] : view.frame(seconds, play);
+      if (play && quality.sample(frameMs)) measure();
 
       for (const event of events) {
         if (event.type === 'landed') landed = true;

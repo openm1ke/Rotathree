@@ -117,7 +117,7 @@ const ACCENT = new THREE.Color('rgb(120, 205, 255)');
 /** The mark of a square that would hide: a dark hole. */
 const HOLE = new THREE.Color('#05050a');
 /** Tipping the hub over takes a little longer than turning the cross. */
-const TILT_SECONDS = 0.65;
+export const TILT_SECONDS = 0.65;
 /** How far the hub turns to be looked into: from above or below, from the
  * right or the left. */
 const PEEK_PITCH = 0.45;
@@ -278,6 +278,8 @@ export class CubeView {
   look: CubeLook = { depthSticks: false, behind: true, edges: false, numbers: false, lane: true, nextPiece: true, depthHint: true };
   /** How long the cross takes to turn in the screen; 0 turns it at once. */
   turnSeconds = 0.36;
+  /** How long the hub takes to lean over; 0 tips it at once. */
+  tiltSeconds = TILT_SECONDS;
   /** Paused: the sticks in front and behind all show. */
   paused = false;
   /** The volume is being looked into; from where: +1 above / right, −1
@@ -1017,7 +1019,7 @@ export class CubeView {
       if (event.type === 'landed') for (const { p } of event.cells) this.flashes.set(game.hub.index(p), this.clock);
     }
     if (turn.t < 1) {
-      const seconds = turn.tilt ? TILT_SECONDS : this.turnSeconds;
+      const seconds = turn.tilt ? this.tiltSeconds : this.turnSeconds;
       turn.t = seconds > 0 ? Math.min(1, turn.t + dt / seconds) : 1;
       if (turn.t >= 1 && turn.carry) this.landCarried();
     }
