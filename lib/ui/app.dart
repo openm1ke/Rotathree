@@ -17,6 +17,7 @@ import 'game/game_screen.dart';
 import 'layout.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
+import 'cube/cube_screen.dart';
 import 'menu/main_menu.dart';
 import 'menu/resume_screen.dart';
 import 'menu/settings_screen.dart';
@@ -65,7 +66,7 @@ class _RotathreeAppState extends State<RotathreeApp> {
   }
 }
 
-enum _Screen { home, resume, campaign, custom, statistics, settings, play }
+enum _Screen { home, resume, campaign, custom, statistics, settings, play, cube }
 
 /// The app: the screens, the route between them, and everything the player
 /// sets up, kept on the device.
@@ -337,6 +338,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onTutorial: () => _openTutorial(),
           tutorialDone: _tutorialDone,
           onCampaign: () => _show(_Screen.campaign),
+          onCube: () => _show(_Screen.cube),
           onCustom: () => _show(_Screen.custom),
           onStatistics: () => _show(_Screen.statistics),
           onSettings: () => _show(_Screen.settings),
@@ -363,6 +365,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onStart: () => _start(CustomSession(_custom)),
           onBack: () => _show(_Screen.home),
         ),
+        _Screen.cube => CubeScreen(onExit: () => _show(_Screen.home)),
         _Screen.statistics => StatisticsScreen(stats: _stats, progress: _progress, onBack: () => _show(_Screen.home)),
         _Screen.settings => SettingsScreen(
           settings: _settings,

@@ -52,6 +52,7 @@ class MainMenu extends StatelessWidget {
     required this.onCustom,
     required this.onStatistics,
     required this.onSettings,
+    this.onCube,
     this.hasSavedGames = false,
     this.onResume,
     this.onTutorial,
@@ -66,6 +67,9 @@ class MainMenu extends StatelessWidget {
   final VoidCallback onCustom;
   final VoidCallback onStatistics;
   final VoidCallback onSettings;
+
+  /// Cube, the 3D mode.
+  final VoidCallback? onCube;
   final bool hasSavedGames;
   final VoidCallback? onResume, onTutorial;
   final bool tutorialDone;
@@ -151,6 +155,8 @@ class MainMenu extends StatelessWidget {
         done: progress.completed ? 1 : progress.unlocked / levels,
         onTap: onCampaign,
       ),
+      if (onCube != null)
+        _Tile(key: const ValueKey('menu-cube'), title: 'Куб', caption: 'Шесть стаканов в 3D', picture: 'cube', onTap: onCube!),
       _Tile(key: const ValueKey('menu-custom'), title: 'Кастом', caption: 'Ваши правила', picture: 'custom', onTap: onCustom),
       if (onTutorial != null)
         _Tile(
