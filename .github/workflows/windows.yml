@@ -1,0 +1,46 @@
+name: Windows build
+
+# The Windows app can only be built on Windows: this builds it on GitHub's
+# runner and keeps the folder that ships, ready to zip or upload to Steam.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'assets/**'
+      - 'windows/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/windows.yml'
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      # Flutter's Windows apps need the Visual C++ runtime. Shipping its DLLs
+      # beside the game lets it start on a PC that has never installed it.
+      - name: Bundle the Visual C++ runtime
+        shell: pwsh
+        run: |
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$dll" build/windows/x64/runner/Release/
+          }
+          Get-ChildItem build/windows/x64/runner/Release | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RotaThree-windows-x64
+          path: build/windows/x64/runner/Release/
+          retention-days: 14
