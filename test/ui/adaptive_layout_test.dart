@@ -69,7 +69,7 @@ void main() {
         expect(first.height, greaterThan(first.width));
       }
 
-      await tester.tap(find.text('01'));
+      await tester.tap(find.byKey(const ValueKey('campaign-level-0')));
       await settle(tester);
       expect(find.byType(GameScreen), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -2,6 +2,7 @@ import '../i18n/language_picker.dart';
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
+import '../../cube/campaign.dart';
 import '../../game/config/campaign.dart';
 import '../data/progress.dart';
 import '../layout.dart';
@@ -48,6 +49,7 @@ class MainMenu extends StatelessWidget {
   const MainMenu({
     super.key,
     required this.progress,
+    this.cubeProgress,
     required this.onCampaign,
     required this.onCustom,
     required this.onStatistics,
@@ -63,6 +65,9 @@ class MainMenu extends StatelessWidget {
   });
 
   final Progress progress;
+
+  /// How far Cube's levels, the campaign's second part, have been played.
+  final Progress? cubeProgress;
   final VoidCallback onCampaign;
   final VoidCallback onCustom;
   final VoidCallback onStatistics;
@@ -143,16 +148,23 @@ class MainMenu extends StatelessWidget {
   /// and the settings side by side.
   List<List<Widget>> _rows(int columns) {
     final levels = campaignLevels.length;
-    final campaign = progress.completed
-        ? 'пройдена · Кошмар открыт'
-        : 'уровень ${progress.unlocked + 1} из $levels';
+    final cubeLevels = cubeCampaign.length;
+    final cube = cubeProgress;
+    final cubePassed = cube == null ? 0 : (cube.completed ? cubeLevels : cube.unlocked);
+    // The flat levels first; once they are passed, Cube's.
+    final campaign = !progress.completed
+        ? 'уровень ${progress.unlocked + 1} из $levels'
+        : cube != null && cubePassed < cubeLevels
+            ? 'куб: уровень ${cubePassed + 1} из $cubeLevels'
+            : 'пройдена · Кошмар открыт';
+    final total = levels + (cube == null ? 0 : cubeLevels);
     final ways = <Widget>[
       _Tile(
         key: const ValueKey('menu-campaign'),
         title: 'Кампания',
         caption: campaign,
         picture: 'campaign',
-        done: progress.completed ? 1 : progress.unlocked / levels,
+        done: ((progress.completed ? levels : progress.unlocked) + cubePassed) / total,
         onTap: onCampaign,
       ),
       if (onCube != null)

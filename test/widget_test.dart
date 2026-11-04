@@ -83,7 +83,8 @@ void main() {
     await tester.pumpWidget(const RotathreeApp());
     await settle(tester);
     expect(find.byKey(const ValueKey('menu-campaign')), findsOneWidget);
-    expect(find.text('пройдена · Кошмар открыт'), findsOneWidget);
+    // The flat levels passed, the campaign goes on with Cube's.
+    expect(find.text('куб: уровень 1 из 8'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('menu-campaign')));
     await settle(tester);
     await tester.ensureVisible(find.text('Играть'));

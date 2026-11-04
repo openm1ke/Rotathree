@@ -115,6 +115,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   /// Cube's lessons: seen once, on now, and what they lead to when skipped
   /// or played through — the endless game, a level, or Cube's screen.
   bool _cubeTutorialDone = false;
+
+  /// The campaign opened from a level of Cube: its part is shown first.
+  bool _campaignCube = false;
   bool _cubeTutorial = false;
   ({bool game, int? level}) _cubeThen = (game: false, level: null);
   GlobalKey<CubeScreenState> _cubeKey = GlobalKey<CubeScreenState>();
@@ -346,6 +349,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   void _show(_Screen screen) {
     _setMusicPaused(false);
+    _campaignCube = false;
     setState(() {
       _screen = screen;
       _settingsOpen = false;
@@ -449,6 +453,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _ => switch (_screen) {
         _Screen.home => MainMenu(
           progress: _progress,
+          cubeProgress: _cubeProgress,
           hasSavedGames: _savedRuns.isNotEmpty || _cubeRuns.isNotEmpty,
           onResume: () => _show(_Screen.resume),
           onTutorial: () => _openTutorial(),
@@ -471,6 +476,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         ),
         _Screen.campaign => CampaignScreen(
           progress: _progress,
+          cubeProgress: _cubeProgress,
+          cubeSaved: _cubeRuns[CubeKind.campaign],
+          onCubeStart: _startCube,
+          onCubeResume: () => _resumeCube(CubeKind.campaign),
+          cube: _campaignCube,
           colours: colours,
           onStart: (level) => _start(CampaignSession(level)),
           onInsane: () => _start(const InsaneSession()),
@@ -508,7 +518,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           level: _cubeLevel,
           progress: _cubeProgress,
           onProgress: _changeCubeProgress,
-          onLevels: () => _show(_Screen.campaign),
+          onLevels: () {
+            _show(_Screen.campaign);
+            _campaignCube = true;
+          },
           onNextLevel: _playCube,
           restore: _cubeRestore,
           onCheckpoint: (save) => _cubeCheckpoint(kindOf(_cubeLevel), save),
