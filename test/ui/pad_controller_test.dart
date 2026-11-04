@@ -14,6 +14,9 @@ class _Log implements PadSink {
 
   @override
   void softDrop({required bool held}) => entries.add('soft $held');
+
+  @override
+  void release(GameAction action) => entries.add('release ${action.name}');
 }
 
 void main() {
@@ -32,7 +35,18 @@ void main() {
     pad.down(GameAction.rotateCCW);
     pad.down(GameAction.none);
     pad.update(1);
-    expect(log, ['hardDrop', 'hardDrop', 'glassRight', 'rotateCCW']);
+    expect(log, ['hardDrop', 'release hardDrop', 'hardDrop', 'glassRight', 'rotateCCW']);
+  });
+
+  test('Cube\'s tips and its look into the volume are told when let go', () {
+    final (pad, log) = setup();
+    pad.down(GameAction.tipBack);
+    pad.down(GameAction.peek);
+    pad.update(1);
+    pad.up(GameAction.peek);
+    pad.up(GameAction.tipBack);
+    pad.up(GameAction.none);
+    expect(log, ['tipBack', 'peek', 'release peek', 'release tipBack']);
   });
 
   test('a held direction moves at once, waits, then repeats', () {

@@ -2,7 +2,7 @@ import '../engine/speed_ramp.dart';
 import 'game_config.dart';
 
 /// The modes a game can be played in.
-enum ModeId { campaign, insane, custom }
+enum ModeId { campaign, insane, custom, cube, cubeCampaign }
 
 /// What the custom mode is set up with; kept between launches.
 class CustomSetup {

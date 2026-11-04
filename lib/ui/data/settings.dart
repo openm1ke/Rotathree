@@ -251,6 +251,121 @@ Color? colourFromHex(Object? raw) {
 String colourToHex(Color colour) =>
     '#${(colour.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
 
+/// Cube's setup and how its picture looks (CubeOptions on the web).
+class CubeOptions {
+  const CubeOptions({
+    this.colours = 4,
+    this.width = 10,
+    this.arm = 9,
+    this.depthSticks = false,
+    this.depthFalls = false,
+    this.inactiveFalls = true,
+    this.behind = true,
+    this.edges = false,
+    this.numbers = false,
+    this.lane = true,
+    this.nextPiece = true,
+    this.depthHint = true,
+    this.volumeEdges = true,
+    this.xray = true,
+    this.grid = true,
+  });
+
+  /// How many colours fall, and the sizes: the glasses' width (the centre
+  /// cube's side) and their arms' length.
+  static const colourRange = (3, 6);
+  static const widthRange = (5, 12);
+  static const armRange = (4, 12);
+
+  factory CubeOptions.fromJson(Object? raw) {
+    const base = CubeOptions();
+    final map = raw is Map ? raw : const <Object?, Object?>{};
+    bool flag(String key, bool fallback) => map[key] is bool ? map[key] as bool : fallback;
+    return CubeOptions(
+      colours: _intIn(map['colours'], colourRange.$1, colourRange.$2, base.colours),
+      width: _intIn(map['width'], widthRange.$1, widthRange.$2, base.width),
+      arm: _intIn(map['arm'], armRange.$1, armRange.$2, base.arm),
+      depthSticks: flag('depthSticks', base.depthSticks),
+      depthFalls: flag('depthFalls', base.depthFalls),
+      inactiveFalls: flag('inactiveFalls', base.inactiveFalls),
+      behind: flag('behind', base.behind),
+      edges: flag('edges', base.edges),
+      numbers: flag('numbers', base.numbers),
+      lane: flag('lane', base.lane),
+      nextPiece: flag('nextPiece', base.nextPiece),
+      depthHint: flag('depthHint', base.depthHint),
+      volumeEdges: flag('volumeEdges', base.volumeEdges),
+      xray: flag('xray', base.xray),
+      grid: flag('grid', base.grid),
+    );
+  }
+
+  final int colours, width, arm;
+  final bool depthSticks, depthFalls, inactiveFalls;
+  final bool behind, edges, numbers, lane, nextPiece, depthHint, volumeEdges, xray, grid;
+
+  CubeOptions copyWith({
+    int? colours,
+    int? width,
+    int? arm,
+    bool? depthSticks,
+    bool? depthFalls,
+    bool? inactiveFalls,
+    bool? behind,
+    bool? edges,
+    bool? numbers,
+    bool? lane,
+    bool? nextPiece,
+    bool? depthHint,
+    bool? volumeEdges,
+    bool? xray,
+    bool? grid,
+  }) =>
+      CubeOptions(
+        colours: colours ?? this.colours,
+        width: width ?? this.width,
+        arm: arm ?? this.arm,
+        depthSticks: depthSticks ?? this.depthSticks,
+        depthFalls: depthFalls ?? this.depthFalls,
+        inactiveFalls: inactiveFalls ?? this.inactiveFalls,
+        behind: behind ?? this.behind,
+        edges: edges ?? this.edges,
+        numbers: numbers ?? this.numbers,
+        lane: lane ?? this.lane,
+        nextPiece: nextPiece ?? this.nextPiece,
+        depthHint: depthHint ?? this.depthHint,
+        volumeEdges: volumeEdges ?? this.volumeEdges,
+        xray: xray ?? this.xray,
+        grid: grid ?? this.grid,
+      );
+
+  Map<String, Object> toJson() => {
+        'colours': colours,
+        'width': width,
+        'arm': arm,
+        'depthSticks': depthSticks,
+        'depthFalls': depthFalls,
+        'inactiveFalls': inactiveFalls,
+        'behind': behind,
+        'edges': edges,
+        'numbers': numbers,
+        'lane': lane,
+        'nextPiece': nextPiece,
+        'depthHint': depthHint,
+        'volumeEdges': volumeEdges,
+        'xray': xray,
+        'grid': grid,
+      };
+
+  @override
+  bool operator ==(Object other) => other is CubeOptions && _json(other) == _json(this);
+
+  @override
+  int get hashCode => _json(this).hashCode;
+
+  static String _json(CubeOptions o) => o.toJson().toString();
+}
+
 class Settings {
   const Settings({
     required this.bindings,
@@ -265,6 +380,9 @@ class Settings {
     this.padButtons = const {},
     this.language = LanguageChoice.auto,
     this.audio = const AudioOptions(),
+    this.cube = const CubeOptions(),
+    this.cubeLeftPad = defaultCubeLeftPad,
+    this.cubeRightPad = defaultCubeRightPad,
   });
 
   factory Settings.defaults() => Settings(
@@ -321,8 +439,11 @@ class Settings {
         sounds: audio['sounds'] != false,
         soundsVolume: _doubleIn(audio['soundsVolume'], 0, 1, base.audio.soundsVolume),
       ),
-      leftPad: _padFromJson(pads['left'], base.leftPad),
-      rightPad: _padFromJson(pads['right'], base.rightPad),
+      leftPad: _padFromJson(pads['left'], base.leftPad, ActionScope.flat),
+      rightPad: _padFromJson(pads['right'], base.rightPad, ActionScope.flat),
+      cube: CubeOptions.fromJson(map['cube']),
+      cubeLeftPad: _padFromJson(section('cubePads')['left'], defaultCubeLeftPad, ActionScope.cube),
+      cubeRightPad: _padFromJson(section('cubePads')['right'], defaultCubeRightPad, ActionScope.cube),
       padShape: PadShape.fromName(pads['shape']),
       padButtons: _buttonsFromJson(pads['buttons']),
     );
@@ -345,6 +466,14 @@ class Settings {
   /// their default are kept here.
   final Map<PadSide, PadTweaks> padButtons;
   final AudioOptions audio;
+
+  /// Cube's setup and look.
+  final CubeOptions cube;
+
+  /// What Cube's pads do; where they are and how they look is the flat
+  /// game's.
+  final PadLayout cubeLeftPad;
+  final PadLayout cubeRightPad;
 
   /// The same settings with one button of one pad changed. A default tweak
   /// removes the entry.
@@ -371,6 +500,9 @@ class Settings {
     PadShape? padShape,
     Map<PadSide, PadTweaks>? padButtons,
     AudioOptions? audio,
+    CubeOptions? cube,
+    PadLayout? cubeLeftPad,
+    PadLayout? cubeRightPad,
   }) =>
       Settings(
         language: language ?? this.language,
@@ -385,6 +517,9 @@ class Settings {
         padShape: padShape ?? this.padShape,
         padButtons: padButtons ?? this.padButtons,
         audio: audio ?? this.audio,
+        cube: cube ?? this.cube,
+        cubeLeftPad: cubeLeftPad ?? this.cubeLeftPad,
+        cubeRightPad: cubeRightPad ?? this.cubeRightPad,
       );
 
   Map<String, Object?> toJson() => {
@@ -416,6 +551,11 @@ class Settings {
           'soundsVolume': audio.soundsVolume,
         },
         'padPositions': padPositions.toJson(),
+        'cube': cube.toJson(),
+        'cubePads': {
+          'left': {for (final slot in PadSlot.values) slot.name: cubeLeftPad[slot]!.name},
+          'right': {for (final slot in PadSlot.values) slot.name: cubeRightPad[slot]!.name},
+        },
         'pads': {
           'left': {for (final slot in PadSlot.values) slot.name: leftPad[slot]!.name},
           'right': {for (final slot in PadSlot.values) slot.name: rightPad[slot]!.name},
@@ -450,10 +590,14 @@ int _intIn(Object? value, num min, num max, int fallback) =>
 double _doubleIn(Object? value, double min, double max, double fallback) =>
     value is num && value.isFinite ? value.clamp(min, max).toDouble() : fallback;
 
-PadLayout _padFromJson(Object? raw, PadLayout fallback) {
+/// A pad's layout as stored; an action of the other game is not taken.
+PadLayout _padFromJson(Object? raw, PadLayout fallback, ActionScope game) {
   if (raw is! Map) return fallback;
   return {
     for (final slot in PadSlot.values)
-      slot: GameAction.byName(raw[slot.name]) ?? fallback[slot]!,
+      slot: switch (GameAction.byName(raw[slot.name])) {
+        final action? when action.inScope(game) => action,
+        _ => fallback[slot]!,
+      },
   };
 }

@@ -1,6 +1,7 @@
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
+import '../../cube/campaign.dart';
 import '../../game/config/modes.dart';
 import '../data/progress.dart';
 import '../data/stats.dart';
@@ -12,14 +13,22 @@ const _descriptions = {
   ModeId.campaign: 'Шестнадцать уровней, каждый со своей целью очков',
   ModeId.insane: 'Шесть цветов, четыре стакана, скорость растёт',
   ModeId.custom: 'Своя настройка, скорость — по желанию',
+  ModeId.cube: 'Шесть стаканов вокруг куба, скорость растёт',
+  ModeId.cubeCampaign: 'Восемь уровней куба, каждый со своей целью очков',
 };
+
+/// The campaigns: their best is a level, not a speed.
+bool _isCampaign(ModeId mode) => mode == ModeId.campaign || mode == ModeId.cubeCampaign;
 
 /// Totals and records of every mode, and the last runs.
 class StatisticsScreen extends StatelessWidget {
-  const StatisticsScreen({super.key, required this.stats, required this.progress, required this.onBack});
+  const StatisticsScreen({super.key, required this.stats, required this.progress, this.cubeProgress, required this.onBack});
 
   final Stats stats;
   final Progress progress;
+
+  /// How far Cube's campaign has been played.
+  final Progress? cubeProgress;
   final VoidCallback onBack;
 
   @override
@@ -29,7 +38,12 @@ class StatisticsScreen extends StatelessWidget {
       title: 'Статистика',
       onBack: onBack,
       children: [
-        for (final mode in ModeId.values) _ModeCard(mode: mode, stats: stats.modes[mode]!, progress: progress),
+        for (final mode in ModeId.values)
+          _ModeCard(
+            mode: mode,
+            stats: stats.modes[mode]!,
+            progress: mode == ModeId.cubeCampaign ? cubeProgress ?? defaultCubeProgress() : progress,
+          ),
         Section(
           title: 'Последние партии',
           children: [
@@ -57,7 +71,7 @@ class _ModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final average = stats.games > 0 ? (stats.totalPieces / stats.games).round() : 0;
-    final campaign = mode == ModeId.campaign;
+    final campaign = _isCampaign(mode);
     final lines = [
       ('Партий', '${stats.games}'),
       if (campaign) ('Кампания пройдена', stats.completed > 0 ? formatTimes(stats.completed) : 'нет'),
@@ -102,7 +116,7 @@ class _RunRow extends StatelessWidget {
 
   String get _outcome {
     if (run.interrupted) return 'партия прервана';
-    if (run.mode == ModeId.campaign) {
+    if (_isCampaign(run.mode)) {
       return run.completed ? 'кампания пройдена' : 'уровень ${run.level}';
     }
     return 'скорость ${run.level}';

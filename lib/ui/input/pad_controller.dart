@@ -9,6 +9,10 @@ abstract class PadSink {
   void press(GameAction action);
 
   void softDrop({required bool held});
+
+  /// A one-shot action let go: Cube's tips and its look into the volume
+  /// work while held and act on release.
+  void release(GameAction action);
 }
 
 /// Turns presses and releases of pad buttons into game actions. Held
@@ -71,6 +75,11 @@ class PadController {
 
   /// A button with [action] was let go.
   void up(GameAction action) {
+    if (action == GameAction.none) return;
+    if (!action.isHeld) {
+      sink.release(action);
+      return;
+    }
     final holders = _holders[action] ?? 0;
     if (holders == 0) return;
     _holders[action] = holders - 1;

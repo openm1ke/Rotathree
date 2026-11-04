@@ -49,4 +49,6 @@ String modeTitle(ModeId mode) => switch (mode) {
       ModeId.campaign => 'Кампания',
       ModeId.insane => 'Кошмар',
       ModeId.custom => 'Кастом',
+      ModeId.cube => 'Куб',
+      ModeId.cubeCampaign => 'Куб: кампания',
     };

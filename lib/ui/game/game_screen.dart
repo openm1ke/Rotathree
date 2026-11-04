@@ -709,6 +709,9 @@ class GameScreenState extends State<GameScreen>
   }
 
   @override
+  void release(GameAction action) {}
+
+  @override
   void softDrop({required bool held}) =>
       _engine.setSoftDrop(held && _acceptsInput && _tutorialAllows(GameAction.softDrop));
 

@@ -312,4 +312,35 @@ void main() {
     expect(formatNumber(-950), '−950');
     expect(formatDuration(3725), '1:02:05');
   });
+
+  test('Cube keeps its setup, its look and its own pads, and takes nothing of the flat game there', () {
+    final settings = Settings.defaults().copyWith(
+      cube: const CubeOptions(colours: 6, width: 7, arm: 5, xray: false, grid: false, inactiveFalls: false),
+      cubeRightPad: {...defaultCubeRightPad, PadSlot.center: GameAction.frontGlass},
+    );
+    final back = Settings.fromJson(jsonDecode(jsonEncode(settings.toJson())));
+    expect(back.cube, settings.cube);
+    expect(back.cubeRightPad[PadSlot.center], GameAction.frontGlass);
+    expect(back.cubeLeftPad, defaultCubeLeftPad);
+    final odd = Settings.fromJson({
+      'cube': {'colours': 99, 'width': 'wide', 'xray': 'no'},
+      'cubePads': {'left': {'center': 'glassOpposite'}},
+      'pads': {'right': {'center': 'peek'}},
+    });
+    expect([odd.cube.colours, odd.cube.width, odd.cube.xray], [6, 10, true]);
+    expect(odd.cubeLeftPad[PadSlot.center], GameAction.depthGlass);
+    expect(odd.rightPad[PadSlot.center], GameAction.glassOpposite);
+  });
+
+  test('a key does one thing in each game: ↑ turns the cross round in 2D and tips the hub in Cube', () {
+    final bindings = defaultBindings();
+    expect(actionForKey(bindings, PhysicalKeyboardKey.arrowUp), GameAction.glassOpposite);
+    expect(actionForKey(bindings, PhysicalKeyboardKey.arrowUp, ActionScope.cube), GameAction.tipBack);
+    expect(actionForKey(bindings, PhysicalKeyboardKey.keyA, ActionScope.cube), GameAction.moveLeft);
+    // Given to a Cube action, a key leaves the flat game's action alone.
+    final rebound = bindKey(bindings, GameAction.peek, 0, PhysicalKeyboardKey.arrowDown);
+    expect(rebound[GameAction.glassOpposite], contains(PhysicalKeyboardKey.arrowDown));
+    expect(rebound[GameAction.tipFront], isNot(contains(PhysicalKeyboardKey.arrowDown)));
+    expect(sanitizeBindings(jsonDecode(jsonEncode(Settings.defaults().toJson()['bindings']))), bindings);
+  });
 }

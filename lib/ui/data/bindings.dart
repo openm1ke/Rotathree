@@ -27,25 +27,38 @@ Bindings defaultBindings() => {
       GameAction.glassOpposite: [PhysicalKeyboardKey.arrowUp, PhysicalKeyboardKey.arrowDown],
       GameAction.pause: [PhysicalKeyboardKey.escape, PhysicalKeyboardKey.keyP],
       GameAction.restart: [PhysicalKeyboardKey.keyN],
+      // Cube's own: the arrows up and down tip the hub there instead.
+      GameAction.tipBack: [PhysicalKeyboardKey.arrowUp],
+      GameAction.tipFront: [PhysicalKeyboardKey.arrowDown],
+      GameAction.frontGlass: [PhysicalKeyboardKey.keyZ],
+      GameAction.backGlass: [PhysicalKeyboardKey.keyC],
+      GameAction.depthGlass: [],
+      GameAction.peek: [PhysicalKeyboardKey.keyV],
     };
+
+/// Whether two actions can be on at the same time, so may not share a key.
+bool _overlap(GameAction a, GameAction b) => a.scope == null || b.scope == null || a.scope == b.scope;
 
 Bindings cloneBindings(Bindings bindings) => {
       for (final action in keyActions) action: [...?bindings[action]],
     };
 
-/// The action a key triggers, if any.
-GameAction? actionForKey(Bindings bindings, PhysicalKeyboardKey key) {
+/// The action a key triggers in [game], if any.
+GameAction? actionForKey(Bindings bindings, PhysicalKeyboardKey key, [ActionScope game = ActionScope.flat]) {
   for (final action in keyActions) {
-    if (bindings[action]!.contains(key)) return action;
+    if (action.inScope(game) && bindings[action]!.contains(key)) return action;
   }
   return null;
 }
 
 /// Puts [key] into [slot] of [action]. A key can only do one thing, so it is
-/// taken away from wherever else it was bound. Returns new bindings.
+/// taken away from wherever else it was bound in the same game: it may tip
+/// the hub in Cube and turn the cross round in the flat game. Returns new
+/// bindings.
 Bindings bindKey(Bindings bindings, GameAction action, int slot, PhysicalKeyboardKey key) {
   final next = cloneBindings(bindings);
   for (final other in keyActions) {
+    if (!_overlap(action, other)) continue;
     next[other] = [
       for (final bound in next[other]!)
         if (bound != key) bound,
@@ -95,17 +108,27 @@ Bindings sanitizeBindings(Object? raw) {
     }
     result[action] = keys.take(slotsPerAction).toList();
   }
-  final used = <int>{};
+  // A key bound twice in one game keeps its first use.
+  final used = <ActionScope, Set<int>>{for (final game in ActionScope.values) game: {}};
+  bool take(GameAction action, PhysicalKeyboardKey key) {
+    final games = [for (final game in ActionScope.values) if (action.inScope(game)) game];
+    if (games.any((game) => used[game]!.contains(key.usbHidUsage))) return false;
+    for (final game in games) {
+      used[game]!.add(key.usbHidUsage);
+    }
+    return true;
+  }
+
   for (final action in keyActions) {
     result[action] = [
       for (final key in result[action]!)
-        if (used.add(key.usbHidUsage)) key,
+        if (take(action, key)) key,
     ];
   }
   for (final (:action, :was, :key) in _laterDefaults) {
     final keys = result[action]!;
     final unchanged = keys.length == was.length && [for (var i = 0; i < was.length; i++) keys[i] == was[i]].every((same) => same);
-    if (unchanged && keys.length < slotsPerAction && used.add(key.usbHidUsage)) result[action] = [...keys, key];
+    if (unchanged && keys.length < slotsPerAction && take(action, key)) result[action] = [...keys, key];
   }
   return result;
 }

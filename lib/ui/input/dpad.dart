@@ -343,6 +343,11 @@ IconData padActionIcon(GameAction action) => switch (action) {
   GameAction.glassOpposite => Icons.swap_vert_rounded,
   GameAction.pause => Icons.pause_rounded,
   GameAction.restart => Icons.refresh_rounded,
+  GameAction.tipBack => Icons.vertical_align_top_rounded,
+  GameAction.tipFront => Icons.vertical_align_bottom_rounded,
+  GameAction.frontGlass || GameAction.depthGlass => Icons.radio_button_checked_rounded,
+  GameAction.backGlass => Icons.cancel_outlined,
+  GameAction.peek => Icons.view_in_ar_rounded,
 };
 
 /// Captions read at 11 px, as on the web. A word wider than its button is
@@ -409,6 +414,11 @@ String padActionCaption(GameAction action) => switch (action) {
   GameAction.glassOpposite => 'НАПРОТИВ',
   GameAction.pause => 'ПАУЗА',
   GameAction.restart => 'ЗАНОВО',
+  GameAction.tipBack || GameAction.tipFront => 'ОПРОКИНУТЬ',
+  GameAction.frontGlass => 'ПЕРЕДНИЙ',
+  GameAction.backGlass => 'ЗАДНИЙ',
+  GameAction.depthGlass => 'ГЛУБИНА',
+  GameAction.peek => 'ОБЪЁМ',
 };
 
 /// Buttons light up in the colour of what they do: the piece in blue, the
@@ -416,6 +426,7 @@ String padActionCaption(GameAction action) => switch (action) {
 Color padActionTint(GameAction action) => switch (action) {
   GameAction.hardDrop => Palette.pink,
   GameAction.glassLeft || GameAction.glassRight || GameAction.glassOpposite => Palette.violet,
+  GameAction.tipBack || GameAction.tipFront => Palette.violet,
   GameAction.pause => Palette.warning,
   _ => Palette.accent,
 };

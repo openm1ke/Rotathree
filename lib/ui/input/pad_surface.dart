@@ -18,8 +18,13 @@ class PadSurface extends StatefulWidget {
     this.onEdit,
     this.highlight,
     this.hint = const [],
+    this.layouts,
   });
   final Settings settings;
+
+  /// The buttons' actions, left pad and right, when not the flat game's:
+  /// Cube's.
+  final (PadLayout, PadLayout)? layouts;
   final ValueChanged<GameAction> onDown, onUp;
   final ValueChanged<PadPositions>? onEdit;
 
@@ -78,7 +83,9 @@ class _PadSurfaceState extends State<PadSurface> {
 
   Widget _pad(PadSide side, Rect rect, Size area, bool preview) {
     final pad = DPad(
-      layout: side == PadSide.left ? widget.settings.leftPad : widget.settings.rightPad,
+      layout: side == PadSide.left
+          ? widget.layouts?.$1 ?? widget.settings.leftPad
+          : widget.layouts?.$2 ?? widget.settings.rightPad,
       size: rect.width,
       // The preview shows what the player will see, captions included.
       showLabels: widget.settings.hud.keyHints,

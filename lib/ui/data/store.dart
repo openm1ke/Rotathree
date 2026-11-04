@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../cube/campaign.dart';
+import '../../cube/save.dart';
 import '../../game/config/modes.dart';
 import 'progress.dart';
 import 'settings.dart';
@@ -19,6 +21,9 @@ class AppStore {
   static const _customKey = 'rotathree.custom.v1';
   static const _runKey = 'rotathree.run.mobile.v1';
   static const _tutorialKey = 'rotathree.tutorial.v1';
+  static const _cubeRunKey = 'rotathree.cube-run.v1';
+  static const _cubeTutorialKey = 'rotathree.cube-tutorial.v1';
+  static const _cubeProgressKey = 'rotathree.cube-progress.v1';
 
   static Future<AppStore> open() async {
     try {
@@ -79,4 +84,11 @@ class AppStore {
   });
   bool loadTutorial() => _read(_tutorialKey, (raw) => raw == true);
   Future<bool> saveTutorial(bool done) => _write(_tutorialKey, done);
+
+  Map<CubeKind, CubeSave> loadCubeRuns() => _read(_cubeRunKey, readCubeRuns);
+  Future<bool> saveCubeRuns(Map<CubeKind, CubeSave> runs) => _write(_cubeRunKey, runs.isEmpty ? null : cubeRunsToJson(runs));
+  bool loadCubeTutorial() => _read(_cubeTutorialKey, (raw) => raw == true);
+  Future<bool> saveCubeTutorial(bool done) => _write(_cubeTutorialKey, done);
+  Progress loadCubeProgress() => _read(_cubeProgressKey, cubeProgressFromJson);
+  Future<bool> saveCubeProgress(Progress value) => _write(_cubeProgressKey, value.toJson());
 }

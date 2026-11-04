@@ -337,7 +337,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             underline: const SizedBox.shrink(),
             style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
             items: [
-              for (final action in GameAction.values) DropdownMenuItem(value: action, child: LText(action.label)),
+              for (final action in GameAction.values)
+                if (action.inScope(ActionScope.flat)) DropdownMenuItem(value: action, child: LText(action.label)),
             ],
             onChanged: (action) {
               if (action != null) onChanged(action);

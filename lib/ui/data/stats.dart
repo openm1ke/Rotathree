@@ -132,9 +132,9 @@ class ModeStats {
 class Stats {
   const Stats({required this.modes, required this.recent});
 
-  factory Stats.empty() => const Stats(
-    modes: {ModeId.campaign: ModeStats(), ModeId.insane: ModeStats(), ModeId.custom: ModeStats()},
-    recent: [],
+  factory Stats.empty() => Stats(
+    modes: {for (final mode in ModeId.values) mode: const ModeStats()},
+    recent: const [],
   );
 
   factory Stats.fromJson(Object? raw) {
