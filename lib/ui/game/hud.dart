@@ -122,10 +122,13 @@ class _CalloutView extends StatelessWidget {
 /// A single row between the two header buttons. Labels remain available to
 /// screen readers and long values shrink within their own space.
 class GameReadout extends StatelessWidget {
-  const GameReadout({super.key, required this.hud, required this.options, this.callout});
+  const GameReadout({super.key, required this.hud, required this.options, this.callout, this.levelCount});
   final HudState hud;
   final HudOptions options;
   final Callout? callout;
+
+  /// How many levels the campaign played has: the flat one's, or Cube's.
+  final int? levelCount;
 
   @override
   Widget build(BuildContext context) => Opacity(
@@ -162,8 +165,8 @@ class GameReadout extends StatelessWidget {
           else
             const Spacer(),
           if (options.score && hud.level > 0)
-            _ReadoutStat(icon: Icons.layers_outlined, value: '${hud.level}/${campaignLevels.length}',
-              label: 'Уровень ${hud.level} / ${campaignLevels.length}', accent: true),
+            _ReadoutStat(icon: Icons.layers_outlined, value: '${hud.level}/${levelCount ?? campaignLevels.length}',
+              label: 'Уровень ${hud.level} / ${levelCount ?? campaignLevels.length}', accent: true),
           if (options.score && hud.speed > 0)
             _ReadoutStat(icon: Icons.speed_rounded, value: '${hud.speed}', label: 'Скорость ${hud.speed}', accent: true),
           if (options.stats) ...[

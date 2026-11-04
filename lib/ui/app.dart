@@ -18,6 +18,9 @@ import 'layout.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
 import 'cube/cube_screen.dart';
+import 'cube/cube_setup_screen.dart';
+import '../cube/campaign.dart';
+import '../cube/save.dart';
 import 'menu/main_menu.dart';
 import 'menu/resume_screen.dart';
 import 'menu/settings_screen.dart';
@@ -66,7 +69,7 @@ class _RotathreeAppState extends State<RotathreeApp> {
   }
 }
 
-enum _Screen { home, resume, campaign, custom, statistics, settings, play, cube }
+enum _Screen { home, resume, campaign, custom, statistics, settings, play, cube, cubePlay }
 
 /// The app: the screens, the route between them, and everything the player
 /// sets up, kept on the device.
@@ -101,6 +104,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   /// A fresh key for each run; system Back talks to the current game.
   GlobalKey<GameScreenState> _gameKey = GlobalKey<GameScreenState>();
+
+  // Cube: the two games kept (endless, a level), its campaign, and the game
+  // on now — a level, or the endless one, maybe a kept one.
+  Map<CubeKind, CubeSave> _cubeRuns = {};
+  Progress _cubeProgress = defaultCubeProgress();
+  int? _cubeLevel;
+  CubeSave? _cubeRestore;
+  GlobalKey<CubeScreenState> _cubeKey = GlobalKey<CubeScreenState>();
 
   @override
   void initState() {
@@ -141,6 +152,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _tutorialDone = store.loadTutorial();
       _savedRuns.removeWhere((_, save) => _stats.recent.any((run) => run.id == save.id));
       _saved('run', store.saveRuns(_savedRuns));
+      _cubeRuns = store.loadCubeRuns()..removeWhere((_, save) => _stats.recent.any((run) => run.id == save.id));
+      _cubeProgress = store.loadCubeProgress();
       if (!store.available) _failedWrites.add('storage');
       _stored = _failedWrites.isEmpty;
     });
@@ -177,6 +190,55 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('custom', store.saveCustom(_custom));
     _saved('run', store.saveRuns(_savedRuns));
     _saved('tutorial', store.saveTutorial(_tutorialDone));
+    _saved('cubeRun', store.saveCubeRuns(_cubeRuns));
+    _saved('cubeProgress', store.saveCubeProgress(_cubeProgress));
+  }
+
+  void _cubeCheckpoint(CubeKind kind, CubeSave? save) {
+    if (save == null) {
+      _cubeRuns.remove(kind);
+    } else {
+      _cubeRuns[kind] = save;
+    }
+    _saved('cubeRun', _store!.saveCubeRuns(_cubeRuns));
+  }
+
+  void _changeCubeProgress(Progress next) {
+    setState(() => _cubeProgress = next);
+    _saved('cubeProgress', _store!.saveCubeProgress(next));
+  }
+
+  /// A new game of Cube, endless or a campaign level: one of the same kind
+  /// left unfinished is given up, and recorded.
+  void _playCube([int? level]) {
+    final kind = kindOf(level);
+    final kept = _cubeRuns[kind];
+    if (kept != null) {
+      _recordRun(kept.abandoned());
+      _cubeCheckpoint(kind, null);
+    }
+    _setMusicPaused(false);
+    setState(() {
+      _cubeKey = GlobalKey<CubeScreenState>();
+      _cubeLevel = level;
+      _cubeRestore = null;
+      _settingsOpen = false;
+      _screen = _Screen.cubePlay;
+    });
+  }
+
+  /// A kept game of Cube: it opens paused.
+  void _resumeCube(CubeKind kind) {
+    final save = _cubeRuns[kind];
+    if (save == null) return;
+    _setMusicPaused(true);
+    setState(() {
+      _cubeKey = GlobalKey<CubeScreenState>();
+      _cubeLevel = save.level;
+      _cubeRestore = save;
+      _settingsOpen = false;
+      _screen = _Screen.cubePlay;
+    });
   }
 
   void _checkpoint(ModeId mode, RunSave? save) {
@@ -312,6 +374,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     });
   }
 
+  /// A game is on the screen, flat or Cube.
+  bool get _inGame => _screen == _Screen.play || _screen == _Screen.cubePlay;
+
   void _back() {
     if (_settingsOpen) {
       setState(() => _settingsOpen = false);
@@ -319,6 +384,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
     if (_screen == _Screen.play) {
       _gameKey.currentState?.handleBack();
+      return;
+    }
+    if (_screen == _Screen.cubePlay) {
+      _cubeKey.currentState?.handleBack();
       return;
     }
     if (_screen != _Screen.home) _show(_Screen.home);
@@ -333,7 +402,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _ => switch (_screen) {
         _Screen.home => MainMenu(
           progress: _progress,
-          hasSavedGames: _savedRuns.isNotEmpty,
+          hasSavedGames: _savedRuns.isNotEmpty || _cubeRuns.isNotEmpty,
           onResume: () => _show(_Screen.resume),
           onTutorial: () => _openTutorial(),
           tutorialDone: _tutorialDone,
@@ -348,6 +417,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         ),
         _Screen.resume => ResumeScreen(
           runs: _savedRuns,
+          cubeRuns: _cubeRuns,
+          onResumeCube: _resumeCube,
           onResume: (save) => _start(save.session, restore: save),
           onBack: () => _show(_Screen.home),
         ),
@@ -365,8 +436,42 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onStart: () => _start(CustomSession(_custom)),
           onBack: () => _show(_Screen.home),
         ),
-        _Screen.cube => CubeScreen(onExit: () => _show(_Screen.home)),
-        _Screen.statistics => StatisticsScreen(stats: _stats, progress: _progress, onBack: () => _show(_Screen.home)),
+        _Screen.cube => CubeSetupScreen(
+          settings: _settings,
+          stats: _stats,
+          colours: colours,
+          onChange: (cube) => _changeSettings(_settings.copyWith(cube: cube)),
+          onStart: () => _playCube(),
+          saved: _cubeRuns[CubeKind.endless],
+          onResume: () => _resumeCube(CubeKind.endless),
+          onTutorial: () => _playCube(),
+          onBack: () => _show(_Screen.home),
+        ),
+        _Screen.cubePlay => CubeScreen(
+          key: _cubeKey,
+          settings: _settings,
+          blocked: _settingsOpen,
+          onSettings: () => setState(() => _settingsOpen = true),
+          onToggleMusic: _toggleMusic,
+          onPauseChanged: _setMusicPaused,
+          onExit: () => _show(_Screen.home),
+          onSetup: () => _show(_Screen.cube),
+          onRetry: () => _playCube(_cubeLevel),
+          onRecord: _recordRun,
+          level: _cubeLevel,
+          progress: _cubeProgress,
+          onProgress: _changeCubeProgress,
+          onLevels: () => _show(_Screen.campaign),
+          onNextLevel: _playCube,
+          restore: _cubeRestore,
+          onCheckpoint: (save) => _cubeCheckpoint(kindOf(_cubeLevel), save),
+        ),
+        _Screen.statistics => StatisticsScreen(
+          stats: _stats,
+          progress: _progress,
+          cubeProgress: _cubeProgress,
+          onBack: () => _show(_Screen.home),
+        ),
         _Screen.settings => SettingsScreen(
           settings: _settings,
           stored: _stored,
@@ -410,16 +515,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           children: [
             Positioned.fill(
               child: Backdrop(
-                menu: _screen != _Screen.play,
+                menu: !_inGame,
                 paused: _settingsOpen || _gamePaused,
-                animated: _screen != _Screen.play || _settings.effects.fieldBackground,
+                animated: !_inGame || _settings.effects.fieldBackground,
               ),
             ),
             Positioned.fill(
               child: Column(
                 children: [
                   // The game lays out its own column, so its dialogs still cover the whole window.
-                  Expanded(child: _screen == _Screen.play ? body : MenuWidth(child: body)),
+                  Expanded(child: _inGame ? body : MenuWidth(child: body)),
                   if (!_stored)
                     SafeArea(
                       top: false,
@@ -442,7 +547,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            if (_settingsOpen && _screen == _Screen.play && store != null)
+            if (_settingsOpen && _inGame && store != null)
               Positioned.fill(
                 child: SettingsScreen(
                   overlay: true,
