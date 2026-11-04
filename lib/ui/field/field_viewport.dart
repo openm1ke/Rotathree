@@ -73,3 +73,54 @@ class FieldViewport {
     );
   }
 }
+
+/// Spans of the field, in cells, that its textures are drawn for.
+class TextureSpans {
+  const TextureSpans(this.rest, this.glow, this.motion);
+
+  factory TextureSpans.of({
+    required int boardSize,
+    required int armLength,
+    required List<Side> sides,
+    Side? growing,
+    bool focusSingleGlass = false,
+    bool showNextPiece = false,
+  }) {
+    double span(List<Side> visible, double angle) => FieldViewport.fit(
+      boardSize: boardSize,
+      armLength: armLength,
+      sides: visible,
+      angle: angle,
+      focusSingleGlass: focusSingleGlass,
+      showNextPiece: showNextPiece,
+    ).span;
+    final layouts = [
+      sides,
+      if (growing != null) [for (final side in sides) if (side != growing) side],
+    ];
+    final rest = span(sides, 0);
+    final glow = layouts.map((visible) => span(visible, 0)).reduce(math.min);
+    var motion = glow;
+    for (final visible in layouts) {
+      for (var step = 1; step < _turnSteps; step++) {
+        motion = math.min(motion, span(visible, step * math.pi / 2 / _turnSteps));
+      }
+    }
+    return TextureSpans(rest, glow, motion);
+  }
+
+  /// Steps a quarter turn is sampled in: every quarter turn looks the same
+  /// to the camera.
+  static const _turnSteps = 64;
+
+  /// The cross at rest: blocks are copied to the screen pixel for pixel.
+  final double rest;
+
+  /// Glows: the cross at rest or, while a glass grows in, the closer view
+  /// without it that the camera starts from.
+  final double glow;
+
+  /// The closest the camera comes while it turns or a glass grows in, so
+  /// that moving blocks are only ever scaled down.
+  final double motion;
+}

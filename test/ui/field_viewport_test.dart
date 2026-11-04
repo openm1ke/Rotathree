@@ -117,7 +117,7 @@ void main() {
     }
   });
 
-  test('texture resolution stays steady through turns and growth', () {
+  test('blocks are drawn for the cross at rest, and finer ones that moving cameras only scale down', () {
     const config = GameConfig(glassCount: 2);
     FieldGeometry geometry({
       double size = 640,
@@ -138,15 +138,30 @@ void main() {
     );
 
     final resting = geometry();
-    final turning = geometry(angle: math.pi / 4);
+    final spans = resting.textureSpans;
+    expect(resting.unitFor(spans.rest), resting.unit);
+    expect(spans.glow, spans.rest);
+    for (var step = 0; step <= 32; step++) {
+      final turning = geometry(angle: step * math.pi / 16);
+      expect(turning.textureSpans.rest, spans.rest);
+      expect(turning.unitFor(turning.textureSpans.motion), greaterThanOrEqualTo(turning.unit));
+      for (final progress in [0.0, 0.1, 0.15, 0.4, 0.75, 1.0]) {
+        final growing = geometry(angle: step * math.pi / 16, building: config.sides.last, progress: progress);
+        expect(growing.textureSpans.rest, spans.rest);
+        expect(growing.unitFor(growing.textureSpans.motion), greaterThanOrEqualTo(growing.unit));
+        if (step == 0) expect(growing.unitFor(growing.textureSpans.glow), greaterThanOrEqualTo(growing.unit));
+      }
+    }
+    // The second glass grows in from the single glass's close view.
     final growing = geometry(building: config.sides.last, progress: 0.15);
-    expect(turning.unit, isNot(resting.unit));
-    expect(growing.unit, isNot(resting.unit));
-    expect(turning.textureUnit, resting.textureUnit);
-    expect(growing.textureUnit, resting.textureUnit);
-    expect(geometry(size: 320).textureUnit, lessThan(resting.textureUnit));
-    expect(geometry(ratio: 1).textureUnit, lessThan(resting.textureUnit));
-    expect(geometry(showNextPiece: true).textureUnit, lessThan(resting.textureUnit));
+    expect(growing.unit, greaterThan(resting.unit));
+    expect(growing.unitFor(growing.textureSpans.glow), greaterThan(resting.unit * 1.4));
+    expect(geometry(size: 320).unitFor(geometry(size: 320).textureSpans.rest), lessThan(resting.unit));
+    expect(geometry(ratio: 1).unitFor(geometry(ratio: 1).textureSpans.rest), lessThan(resting.unit));
+    final shown = geometry(showNextPiece: true);
+    expect(shown.unitFor(shown.textureSpans.rest), lessThan(resting.unit));
+    // Turned half a quarter, the cross with its next pieces comes closer.
+    expect(shown.unitFor(shown.textureSpans.motion), greaterThan(shown.unitFor(shown.textureSpans.rest)));
   });
 
   test('touch targets follow the zoom around the fixed center and ignore absent arms', () {

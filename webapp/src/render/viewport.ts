@@ -51,3 +51,33 @@ export function fieldViewport(n: number, arm: number, sides: readonly Side[], an
     span: Math.max(right - left, bottom - top),
     grow: building === null || reduceMotion ? 1 : ease((progress - 0.25) / 0.75) };
 }
+
+/** Steps a quarter turn is sampled in: every quarter turn looks the same to
+ * the camera. */
+const TURN_STEPS = 64;
+
+/** Spans of the field, in cells, that its textures are drawn for. */
+export interface TextureSpans {
+  /** The cross at rest: blocks are copied to the screen pixel for pixel. */
+  rest: number;
+  /** Glows: the cross at rest or, while a glass grows in, the closer view
+   * without it that the camera starts from. */
+  glow: number;
+  /** The closest the camera comes while it turns or a glass grows in, so
+   * that moving blocks are only ever scaled down. */
+  motion: number;
+}
+
+export function textureSpans(n: number, arm: number, sides: readonly Side[], growing: Side | null = null,
+  focusSingleGlass = false, showNextPiece = false): TextureSpans {
+  const span = (visible: readonly Side[], angle: number) =>
+    fieldViewport(n, arm, visible, angle, null, 1, false, focusSingleGlass, showNextPiece).span;
+  const layouts = growing === null ? [sides] : [sides, sides.filter((side) => side !== growing)];
+  const rest = span(sides, 0);
+  const glow = Math.min(...layouts.map((visible) => span(visible, 0)));
+  let motion = glow;
+  for (const visible of layouts) for (let step = 1; step < TURN_STEPS; step++) {
+    motion = Math.min(motion, span(visible, step * Math.PI / 2 / TURN_STEPS));
+  }
+  return { rest, glow, motion };
+}

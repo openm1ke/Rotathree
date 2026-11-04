@@ -6,7 +6,7 @@ import type { IncomingPiece } from '../game/incoming';
 import { isHorizontal, pieceDepth, pieceWidth, type BlockColor, type Piece } from '../game/piece';
 import { SIDES, type Side } from '../game/side';
 import type { Effects } from './effects';
-import { fieldViewport, nextPiecePreviewRect } from './viewport';
+import { fieldViewport, nextPiecePreviewRect, textureSpans } from './viewport';
 import { THEME, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
 
 const QUARTER = Math.PI / 2;
@@ -64,11 +64,15 @@ export class GameRenderer {
   /** Side of the canvas in device pixels; always even. */
   private pixels = 0;
 
+  /** Device pixels per cell of the textures (see `textureSpans`): blocks at
+   * rest and moving, and the glows. Set when the layout changes. */
   private textureLayout = '';
-  /** Device pixels per cell at the resting camera scale. */
-  private textureUnit = 1;
+  private restUnit = 1;
+  private motionUnit = 1;
+  private glowUnit = 1;
+  /** The blocks drawn this frame, from the sets of the sizes in use. */
   private sprites: HTMLCanvasElement[] = [];
-  private spriteSize = 0;
+  private readonly spriteSets = new Map<number, HTMLCanvasElement[]>();
   private spriteRevision = -1;
 
   private glowKey = '';
@@ -182,15 +186,18 @@ export class GameRenderer {
     this.reach = this.half + this.arm;
     this.grid = grid;
     this.px = scale / unit;
-    // Camera movement scales the existing textures. Only the resting layout
-    // and the canvas resolution determine how large to rasterize them.
-    const textureLayout = `${pixels}:${this.n}:${this.arm}:${this.visible.join(',')}:${focusSingleGlass}:${showNextPiece}`;
+    // Camera movement scales the existing textures. Only the layout and the
+    // canvas resolution determine how large to rasterize them.
+    const growing = state.phase === 'building' && !reduceMotion ? state.buildingSide : null;
+    const textureLayout = `${pixels}:${this.n}:${this.arm}:${this.visible.join(',')}:${growing}:${focusSingleGlass}:${showNextPiece}`;
     if (textureLayout !== this.textureLayout) {
-      const resting = fieldViewport(this.n, this.arm, this.visible, 0, null, 1, false, focusSingleGlass, showNextPiece);
-      this.textureUnit = Math.max(1, Math.floor(pixels * FIT / resting.span));
+      const spans = textureSpans(this.n, this.arm, this.visible, growing, focusSingleGlass, showNextPiece);
+      const unitOf = (span: number) => Math.max(1, Math.floor(pixels * FIT / span));
+      this.restUnit = unitOf(spans.rest);
+      this.motionUnit = unitOf(spans.motion);
+      this.glowUnit = unitOf(spans.glow);
       this.textureLayout = textureLayout;
     }
-    this.ensureSprites(this.textureUnit);
     this.ensureGlows(scale);
     this.ensurePaths();
 
@@ -213,6 +220,7 @@ export class GameRenderer {
     }
     this.dcos = atRest ? 1 : Math.cos(delta);
     this.dsin = atRest ? 0 : Math.sin(delta);
+    this.ensureSprites(atRest && growing === null ? this.restUnit : this.motionUnit);
 
     // Combo pulses stay inside the fitted camera and zoom about its center.
     this.s = Math.min(unit * (1 + fx.punch), pixels * 0.985 / viewport.span);
@@ -288,43 +296,22 @@ export class GameRenderer {
   // ------------------------------------------------------------- sprites
 
   /** One pre-rendered block per colour, exactly a cell big: flat, with a lit
-   * top edge and a shaded bottom one. */
+   * top edge and a shaded bottom one. Kept for the sizes in use, at rest and
+   * moving, so that turning the cross only switches between them. */
   private ensureSprites(size: number): void {
-    if (size === this.spriteSize && this.spriteRevision === paletteRevision()) return;
-    this.spriteSize = size;
-    this.spriteRevision = paletteRevision();
-    this.sprites = paletteTones().map((tones) => {
-      const sprite = document.createElement('canvas');
-      sprite.width = sprite.height = Math.max(4, size);
-      const g = sprite.getContext('2d')!;
-      const s = sprite.width;
-      const pad = s * 0.045;
-      const side = s - pad * 2;
-      const radius = s * 0.16;
-
-      const body = g.createLinearGradient(0, pad, 0, pad + side);
-      body.addColorStop(0, tones.light);
-      body.addColorStop(0.3, tones.base);
-      body.addColorStop(1, tones.dark);
-      g.fillStyle = body;
-      roundedRect(g, pad, pad, side, side, radius);
-      g.fill();
-
-      // A flat face set into the bevel.
-      const inset = s * 0.16;
-      g.fillStyle = tones.base;
-      roundedRect(g, inset, inset, s - inset * 2, s - inset * 2, radius * 0.6);
-      g.fill();
-
-      // A soft highlight across the top of the face.
-      const shine = g.createLinearGradient(0, inset, 0, s - inset);
-      shine.addColorStop(0, 'rgba(255, 255, 255, 0.38)');
-      shine.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
-      g.fillStyle = shine;
-      roundedRect(g, inset, inset, s - inset * 2, s - inset * 2, radius * 0.6);
-      g.fill();
-      return sprite;
-    });
+    if (this.spriteRevision !== paletteRevision()) {
+      this.spriteRevision = paletteRevision();
+      this.spriteSets.clear();
+    }
+    let sprites = this.spriteSets.get(size);
+    if (sprites === undefined) {
+      for (const kept of this.spriteSets.keys()) {
+        if (kept !== this.restUnit && kept !== this.motionUnit) this.spriteSets.delete(kept);
+      }
+      sprites = makeSprites(size);
+      this.spriteSets.set(size, sprites);
+    }
+    this.sprites = sprites;
   }
 
   /** Draws one block centred at (`x`, `y`) of the frame of glass `frame`
@@ -378,7 +365,7 @@ export class GameRenderer {
   // --------------------------------------------------------------- glows
 
   private ensureGlows(scale: number): void {
-    const { textureUnit: unit, n } = this;
+    const { glowUnit: unit, n } = this;
     const key = `${unit}:${scale}:${n}:${this.arm}`;
     if (key === this.glowKey) return;
     this.glowKey = key;
@@ -431,7 +418,7 @@ export class GameRenderer {
     const key = `${width}x${depth}:${rgb}`;
     let halo = this.halos.get(key);
     if (halo === undefined) {
-      const { textureUnit: unit } = this;
+      const { glowUnit: unit } = this;
       const px = this.pixels / this.cssSize / unit;
       halo = makeGlow(width, depth, unit, HALO_BLUR, (g) => {
         g.shadowColor = rgba(rgb, 0.9);
@@ -448,7 +435,7 @@ export class GameRenderer {
 
   /** Draws a glow with its shape's origin at (`x`, `y`) of the current frame. */
   private glow(glow: Glow, x: number, y: number, alpha: number): void {
-    const { ctx, textureUnit: unit } = this;
+    const { ctx, glowUnit: unit } = this;
     const { image, pad } = glow;
     ctx.globalAlpha = Math.min(1, alpha);
     ctx.drawImage(image, x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
@@ -1068,4 +1055,40 @@ function roundedRect(
   ctx.arcTo(x, y + height, x, y, r);
   ctx.arcTo(x, y, x + width, y, r);
   ctx.closePath();
+}
+
+/** One block per colour of the palette, `size` pixels square. */
+function makeSprites(size: number): HTMLCanvasElement[] {
+  return paletteTones().map((tones) => {
+    const sprite = document.createElement('canvas');
+    sprite.width = sprite.height = Math.max(4, size);
+    const g = sprite.getContext('2d')!;
+    const s = sprite.width;
+    const pad = s * 0.045;
+    const side = s - pad * 2;
+    const radius = s * 0.16;
+
+    const body = g.createLinearGradient(0, pad, 0, pad + side);
+    body.addColorStop(0, tones.light);
+    body.addColorStop(0.3, tones.base);
+    body.addColorStop(1, tones.dark);
+    g.fillStyle = body;
+    roundedRect(g, pad, pad, side, side, radius);
+    g.fill();
+
+    // A flat face set into the bevel.
+    const inset = s * 0.16;
+    g.fillStyle = tones.base;
+    roundedRect(g, inset, inset, s - inset * 2, s - inset * 2, radius * 0.6);
+    g.fill();
+
+    // A soft highlight across the top of the face.
+    const shine = g.createLinearGradient(0, inset, 0, s - inset);
+    shine.addColorStop(0, 'rgba(255, 255, 255, 0.38)');
+    shine.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = shine;
+    roundedRect(g, inset, inset, s - inset * 2, s - inset * 2, radius * 0.6);
+    g.fill();
+    return sprite;
+  });
 }

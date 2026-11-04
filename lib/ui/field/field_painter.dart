@@ -55,6 +55,7 @@ class FieldGeometry {
        arm = config.armLength,
        grid = config.gridSize,
        sides = sides ?? config.sides,
+       growing = reduceMotion ? null : building,
        viewport = FieldViewport.fit(
          boardSize: config.boardSize,
          armLength: config.armLength,
@@ -79,6 +80,9 @@ class FieldGeometry {
   final int grid;
   final double angle;
   final List<Side> sides;
+
+  /// The glass growing in, unless motion is reduced.
+  final Side? growing;
   final bool focusSingleGlass;
   final bool showNextPiece;
   final FieldViewport viewport;
@@ -91,20 +95,20 @@ class FieldGeometry {
 
   /// Physical pixels to a cell while the cross is at rest. A whole number, so
   /// that a block is copied to the screen pixel for pixel.
-  int get unit => _unitFor(viewport.span);
+  int get unit => unitFor(viewport.span);
 
-  int _unitFor(double span) => math.max(1, (size * devicePixelRatio * fit / span).floor());
+  /// Physical pixels to a cell when the camera shows [span] cells.
+  int unitFor(double span) => math.max(1, (size * devicePixelRatio * fit / span).floor());
 
-  /// Resolution of reusable textures. Turns and growth scale their existing
-  /// images; only a change to the resting layout needs a new resolution.
-  late final int textureUnit = _unitFor(
-    FieldViewport.fit(
-      boardSize: n,
-      armLength: arm,
-      sides: sides,
-      focusSingleGlass: focusSingleGlass,
-      showNextPiece: showNextPiece,
-    ).span,
+  /// What the reusable textures are drawn for. Turns and growth scale them;
+  /// only a change to the layout needs them drawn again.
+  late final TextureSpans textureSpans = TextureSpans.of(
+    boardSize: n,
+    armLength: arm,
+    sides: sides,
+    growing: growing,
+    focusSingleGlass: focusSingleGlass,
+    showNextPiece: showNextPiece,
   );
 
   /// A cell as drawn at rest, in logical pixels.
@@ -157,6 +161,19 @@ class _Glow {
 
   /// Where the image goes when its shape's origin is at ([x], [y]), in cells.
   Rect at(double x, double y) => Rect.fromLTWH(x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
+}
+
+/// The blocks drawn for one size of cell, with a white square for the
+/// particles.
+class _Atlas {
+  const _Atlas(this.image, this.unit, this.blocks, this.whitePatch);
+
+  final ui.Image image;
+
+  /// Pixels to a cell.
+  final int unit;
+  final List<Rect> blocks;
+  final Rect whitePatch;
 }
 
 /// The seconds written beside a piece, laid out once for each text.
@@ -241,12 +258,15 @@ class FieldAssets {
     Color(0x16FFFFFF),
   ]);
 
-  ui.Image? _atlas;
-  int _unit = 0;
-  (double, double, int, int, int, bool, bool)? _textureLayout;
+  /// The blocks drawn this frame, from the atlases of the sizes in use: the
+  /// cross at rest and moving, so that a turn only switches between them.
+  _Atlas? _atlas;
+  final Map<int, _Atlas> _atlases = {};
+  (double, double, int, int, int, int, bool, bool)? _textureLayout;
+  int _restUnit = 0;
+  int _motionUnit = 0;
+  int _glowUnit = 0;
   int _revision = -1;
-  final List<Rect> _blocks = [];
-  Rect _whitePatch = Rect.zero;
 
   (int, double, int, int)? _glowKey;
   _Glow? _well;
@@ -278,8 +298,7 @@ class FieldAssets {
   final Map<CellPosition, Landing> _landing = {};
 
   void dispose() {
-    _atlas?.dispose();
-    _atlas = null;
+    _disposeAtlases();
     _disposeGlows();
     for (final label in _labels.values) {
       label.painter?.dispose();
@@ -299,21 +318,50 @@ class FieldAssets {
     _glowKey = null;
   }
 
-  /// Makes sure everything fits the canvas, the board and the palette.
-  void _prepare(FieldGeometry g) {
+  void _disposeAtlases() {
+    for (final atlas in _atlases.values) {
+      atlas.image.dispose();
+    }
+    _atlases.clear();
+    _atlas = null;
+  }
+
+  /// Makes sure everything fits the canvas, the board and the palette, with
+  /// the blocks for a camera that is [moving].
+  void _prepare(FieldGeometry g, {required bool moving}) {
     var sides = 0;
     for (final side in g.sides) {
       sides |= 1 << side.index;
     }
-    final layout = (g.size, g.devicePixelRatio, g.n, g.arm, sides, g.focusSingleGlass, g.showNextPiece);
-    final unit = layout == _textureLayout ? _unit : g.textureUnit;
-    _textureLayout = layout;
-    if (_atlas == null || unit != _unit || _revision != BlockTones.revision) {
-      _unit = unit;
-      _revision = BlockTones.revision;
-      _makeAtlas(unit);
+    final layout = (
+      g.size,
+      g.devicePixelRatio,
+      g.n,
+      g.arm,
+      sides,
+      g.growing?.index ?? -1,
+      g.focusSingleGlass,
+      g.showNextPiece,
+    );
+    if (layout != _textureLayout) {
+      _textureLayout = layout;
+      final spans = g.textureSpans;
+      _restUnit = g.unitFor(spans.rest);
+      _motionUnit = g.unitFor(spans.motion);
+      _glowUnit = g.unitFor(spans.glow);
+      _atlases.removeWhere((unit, atlas) {
+        if (unit == _restUnit || unit == _motionUnit) return false;
+        atlas.image.dispose();
+        return true;
+      });
     }
-    final glowKey = (unit, g.devicePixelRatio, g.n, g.arm);
+    if (_revision != BlockTones.revision) {
+      _revision = BlockTones.revision;
+      _disposeAtlases();
+    }
+    final unit = moving ? _motionUnit : _restUnit;
+    _atlas = _atlases[unit] ??= _makeAtlas(unit);
+    final glowKey = (_glowUnit, g.devicePixelRatio, g.n, g.arm);
     if (glowKey != _glowKey) {
       _disposeGlows();
       _glowKey = glowKey;
@@ -328,17 +376,16 @@ class FieldAssets {
 
   /// One block per colour, exactly a cell big — flat, with a lit top edge and
   /// a shaded bottom one — and a white square for the particles.
-  void _makeAtlas(int unit) {
-    _atlas?.dispose();
+  static _Atlas _makeAtlas(int unit) {
     final pitch = unit + 2 * _gutter;
     final count = BlockColor.values.length;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    _blocks.clear();
+    final blocks = <Rect>[];
     for (final color in BlockColor.values) {
       final left = (color.index * pitch + _gutter).toDouble();
       final top = _gutter.toDouble();
-      _blocks.add(Rect.fromLTWH(left, top, unit.toDouble(), unit.toDouble()));
+      blocks.add(Rect.fromLTWH(left, top, unit.toDouble(), unit.toDouble()));
       canvas.save();
       canvas.translate(left + unit / 2, top + unit / 2);
       canvas.scale(unit.toDouble());
@@ -347,10 +394,10 @@ class FieldAssets {
     }
     final patchLeft = (count * pitch).toDouble();
     canvas.drawRect(Rect.fromLTWH(patchLeft, 0, _patch.toDouble(), _patch.toDouble()), Paint()..color = _white);
-    _whitePatch = Rect.fromLTWH(patchLeft + 1, 1, 2, 2);
     final picture = recorder.endRecording();
-    _atlas = picture.toImageSync(count * pitch + _patch, math.max(pitch, _patch));
+    final image = picture.toImageSync(count * pitch + _patch, math.max(pitch, _patch));
     picture.dispose();
+    return _Atlas(image, unit, blocks, Rect.fromLTWH(patchLeft + 1, 1, 2, 2));
   }
 
   /// A block a cell wide, centred on the origin.
@@ -379,7 +426,7 @@ class FieldAssets {
   }
 
   void _makeGlows(FieldGeometry g) {
-    final px = g.devicePixelRatio / _unit;
+    final px = g.devicePixelRatio / _glowUnit;
     final n = g.n.toDouble();
     final depth = (g.arm + g.n).toDouble();
 
@@ -440,7 +487,7 @@ class FieldAssets {
   /// [_haloColors].
   _Glow _halo(int width, int depth, int tone, FieldGeometry g) {
     return _halos[width * 100 + depth * 10 + tone] ??= _makeGlow(width.toDouble(), depth.toDouble(), g, 16, (canvas) {
-      final px = g.devicePixelRatio / _unit;
+      final px = g.devicePixelRatio / _glowUnit;
       canvas.drawRRect(
         _haloShape(0, 0, width, depth),
         Paint()
@@ -467,7 +514,7 @@ class FieldAssets {
     double reach,
     void Function(Canvas canvas) draw,
   ) {
-    final unit = _unit;
+    final unit = _glowUnit;
     final pad = (reach * g.devicePixelRatio).ceil() + 2;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -631,7 +678,7 @@ class FieldPainter extends CustomPainter {
       showNextPiece: showNextPiece,
     );
     if (g.cell <= 0) return;
-    assets._prepare(g);
+    assets._prepare(g, moving: fx.turnLeft.abs() >= 1e-7 || g.growing != null);
     _px = devicePixelRatio / g.unit;
 
     // Where each glass's frame points on the screen. At rest that is a whole
@@ -742,7 +789,8 @@ class FieldPainter extends CustomPainter {
   void _add(BlockColor color, double x, double y, int frame) {
     final c = _cos[frame];
     final s = _sin[frame];
-    final unit = assets._unit;
+    final atlas = assets._atlas!;
+    final unit = atlas.unit;
     // The sprite is `unit` pixels wide and a cell big; mid-turn it is turned
     // by what is left of the turn, about its centre.
     assets._batch.add(
@@ -750,11 +798,11 @@ class FieldPainter extends CustomPainter {
       _leftSin / unit,
       c * x - s * y - (_leftCos - _leftSin) / 2,
       s * x + c * y - (_leftSin + _leftCos) / 2,
-      assets._blocks[color.index],
+      atlas.blocks[color.index],
     );
   }
 
-  void _flush(Canvas canvas) => assets._batch.draw(canvas, assets._atlas!, assets._imagePaint);
+  void _flush(Canvas canvas) => assets._batch.draw(canvas, assets._atlas!.image, assets._imagePaint);
 
   /// Draws one block stretched along the axes of its frame, and lit by
   /// [flash] of white.
@@ -778,7 +826,7 @@ class FieldPainter extends CustomPainter {
     canvas.translate(c * x - s * y, s * x + c * y);
     if (!_atRest) canvas.rotate(_left);
     canvas.scale(swapped ? scaleY : scaleX, swapped ? scaleX : scaleY);
-    canvas.drawImageRect(assets._atlas!, assets._blocks[color.index], FieldAssets._unitRect, imagePaint ?? assets._imagePaint);
+    canvas.drawImageRect(assets._atlas!.image, assets._atlas!.blocks[color.index], FieldAssets._unitRect, imagePaint ?? assets._imagePaint);
     if (flash > 0) {
       canvas.drawRRect(
         FieldAssets._flashShape,
@@ -1252,11 +1300,11 @@ class FieldPainter extends CustomPainter {
         ssin,
         c * particle.x - s * particle.y - (scos - ssin),
         s * particle.x + c * particle.y - (ssin + scos),
-        a._whitePatch,
+        a._atlas!.whitePatch,
         ((strength * 255).round() << 24) | (particle.color.toARGB32() & 0xFFFFFF),
       );
     }
-    a._batch.draw(canvas, a._atlas!, a._imagePaint, tinted: true);
+    a._batch.draw(canvas, a._atlas!.image, a._imagePaint, tinted: true);
   }
 
   void _drawIncoming(Canvas canvas, FieldGeometry g, IncomingPiece piece) {

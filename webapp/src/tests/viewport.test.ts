@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GLASS_ORDER } from '../game/config';
-import { fieldViewport, nextPiecePreviewRect } from '../render/viewport';
+import { fieldViewport, nextPiecePreviewRect, textureSpans } from '../render/viewport';
 
 describe('field camera', () => {
   it('keeps next-piece cards outside the glasses and inside the camera through turns', () => {
@@ -100,5 +100,32 @@ describe('field camera', () => {
     expect(build(.2).cy).toBeLessThan(0);
     expect(build(.4).cy).toBe(0);
     expect(build(1)).toEqual(fieldViewport(6, 9, [0, 1]));
+  });
+
+  it('draws blocks for the cross at rest, and finer ones that a moving camera only scales down', () => {
+    const unit = (span: number) => Math.floor(1170 * 0.965 / span);
+    for (const focus of [false, true]) for (const next of [false, true]) for (let count = 1; count <= 4; count++) {
+      const sides = GLASS_ORDER.slice(0, count), last = sides[count - 1];
+      const still = textureSpans(10, 9, sides, null, focus, next);
+      expect(still.rest).toBe(fieldViewport(10, 9, sides, 0, null, 1, false, focus, next).span);
+      expect(still.glow).toBe(still.rest);
+      const growing = textureSpans(10, 9, sides, last, focus, next);
+      expect(growing.rest).toBe(still.rest);
+      for (let step = 0; step <= 32; step++) {
+        const angle = step * Math.PI / 16;
+        expect(unit(fieldViewport(10, 9, sides, angle, null, 1, false, focus, next).span)).toBeLessThanOrEqual(unit(still.motion));
+        for (const progress of [0, 0.1, 0.2, 0.4, 0.75, 1]) {
+          const view = fieldViewport(10, 9, sides, angle, last, progress, false, focus, next);
+          expect(unit(view.span)).toBeLessThanOrEqual(unit(growing.motion));
+          if (angle === 0) expect(unit(view.span)).toBeLessThanOrEqual(unit(growing.glow));
+        }
+      }
+    }
+    // A phone's first growing glass starts half as close again, and a turn
+    // with the next pieces shown comes a fifth closer than the rest.
+    const two = GLASS_ORDER.slice(0, 2);
+    expect(unit(textureSpans(10, 9, two, two[1], true).glow)).toBeGreaterThan(unit(textureSpans(10, 9, two, null, true).rest) * 1.4);
+    const shown = textureSpans(10, 9, GLASS_ORDER, null, false, true);
+    expect(unit(shown.motion)).toBeGreaterThan(unit(shown.rest) * 1.15);
   });
 });
