@@ -19,7 +19,7 @@ Future<void> loadExo2(WidgetTester tester) => tester.runAsync(() async {
 });
 
 void main() {
-  Future<void> pumpMenu(WidgetTester tester, Size size) async {
+  Future<void> pumpMenu(WidgetTester tester, Size size, {bool saved = true}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -28,11 +28,10 @@ void main() {
         home: Scaffold(
           body: MainMenu(
             progress: Progress.initial(),
-            hasSavedGames: true,
+            hasSavedGames: saved,
             onResume: () {},
             onTutorial: () {},
             onCampaign: () {},
-            onPlayCampaign: () {},
             onCustom: () {},
             onStatistics: () {},
             onSettings: () {},
@@ -45,31 +44,43 @@ void main() {
     await tester.pump();
   }
 
-  Rect item(WidgetTester tester, String title) =>
-      tester.getRect(find.ancestor(of: find.text(title), matching: find.byType(Material)).first);
+  Rect tile(WidgetTester tester, String name) => tester.getRect(find.byKey(ValueKey('menu-$name')));
   double scrollRoom(WidgetTester tester) =>
       tester.state<ScrollableState>(find.byType(Scrollable)).position.maxScrollExtent;
 
-  testWidgets('a tall phone shows the menu as drawn', (tester) async {
+  testWidgets('a tall phone shows the tiles as drawn, one to a row, every one as tall', (tester) async {
     await loadExo2(tester);
     await pumpMenu(tester, const Size(390, 900));
-    expect(item(tester, 'Кампания').top - item(tester, 'Обучение').top, 76);
+    expect(tile(tester, 'campaign').height, 76);
+    expect(tile(tester, 'custom').top - tile(tester, 'campaign').top, 86);
+    expect(tile(tester, 'resume').height, tile(tester, 'settings').height);
+    // The records and the settings side by side.
+    expect(tile(tester, 'statistics').top, tile(tester, 'settings').top);
     expect(scrollRoom(tester), 0);
   });
 
-  testWidgets('a 360x640 phone fits all of the menu, Continue and the campaign card included', (tester) async {
+  testWidgets('a 360x640 phone fits all of the menu, Continue included', (tester) async {
     await loadExo2(tester);
     // 640 dp less the status bar and the gesture bar.
     await pumpMenu(tester, const Size(360, 600));
-    expect(item(tester, 'Кампания').top - item(tester, 'Обучение').top, lessThan(76));
     expect(scrollRoom(tester), 0);
-    expect(find.byKey(const ValueKey('campaign-shortcut')).hitTestable(), findsOneWidget);
+    for (final name in ['resume', 'campaign', 'custom', 'tutorial', 'statistics', 'settings']) {
+      expect(find.byKey(ValueKey('menu-$name')).hitTestable(), findsOneWidget, reason: name);
+    }
   });
 
-  testWidgets('a lower screen still reaches every entry by scrolling', (tester) async {
+  testWidgets('a lower screen still reaches every tile by scrolling', (tester) async {
     await loadExo2(tester);
-    await pumpMenu(tester, const Size(360, 420));
-    expect(item(tester, 'Кампания').top - item(tester, 'Обучение').top, 58);
+    await pumpMenu(tester, const Size(320, 330));
+    expect(tile(tester, 'campaign').height, 54);
     expect(scrollRoom(tester), greaterThan(0));
+  });
+
+  testWidgets('a wide window puts the ways to play two to a row', (tester) async {
+    await loadExo2(tester);
+    await pumpMenu(tester, const Size(900, 500), saved: false);
+    expect(tile(tester, 'campaign').top, tile(tester, 'custom').top);
+    expect(tile(tester, 'tutorial').width, greaterThan(tile(tester, 'campaign').width));
+    expect(find.byKey(const ValueKey('menu-resume')), findsNothing);
   });
 }

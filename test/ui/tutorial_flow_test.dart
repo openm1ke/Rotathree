@@ -30,7 +30,7 @@ Future<void> openTutorialFromMenu(WidgetTester tester) async {
   addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
   await tester.pumpWidget(const RotathreeApp());
   await settle(tester);
-  await tester.tap(find.text('Обучение'));
+  await tester.tap(find.byKey(const ValueKey('menu-tutorial')));
   await settle(tester);
   expect(tester.widget<GameScreen>(find.byType(GameScreen)).tutorial, isTrue);
 }
@@ -68,7 +68,7 @@ void main() {
     await tester.tap(find.text('Пропустить'));
     await settle(tester);
     expect(find.byType(GameScreen), findsNothing);
-    expect(find.text('Кампания'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-campaign')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

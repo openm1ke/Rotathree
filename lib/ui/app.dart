@@ -251,11 +251,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
-  int get _campaignHomeLevel {
-    final session = _savedRuns[ModeId.campaign]?.session;
-    return session is CampaignSession ? session.level : _progress.unlocked;
-  }
-
   void _start(Session session, {RunSave? restore, bool resumeImmediately = false}) {
     if (restore == null && !_tutorialDone) {
       _openTutorial(after: session);
@@ -342,8 +337,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onTutorial: () => _openTutorial(),
           tutorialDone: _tutorialDone,
           onCampaign: () => _show(_Screen.campaign),
-          onPlayCampaign: _playCampaign,
-          campaignLevel: _campaignHomeLevel,
           onCustom: () => _show(_Screen.custom),
           onStatistics: () => _show(_Screen.statistics),
           onSettings: () => _show(_Screen.settings),

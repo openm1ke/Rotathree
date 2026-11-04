@@ -41,14 +41,14 @@ void main() {
       await tester.pumpWidget(const RotathreeApp());
       await settle(tester);
       expect(tester.takeException(), isNull);
-      expect(find.text('Настройки'), findsOneWidget);
+      expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);
       if (isTablet(size)) {
         // The menu sits in the middle of the screen, not pinned to its top edge.
-        expect(tester.getTopLeft(find.text('Обучение')).dy, greaterThan(size.height * 0.2));
-        expect(tester.getBottomLeft(find.textContaining('из 16')).dy, lessThan(size.height));
+        expect(tester.getTopLeft(find.byKey(const ValueKey('menu-tutorial'))).dy, greaterThan(size.height * 0.2));
+        expect(tester.getBottomLeft(find.byKey(const ValueKey('menu-settings'))).dy, lessThan(size.height));
       }
 
-      await tester.tap(find.text('Обучение'));
+      await tester.tap(find.byKey(const ValueKey('menu-tutorial')));
       await settle(tester);
       expect(tester.takeException(), isNull);
       expect(_fieldWidth(tester), lessThanOrEqualTo(math.min(size.width, size.height) + 0.5));
@@ -58,7 +58,7 @@ void main() {
       await tester.tap(find.byTooltip('Назад'));
       await settle(tester);
 
-      await tester.tap(find.text('Кампания'));
+      await tester.tap(find.byKey(const ValueKey('menu-campaign')));
       await settle(tester);
       expect(tester.takeException(), isNull);
       if (isTablet(size)) {
