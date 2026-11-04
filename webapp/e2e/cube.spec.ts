@@ -145,9 +145,14 @@ test('a pause lets the cube be looked at; a lost game shows, records and can be 
   await expect(line(page)).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
+  // The game is played out here and now rather than on a timer: it only
+  // moves on with the frames drawn, and a slow runner draws few of them.
   await page.evaluate(() => {
     const game = (window as unknown as { __rotathreeCube: { game: CubeGame } }).__rotathreeCube.game;
-    const id = setInterval(() => (game.isGameOver ? clearInterval(id) : game.dropActive()), 60);
+    for (let i = 0; i < 20_000 && !game.isGameOver; i++) {
+      game.dropActive();
+      game.update(0.05);
+    }
   });
   await expect(page.getByRole('heading', { name: 'Игра окончена' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/стакан заполнился до конца рукава/)).toBeVisible();
