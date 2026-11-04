@@ -1,0 +1,129 @@
+name: Desktop builds
+
+# Builds the game for Windows, Linux and macOS, each on its own system, and
+# puts the three on the repository's Releases page:
+# - every push to main replaces the "nightly" pre-release with fresh builds;
+# - a pushed version tag (v0.1.5) makes a release of its own that stays.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+    # Not looked at for tags: a version tag is always built.
+    paths:
+      - 'lib/**'
+      - 'assets/**'
+      - 'windows/**'
+      - 'linux/**'
+      - 'macos/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/desktop.yml'
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            package: RotaThree-windows-x64.zip
+          # The oldest supported Ubuntu: what it builds runs on newer
+          # systems too, not the other way round.
+          - platform: linux
+            os: ubuntu-22.04
+            package: RotaThree-linux-x64.tar.gz
+          - platform: macos
+            os: macos-latest
+            package: RotaThree-macos.zip
+    runs-on: ${{ matrix.os }}
+    env:
+      LANG: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the Linux build tools
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ${{ matrix.platform }} --release
+
+      # Windows: the Visual C++ runtime goes beside the game, so that it
+      # starts on a PC that has never installed it.
+      - name: Package for Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$dll" build/windows/x64/runner/Release/
+          }
+          Copy-Item -Recurse build/windows/x64/runner/Release RotaThree
+          Compress-Archive -Path RotaThree -DestinationPath ${{ matrix.package }}
+      - name: Package for Linux
+        if: matrix.platform == 'linux'
+        run: |
+          cp -r build/linux/x64/release/bundle RotaThree
+          tar -czf ${{ matrix.package }} RotaThree
+      - name: Package for macOS
+        if: matrix.platform == 'macos'
+        run: |
+          lipo -info build/macos/Build/Products/Release/RotaThree.app/Contents/MacOS/RotaThree
+          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/RotaThree.app ${{ matrix.package }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RotaThree-${{ matrix.platform }}
+          path: ${{ matrix.package }}
+          retention-days: 14
+
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Write the release notes
+        run: |
+          cat > notes.md <<EOF
+          Сборка из коммита ${GITHUB_SHA::7}. Build of commit ${GITHUB_SHA::7}.
+
+          | Система | Файл | Как запустить |
+          |---|---|---|
+          | Windows 10/11, x64 | RotaThree-windows-x64.zip | Распаковать и открыть RotaThree.exe. Если Windows предупредит, нажать «Подробнее» → «Выполнить в любом случае». |
+          | Linux, x64 | RotaThree-linux-x64.tar.gz | Распаковать и запустить RotaThree/rotathree. Нужны GTK 3 и GStreamer, они есть в обычных дистрибутивах. |
+          | macOS 12+, Apple Silicon и Intel | RotaThree-macos.zip | Распаковать и перенести RotaThree в «Программы». Приложение не нотаризовано: при первом запуске открыть «Системные настройки» → «Конфиденциальность и безопасность» → «Всё равно открыть». |
+          EOF
+      - name: Publish
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+              --title "RotaThree $GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release delete nightly --cleanup-tag --yes || true
+            gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
+              --title "RotaThree — свежая сборка (main)" --notes-file notes.md
+          fi

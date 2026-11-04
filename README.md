@@ -16,6 +16,12 @@ and a browser version with keyboard and adaptive touch controls in [`webapp/`](w
 `webapp/` and published by `.github/workflows/pages.yml` on every push to
 `main` that touches it.
 
+**Download for Windows, Linux or macOS:** the
+[Releases page](https://github.com/openm1ke/Rotathree/releases). Each is built
+on its own system by `.github/workflows/desktop.yml`: every push to `main` that
+touches the app replaces the `nightly` pre-release, and a pushed version tag
+(`git tag v0.1.5 && git push origin v0.1.5`) makes a release of its own.
+
 See [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) for current session behavior,
 validation and release setup. [PROTOTYPE_REPORT.md](PROTOTYPE_REPORT.md) is the
 historical prototype audit, with its original test and playtest results.
