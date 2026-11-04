@@ -64,6 +64,10 @@ interface Props {
 
 /** Longest frame the game will simulate in one go (hitches, tab switches). */
 const MAX_FRAME_SECONDS = 0.05;
+
+/** Longest frame a lesson counts of a key held: as long as it was, on a
+ * device that draws few frames, but not a stall. */
+const MAX_LESSON_FRAME_SECONDS = 0.25;
 /** Browsers refuse, or silently shrink, canvases much beyond this many
  * device pixels a side. */
 const MAX_CANVAS_PIXELS = 4096;
@@ -663,7 +667,7 @@ export function CubeScreen(props: Props) {
         }
       }
 
-      if (tutorial && !frozen) checkLesson(seconds, now);
+      if (tutorial && !frozen) checkLesson(Math.min(MAX_LESSON_FRAME_SECONDS, Math.max(0, frameMs / 1000)), now);
       // A level is passed once its points are in and the board is at rest.
       if (levelPlayed && level !== null && !finished && game.score >= levelPlayed.target && (game.phase === 'playing' || game.isGameOver)) {
         finished = true;
