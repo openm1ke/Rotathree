@@ -49,9 +49,11 @@ const CAPTIONS: Record<PadAction, string> = {
 /** Captions are drawn at 11 px (global.css) to stay readable on a phone
  * (Playgama's game checklist, item 28). A word wider than its button is
  * condensed to fit, and only a word that would need more than that drops to
- * 10 px. */
+ * 10 px; a long word on a small button ("Опрокинуть") is condensed further
+ * rather than cut at its ends. */
 const SMALL_CAPTION_PX = 10;
 const MOST_CONDENSED = 0.8;
+const NARROWEST = 0.55;
 
 function fitCaption(caption: HTMLElement): void {
   caption.style.fontSize = '';
@@ -63,7 +65,7 @@ function fitCaption(caption: HTMLElement): void {
     caption.style.fontSize = `${SMALL_CAPTION_PX}px`;
     width = caption.getBoundingClientRect().width;
   }
-  caption.style.transform = `scaleX(${Math.max(MOST_CONDENSED, room / width).toFixed(3)})`;
+  caption.style.transform = `scaleX(${Math.max(NARROWEST, room / width).toFixed(3)})`;
 }
 
 export function DPad({

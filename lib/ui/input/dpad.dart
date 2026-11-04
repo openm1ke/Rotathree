@@ -352,13 +352,15 @@ IconData padActionIcon(GameAction action) => switch (action) {
 
 /// Captions read at 11 px, as on the web. A word wider than its button is
 /// condensed to fit, and only a word that would need more than that drops to
-/// 10 px.
+/// 10 px; a long word on a small button ("ОПРОКИНУТЬ") is condensed further
+/// rather than cut at its ends.
 class _PadCaption extends StatelessWidget {
   const _PadCaption({required this.text, required this.color, required this.room});
 
   static const _size = 11.0;
   static const _smallSize = 10.0;
   static const _mostCondensed = 0.8;
+  static const _narrowest = 0.55;
 
   final String text;
   final Color color;
@@ -395,7 +397,7 @@ class _PadCaption extends StatelessWidget {
       child: ClipRect(
         child: OverflowBox(
           maxWidth: double.infinity,
-          child: Transform.scale(scaleX: math.max(_mostCondensed, room / measured.width), scaleY: 1, child: label),
+          child: Transform.scale(scaleX: math.max(_narrowest, room / measured.width), scaleY: 1, child: label),
         ),
       ),
     );
