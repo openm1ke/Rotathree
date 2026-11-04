@@ -2,23 +2,12 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n/context';
 import { T } from '../i18n/Text';
 import { Keycap } from './Keycap';
+import { TUTORIAL_LESSONS } from '../game/tutorial';
 
 export interface TutorialControl {
   label: string;
   keys: readonly string[];
 }
-
-/** One short line per lesson, read at a glance above the glass; the keys or
- * the glowing pad buttons say the rest. A lesson with an action goes on by
- * itself once the action is done; the first and the last wait for a button. */
-export const TUTORIAL_LESSONS = [
-  ['Собирай 3 в ряд', 'Три клетки одного цвета исчезают'],
-  ['Двигай фигуру', ''],
-  ['Поверни фигуру', ''],
-  ['Брось — собери 3', ''],
-  ['Поверни крест', 'Наверху — активный стакан'],
-  ['Следи за всеми стаканами', 'Активный падает быстрее — переключайся'],
-] as const;
 
 export function TutorialPanel({
   lessons = TUTORIAL_LESSONS,
