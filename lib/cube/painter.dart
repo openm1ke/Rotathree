@@ -52,6 +52,28 @@ class _Triangles {
     add(a, ca, c, cc, d, cd);
   }
 
+  /// A triangle between points [a], [b] and [c] of [xs] and [ys].
+  void addAt(Float64List xs, Float64List ys, int a, int ca, int b, int cb, int c, int cc) {
+    if (3 * (vertices + 3) > colors.length) _grow();
+    final i = vertices * 2;
+    positions[i] = xs[a];
+    positions[i + 1] = ys[a];
+    positions[i + 2] = xs[b];
+    positions[i + 3] = ys[b];
+    positions[i + 4] = xs[c];
+    positions[i + 5] = ys[c];
+    colors[vertices] = ca;
+    colors[vertices + 1] = cb;
+    colors[vertices + 2] = cc;
+    vertices += 3;
+  }
+
+  /// A quad between points [a], [b], [c] and [d] of [xs] and [ys], as [quad].
+  void quadAt(Float64List xs, Float64List ys, int a, int b, int c, int d, int ca, int cb, int cc, int cd) {
+    addAt(xs, ys, a, ca, b, cb, c, cc);
+    addAt(xs, ys, a, ca, c, cc, d, cd);
+  }
+
   void draw(Canvas canvas) {
     if (vertices == 0) return;
     final vertexData = ui.Vertices.raw(
@@ -82,20 +104,50 @@ const _faces = <(List<double>, List<double>, List<double>)>[
 ];
 
 /// The rounded rim of a face as an octagon, and the inner corner each of its
-/// points belongs to.
+/// points belongs to (see [_cornerAt]).
 const _inner = 0.5 - _round;
 const _octagon = <(double, double, int)>[
   (-0.5, -_inner, 0), (-_inner, -0.5, 0), (_inner, -0.5, 1), (0.5, -_inner, 1),
   (0.5, _inner, 2), (_inner, 0.5, 2), (-_inner, 0.5, 3), (-0.5, _inner, 3),
 ];
-const _innerCorners = <(double, double)>[(-_inner, -_inner), (_inner, -_inner), (_inner, _inner), (-_inner, _inner)];
 const _grid = [-_inner, 0.0, _inner];
+
+/// [_faces] as axes of the block: the normal's axis and its sign, then the
+/// axes across the face.
+const _faceAxes = <(int, double, int, int)>[
+  (0, 1, 1, 2), (0, -1, 2, 1), (1, 1, 2, 0), (1, -1, 0, 2), (2, 1, 0, 1), (2, -1, 1, 0),
+];
+
+/// The points of a face, in its own (a, b): the three corners that tell
+/// whether it faces the eye, the rim's eight, and the face's three-by-three
+/// grid, row by row. The grid's corners are the rim's inner ones.
+final _facePoints = <(double, double)>[
+  (-0.5, -0.5), (0.5, -0.5), (0.5, 0.5),
+  for (final (a, b, _) in _octagon) (a, b),
+  for (final b in _grid)
+    for (final a in _grid) (a, b),
+];
+const _rimAt = 3, _gridAt = 11;
+
+/// Where each inner corner of the rim is among [_facePoints].
+const _cornerAt = [_gridAt, _gridAt + 2, _gridAt + 8, _gridAt + 6];
 
 class CubePainter extends CustomPainter {
   CubePainter(this.view, {super.repaint});
 
   final CubeView view;
   static final _triangles = _Triangles();
+
+  // One face of a block at a time: its points on the canvas, how far up the
+  // screen each is from the block's middle, and their colours.
+  static final _xs = Float64List(_facePoints.length);
+  static final _ys = Float64List(_facePoints.length);
+  static final _ups = Float64List(_facePoints.length);
+  static final _rims = Int32List(_facePoints.length);
+  static final _fills = Int32List(_facePoints.length);
+
+  /// The block's turn as columns: where each of its axes points.
+  static final _axes = Float64List(9);
 
   late List<double> _m;
   late Size _size;
@@ -159,7 +211,8 @@ class CubePainter extends CustomPainter {
       }
     }
     // A stick hidden behind blocks shows through them while the hub is open.
-    if (view.xrayOpacity > 0.01) {
+    if (view.xrayOpacity > 0.01 && view.xrays.isNotEmpty) {
+      _placeCentres();
       for (final x in view.xrays) {
         if (_hidden(x)) _solid(t, x, view.xrayOpacity);
       }
@@ -171,13 +224,32 @@ class CubePainter extends CustomPainter {
     }
   }
 
+  /// The middle of each of the view's blocks on the canvas, for [_hidden].
+  static Float64List _centreXs = Float64List(256), _centreYs = Float64List(256);
+
+  void _placeCentres() {
+    final solids = view.solids;
+    if (_centreXs.length < solids.length) {
+      _centreXs = Float64List(solids.length * 2);
+      _centreYs = Float64List(solids.length * 2);
+    }
+    for (var i = 0; i < solids.length; i++) {
+      final at = _p(solids[i].at);
+      _centreXs[i] = at.dx;
+      _centreYs[i] = at.dy;
+    }
+  }
+
   /// Whether something nearer covers the middle of [x] on the canvas.
   bool _hidden(CubeSolid x) {
     final at = _p(x.at);
     final cell = (_p(V3(x.at.x + 0.5, x.at.y, x.at.z)) - at).distance;
-    for (final s in view.solids) {
+    final solids = view.solids;
+    for (var i = 0; i < solids.length; i++) {
+      final s = solids[i];
       if (s.depth >= x.depth - 0.64 || s.size < 0.5) continue;
-      if ((_p(s.at) - at).distance < cell) return true;
+      final dx = _centreXs[i] - at.dx, dy = _centreYs[i] - at.dy;
+      if (math.sqrt(dx * dx + dy * dy) < cell) return true;
     }
     return false;
   }
@@ -209,77 +281,102 @@ class CubePainter extends CustomPainter {
     final base = tones.base, light = tones.light, dark = tones.dark;
     final q = s.turn;
     final half = s.size;
-    for (final (n, u, v) in _faces) {
-      final normal = V3(n[0], n[1], n[2]).applyQuaternion(q);
-      final uu = V3(u[0], u[1], u[2]).applyQuaternion(q);
-      final vv = V3(v[0], v[1], v[2]).applyQuaternion(q);
-      // A point of the face in its own (a, b), in the scene and on the canvas;
-      // and how far up the screen it is from the cube's middle (vUp).
-      (Offset, double) point(double a, double b) {
-        final x = normal.x * 0.5 + uu.x * a + vv.x * b;
-        final y = normal.y * 0.5 + uu.y * a + vv.y * b;
-        final z = normal.z * 0.5 + uu.z * a + vv.z * b;
-        return (_project(s.at.x + x * half, s.at.y + y * half, s.at.z + z * half), y);
+    final at = s.at;
+    final m = _m;
+    final width = _size.width, height = _size.height, distance = view.distance;
+    final axes = _axes;
+    final qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+    // Each axis turned by q, as V3.applyQuaternion turns it.
+    for (var axis = 0; axis < 3; axis++) {
+      final vx = axis == 0 ? 1.0 : 0.0, vy = axis == 1 ? 1.0 : 0.0, vz = axis == 2 ? 1.0 : 0.0;
+      final tx = 2 * (qy * vz - qz * vy);
+      final ty = 2 * (qz * vx - qx * vz);
+      final tz = 2 * (qx * vy - qy * vx);
+      axes[axis * 3] = vx + qw * tx + qy * tz - qz * ty;
+      axes[axis * 3 + 1] = vy + qw * ty + qz * tx - qx * tz;
+      axes[axis * 3 + 2] = vz + qw * tz + qx * ty - qy * tx;
+    }
+    final xs = _xs, ys = _ys, ups = _ups, rims = _rims, fills = _fills;
+    for (final (normalAxis, sign, uAxis, vAxis) in _faceAxes) {
+      final nx = sign * axes[normalAxis * 3], ny = sign * axes[normalAxis * 3 + 1], nz = sign * axes[normalAxis * 3 + 2];
+      final ux = axes[uAxis * 3], uy = axes[uAxis * 3 + 1], uz = axes[uAxis * 3 + 2];
+      final vx = axes[vAxis * 3], vy = axes[vAxis * 3 + 1], vz = axes[vAxis * 3 + 2];
+      // A point of the face in the scene, on the canvas (the camera's
+      // projection, as _project), and how far up it is (vUp).
+      void place(int i) {
+        final (a, b) = _facePoints[i];
+        final x = nx * 0.5 + ux * a + vx * b;
+        final y = ny * 0.5 + uy * a + vy * b;
+        final z = nz * 0.5 + uz * a + vz * b;
+        final sx = at.x + x * half, sy = at.y + y * half, sz = at.z + z * half - distance;
+        final cx = m[0] * sx + m[4] * sy + m[8] * sz + m[12];
+        final cy = m[1] * sx + m[5] * sy + m[9] * sz + m[13];
+        final cw = m[3] * sx + m[7] * sy + m[11] * sz + m[15];
+        xs[i] = (cx / cw + 1) / 2 * width;
+        ys[i] = (1 - cy / cw) / 2 * height;
+        ups[i] = y;
       }
 
       // Facing the eye? The winding of its corners on the canvas says.
-      final c0 = point(-0.5, -0.5).$1;
-      final c1 = point(0.5, -0.5).$1;
-      final c2 = point(0.5, 0.5).$1;
-      final area = (c1.dx - c0.dx) * (c2.dy - c0.dy) - (c1.dy - c0.dy) * (c2.dx - c0.dx);
+      place(0);
+      place(1);
+      place(2);
+      final area = (xs[1] - xs[0]) * (ys[2] - ys[0]) - (ys[1] - ys[0]) * (xs[2] - xs[0]);
       if (area > -0.05) continue;
-      final toEye = math.max(normal.z, 0.0);
-      final shade = (0.72 + 0.28 * toEye + 0.12 * normal.y).clamp(0.0, 1.0) * s.brightness;
+      for (var i = _rimAt; i < _facePoints.length; i++) {
+        place(i);
+      }
+      final toEye = math.max(nz, 0.0);
+      final shade = (0.72 + 0.28 * toEye + 0.12 * ny).clamp(0.0, 1.0) * s.brightness;
       final alpha = s.alpha * opacity;
+      final flash = s.flash;
       int finish(double r, double g, double b) {
         r *= shade;
         g *= shade;
         b *= shade;
-        r += (1 - r) * s.flash;
-        g += (1 - g) * s.flash;
-        b += (1 - b) * s.flash;
+        r += (1 - r) * flash;
+        g += (1 - g) * flash;
+        b += (1 - b) * flash;
         return _argb(r, g, b, alpha);
       }
 
+      // The rim: graded light at the top of the screen through its colour
+      // to dark at the bottom; the face: its colour with a shine at the top.
       int rim(double up) {
         final y = (0.5 - up).clamp(0.0, 1.0);
         final (from, to, k) = y < 0.3 ? (light, base, y / 0.3) : (base, dark, (y - 0.3) / 0.7);
         return finish(from.r + (to.r - from.r) * k, from.g + (to.g - from.g) * k, from.b + (to.b - from.b) * k);
       }
 
-      int face(double up) {
-        final fy = ((0.37 - up) / 0.74).clamp(0.0, 1.0);
+      for (var i = _rimAt; i < _gridAt; i++) {
+        rims[i] = rim(ups[i]);
+      }
+      for (final i in _cornerAt) {
+        rims[i] = rim(ups[i]);
+      }
+      for (var i = _gridAt; i < _facePoints.length; i++) {
+        final fy = ((0.37 - ups[i]) / 0.74).clamp(0.0, 1.0);
         final shine = 0.34 * math.max(0.0, 1 - fy * 2) * toEye;
-        return finish(base.r + (1 - base.r) * shine, base.g + (1 - base.g) * shine, base.b + (1 - base.b) * shine);
+        fills[i] = finish(base.r + (1 - base.r) * shine, base.g + (1 - base.g) * shine, base.b + (1 - base.b) * shine);
       }
 
       // The rim: an octagon round the inner square.
-      final outer = [for (final (a, b, _) in _octagon) point(a, b)];
-      final corners = [for (final (a, b) in _innerCorners) point(a, b)];
       for (var i = 0; i < 8; i++) {
         final j = (i + 1) % 8;
-        final (oi, ui) = outer[i];
-        final (oj, uj) = outer[j];
+        final oi = _rimAt + i, oj = _rimAt + j;
         final ci = _octagon[i].$3, cj = _octagon[j].$3;
-        final (pi, upi) = corners[ci];
-        final (pj, upj) = corners[cj];
+        final pi = _cornerAt[ci], pj = _cornerAt[cj];
         if (ci == cj) {
-          t.add(oi, rim(ui), oj, rim(uj), pi, rim(upi));
+          t.addAt(xs, ys, oi, rims[oi], oj, rims[oj], pi, rims[pi]);
         } else {
-          t.quad(oi, oj, pj, pi, rim(ui), rim(uj), rim(upj), rim(upi));
+          t.quadAt(xs, ys, oi, oj, pj, pi, rims[oi], rims[oj], rims[pj], rims[pi]);
         }
       }
       // The face: a three-by-three grid, for the shine to fade by the middle.
-      final grid = [
-        for (final b in _grid) [for (final a in _grid) point(a, b)],
-      ];
       for (var r = 0; r < 2; r++) {
         for (var c = 0; c < 2; c++) {
-          final (p00, u00) = grid[r][c];
-          final (p01, u01) = grid[r][c + 1];
-          final (p11, u11) = grid[r + 1][c + 1];
-          final (p10, u10) = grid[r + 1][c];
-          t.quad(p00, p01, p11, p10, face(u00), face(u01), face(u11), face(u10));
+          final p00 = _gridAt + r * 3 + c, p01 = p00 + 1, p10 = p00 + 3, p11 = p00 + 4;
+          t.quadAt(xs, ys, p00, p01, p11, p10, fills[p00], fills[p01], fills[p11], fills[p10]);
         }
       }
     }
@@ -322,16 +419,27 @@ class CubePainter extends CustomPainter {
     t.quad(a + side, b + side, b - side, a - side, color, color, color, color);
   }
 
+  /// The glasses' numbers, laid out once for each look they take: laying
+  /// text out costs more than everything else in a frame.
+  static final _labelTexts = <(String, int, int), TextPainter>{};
+
   void _label(Canvas canvas, CubeLabel label) {
     final at = _p(label.at);
     final unit = (_p(V3(label.at.x + 1, label.at.y, label.at.z)) - at).distance;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: label.text,
-        style: Type.display(unit * 1.15 * 0.69, color: Palette.text.withValues(alpha: label.opacity)),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    // Half a pixel of size and a fiftieth of opacity are not seen.
+    final key = (label.text, (unit * 1.15 * 0.69 * 2).round(), (label.opacity.clamp(0.0, 1.0) * 50).round());
+    var painter = _labelTexts.remove(key);
+    if (painter == null) {
+      if (_labelTexts.length >= 48) _labelTexts.remove(_labelTexts.keys.first)!.dispose();
+      painter = TextPainter(
+        text: TextSpan(
+          text: label.text,
+          style: Type.display(key.$2 / 2, color: Palette.text.withValues(alpha: key.$3 / 50)),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+    _labelTexts[key] = painter;
     painter.paint(canvas, at - Offset(painter.width / 2, painter.height / 2));
   }
 
