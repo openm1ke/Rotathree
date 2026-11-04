@@ -111,6 +111,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Progress _cubeProgress = defaultCubeProgress();
   int? _cubeLevel;
   CubeSave? _cubeRestore;
+
+  /// Cube's lessons: seen once, on now, and what they lead to when skipped
+  /// or played through — the endless game, a level, or Cube's screen.
+  bool _cubeTutorialDone = false;
+  bool _cubeTutorial = false;
+  ({bool game, int? level}) _cubeThen = (game: false, level: null);
   GlobalKey<CubeScreenState> _cubeKey = GlobalKey<CubeScreenState>();
 
   @override
@@ -154,6 +160,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _saved('run', store.saveRuns(_savedRuns));
       _cubeRuns = store.loadCubeRuns()..removeWhere((_, save) => _stats.recent.any((run) => run.id == save.id));
       _cubeProgress = store.loadCubeProgress();
+      _cubeTutorialDone = store.loadCubeTutorial();
       if (!store.available) _failedWrites.add('storage');
       _stored = _failedWrites.isEmpty;
     });
@@ -192,6 +199,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('tutorial', store.saveTutorial(_tutorialDone));
     _saved('cubeRun', store.saveCubeRuns(_cubeRuns));
     _saved('cubeProgress', store.saveCubeProgress(_cubeProgress));
+    _saved('cubeTutorial', store.saveCubeTutorial(_cubeTutorialDone));
   }
 
   void _cubeCheckpoint(CubeKind kind, CubeSave? save) {
@@ -222,9 +230,47 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _cubeKey = GlobalKey<CubeScreenState>();
       _cubeLevel = level;
       _cubeRestore = null;
+      _cubeTutorial = false;
       _settingsOpen = false;
       _screen = _Screen.cubePlay;
     });
+  }
+
+  /// Cube's first game, endless or a level, begins with its lessons.
+  void _startCube([int? level]) {
+    if (_cubeTutorialDone) {
+      _playCube(level);
+    } else {
+      _openCubeTutorial((game: true, level: level));
+    }
+  }
+
+  void _openCubeTutorial(({bool game, int? level}) then) {
+    _setMusicPaused(false);
+    setState(() {
+      _cubeKey = GlobalKey<CubeScreenState>();
+      _cubeLevel = null;
+      _cubeRestore = null;
+      _cubeTutorial = true;
+      _cubeThen = then;
+      _settingsOpen = false;
+      _screen = _Screen.cubePlay;
+    });
+  }
+
+  /// [played]: Play on the last lesson rather than Skip: it goes into the
+  /// game, as a skip does when the lessons came before a game.
+  void _finishCubeTutorial(bool played) {
+    _cubeTutorialDone = true;
+    _saved('cubeTutorial', _store!.saveCubeTutorial(true));
+    final then = _cubeThen;
+    if (then.level != null) {
+      _playCube(then.level);
+    } else if (played || then.game) {
+      _playCube();
+    } else {
+      _show(_Screen.cube);
+    }
   }
 
   /// A kept game of Cube: it opens paused.
@@ -236,6 +282,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _cubeKey = GlobalKey<CubeScreenState>();
       _cubeLevel = save.level;
       _cubeRestore = save;
+      _cubeTutorial = false;
       _settingsOpen = false;
       _screen = _Screen.cubePlay;
     });
@@ -441,10 +488,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           stats: _stats,
           colours: colours,
           onChange: (cube) => _changeSettings(_settings.copyWith(cube: cube)),
-          onStart: () => _playCube(),
+          onStart: () => _startCube(),
           saved: _cubeRuns[CubeKind.endless],
           onResume: () => _resumeCube(CubeKind.endless),
-          onTutorial: () => _playCube(),
+          onTutorial: () => _openCubeTutorial((game: false, level: null)),
           onBack: () => _show(_Screen.home),
         ),
         _Screen.cubePlay => CubeScreen(
@@ -465,6 +512,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           onNextLevel: _playCube,
           restore: _cubeRestore,
           onCheckpoint: (save) => _cubeCheckpoint(kindOf(_cubeLevel), save),
+          tutorial: _cubeTutorial,
+          onTutorialDone: _finishCubeTutorial,
         ),
         _Screen.statistics => StatisticsScreen(
           stats: _stats,

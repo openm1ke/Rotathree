@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import '../../cube/campaign.dart';
 import '../../cube/painter.dart';
 import '../../cube/rules.dart';
 import '../../cube/save.dart';
+import '../../cube/tutorial.dart';
 import '../../cube/view.dart';
 import '../../game/config/modes.dart';
 import '../audio/sound_effects.dart';
@@ -18,6 +20,7 @@ import '../data/stats.dart';
 import '../format.dart';
 import '../game/campaign_progress.dart';
 import '../game/hud.dart';
+import '../game/tutorial.dart';
 import '../i18n/strings.dart';
 import '../input/game_action.dart';
 import '../input/pad_controller.dart';
@@ -59,6 +62,33 @@ const _lookTurns = <GameAction, (LookAxis, int)>{
   GameAction.rotateCW: (LookAxis.upright, -1),
   GameAction.rotateCCW: (LookAxis.upright, 1),
 };
+
+/// A lesson done moves on once the board has been at rest this long.
+const _tutorialNextSeconds = 0.7;
+
+/// A lesson still waiting after this long says again what to press.
+const _tutorialIdle = Duration(seconds: 4);
+
+/// How long the volume has to be held open in its lesson.
+const _peekLessonSeconds = 1.2;
+
+/// Longest frame a lesson counts of a key held: as long as it was, on a
+/// device that draws few frames, but not a stall.
+const _maxLessonFrameSeconds = 0.25;
+
+/// The first lesson opens the cube and closes it again, from either side,
+/// this many seconds at a time.
+const _introBeatSeconds = 2.4;
+
+/// What the lessons let the player do with the stick.
+const _pieceActions = [
+  GameAction.moveLeft,
+  GameAction.moveRight,
+  GameAction.rotateCW,
+  GameAction.rotateCCW,
+  GameAction.softDrop,
+  GameAction.hardDrop,
+];
 
 /// The glass that filled up, by where the screen shows it.
 const _placeNames = {
@@ -112,9 +142,17 @@ class CubeScreen extends StatefulWidget {
     this.onCheckpoint,
     this.onPauseChanged,
     this.onToggleMusic,
+    this.tutorial = false,
+    this.onTutorialDone,
   });
 
   final Settings settings;
+
+  /// The tutorial's lessons instead of a game.
+  final bool tutorial;
+
+  /// `played`: Play on the last lesson; false when the player skipped.
+  final ValueChanged<bool>? onTutorialDone;
 
   /// True while the settings are open over the game: nothing moves.
   final bool blocked;
@@ -192,6 +230,19 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   double _unsaved = 0;
   bool _changed = false;
 
+  // The tutorial: the lesson shown (−1 in a game), whether it is done, what
+  // it has seen happen, and what it says.
+  int _lesson = -1;
+  bool _lessonDone = false;
+  bool _landed = false;
+  bool _matched = false;
+  double _peekSeconds = 0;
+  double _restSince = -1;
+  double _clock = 0;
+  String? _hint;
+  bool _urging = false;
+  Timer? _idle;
+
   /// The game and its picture, for the tests of the screen.
   @visibleForTesting
   CubeGame get game => _game;
@@ -221,7 +272,10 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
     _runId = widget.restore?.id ?? _newId();
     var restored = false;
     final save = widget.restore;
-    if (save != null) {
+    if (widget.tutorial) {
+      _lesson = 0;
+      _game = lessonGame(0);
+    } else if (save != null) {
       try {
         _game = CubeGame.restore(save.game);
         restored = true;
@@ -242,6 +296,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
     // A kept game opens paused: the player looks first, then goes on.
     _status = restored ? _Status.paused : _Status.playing;
     _view.paused = _status != _Status.playing;
+    _armIdle();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.onPauseChanged?.call(_status == _Status.paused);
     });
@@ -251,6 +306,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _idle?.cancel();
     _ticker.dispose();
     _focus.dispose();
     _hud.dispose();
@@ -271,7 +327,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
     }
     _letGo();
     _checkpoint();
-    if (_status == _Status.playing) _setStatus(_Status.paused);
+    if (_status == _Status.playing && !widget.tutorial) _setStatus(_Status.paused);
   }
 
   void _setStatus(_Status status) {
@@ -290,7 +346,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   /// Keeps the game as it is, when it is at rest; otherwise the last one
   /// kept stands, a moment older.
   void _checkpoint() {
-    if (_finished) return;
+    if (_finished || widget.tutorial) return;
     final snapshot = _game.snapshot();
     if (snapshot == null) return;
     widget.onCheckpoint?.call(
@@ -329,7 +385,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   }
 
   void _togglePause() {
-    if (_status == _Status.over || _status == _Status.done) return;
+    if (_status == _Status.over || _status == _Status.done || widget.tutorial) return;
     _letGo();
     if (_looking) _setLook(false);
     _setStatus(_status == _Status.playing ? _Status.paused : _Status.playing);
@@ -337,6 +393,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   }
 
   void _retry() {
+    if (widget.tutorial) return;
     if (!_finished) _recordRun(interrupted: true);
     _finished = true;
     widget.onRetry();
@@ -362,8 +419,131 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
     destination();
   }
 
-  /// The system's Back: kept, and to the main menu.
-  void handleBack() => _leave(widget.onExit);
+  /// A lesson whose button the player's pads do not have: pressed for them,
+  /// held a moment for the volume.
+  VoidCallback? get _practice {
+    if (!widget.tutorial || _lessonDone) return null;
+    final missing = missingOnPads(_lesson, widget.settings.cubeLeftPad, widget.settings.cubeRightPad);
+    if (missing == null) return null;
+    return () {
+      _pads.down(missing);
+      Timer(Duration(milliseconds: missing == GameAction.peek ? 1500 : 60), () {
+        if (mounted) _pads.up(missing);
+      });
+    };
+  }
+
+  /// The system's Back: kept, and to the main menu; out of the lessons.
+  void handleBack() => widget.tutorial ? widget.onTutorialDone?.call(false) : _leave(widget.onExit);
+
+  // ------------------------------------------------------------ the lessons
+
+  void _enterLesson(int next) {
+    _letGo();
+    _lesson = next;
+    _game = lessonGame(next);
+    _view.reset(_game);
+    _lessonDone = _landed = _matched = false;
+    _peekSeconds = 0;
+    _restSince = -1;
+    setState(() {
+      _hint = null;
+      _urging = false;
+    });
+    _armIdle();
+  }
+
+  void _didLesson() {
+    if (_lessonDone) return;
+    _lessonDone = true;
+    _idle?.cancel();
+    setState(() {
+      _hint = null;
+      _urging = false;
+    });
+  }
+
+  /// The first lesson and the last wait for their button.
+  void _nextLesson() {
+    if (!widget.tutorial || widget.blocked || (_lesson > 0 && _lesson < cubeLessonLast)) return;
+    if (_lesson == cubeLessonLast) {
+      widget.onTutorialDone?.call(true);
+    } else {
+      _enterLesson(_lesson + 1);
+    }
+  }
+
+  /// A lesson still waiting says again what to press, and the call beats
+  /// faster.
+  void _armIdle() {
+    _idle?.cancel();
+    if (!widget.tutorial || cubeLessonActions[_lesson] == null || _lessonDone) return;
+    _idle = Timer(_tutorialIdle, () {
+      if (!mounted || _lessonDone) return;
+      if (widget.blocked || !_appActive) return _armIdle();
+      setState(() {
+        _urging = true;
+        _hint ??= 'Нажми подсвеченную кнопку';
+      });
+    });
+  }
+
+  /// Whether the lesson lets the player do this now.
+  bool _allows(GameAction action) {
+    if (_lesson < 0 || _lesson == cubeLessonLast) return true;
+    if (_lessonDone || _lesson == 0) return false;
+    return switch (_lesson) {
+      1 => _pieceActions.contains(action),
+      2 => action == GameAction.glassLeft || action == GameAction.glassRight,
+      3 => action == GameAction.tipBack || action == GameAction.tipFront,
+      _ => action == GameAction.peek || (_view.peeking && _pieceActions.contains(action)),
+    };
+  }
+
+  /// False, and a word of what to press, when the lesson asks for something
+  /// else.
+  bool _lets(GameAction action) {
+    if (!widget.tutorial) return true;
+    if (!_allows(action)) {
+      if (_lesson > 0 && !_lessonDone) setState(() => _hint = 'Нажми подсвеченную кнопку');
+      return false;
+    }
+    // On the right track: the reminder goes, and waits again.
+    if (_hint != null || _urging) {
+      setState(() {
+        _hint = null;
+        _urging = false;
+      });
+    }
+    _armIdle();
+    return true;
+  }
+
+  /// The lesson with a piece to drop: a miss lays the board out again; the
+  /// volume held long enough; the first lesson opening the cube and closing
+  /// it again. A lesson done goes on once the board is at rest.
+  void _checkLesson(double seconds) {
+    if (_lesson == 1) {
+      if (_matched) {
+        _didLesson();
+      } else if (_landed && _game.phase == CubePhase.playing) {
+        _enterLesson(_lesson);
+        setState(() => _hint = 'Мимо — попробуй ещё раз');
+      }
+    } else if (_lesson == 4 && _view.peeking) {
+      _peekSeconds += seconds;
+      if (_peekSeconds >= _peekLessonSeconds) _didLesson();
+    } else if (_lesson == 0 && !widget.blocked) {
+      final beat = (_clock / _introBeatSeconds).floor() % 3;
+      _view.peeking = beat > 0;
+      if (beat > 0) _view.peekYaw = beat == 1 ? 1 : -1;
+    }
+    final atRest = _game.phase == CubePhase.playing && !_view.tilting;
+    _restSince = _lessonDone && atRest ? (_restSince < 0 ? _clock : _restSince) : -1;
+    if (_restSince >= 0 && _clock - _restSince >= _tutorialNextSeconds && _lesson < cubeLessonLast) {
+      _enterLesson(_lesson + 1);
+    }
+  }
 
   bool get _playing => _status == _Status.playing && !widget.blocked && _appActive;
 
@@ -371,6 +551,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
 
   @override
   void move(int direction, {required bool toWall}) {
+    if (!_lets(direction < 0 ? GameAction.moveLeft : GameAction.moveRight)) return;
     if (_view.peeking) {
       _view.peekYaw = direction;
       return;
@@ -383,6 +564,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
 
   @override
   void softDrop({required bool held}) {
+    if (held && !_lets(GameAction.softDrop)) return;
     if (held && _view.peeking) {
       _view.peekPitch = -1;
     } else {
@@ -394,6 +576,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   void press(GameAction action) {
     if (action == GameAction.pause) return _togglePause();
     if (action == GameAction.restart) return _retry();
+    if (!_lets(action)) return;
     if (action == GameAction.peek) {
       _view.peeking = _playing || _looking;
       return;
@@ -422,6 +605,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
         // As in the flat game: ← clockwise, the glass on the left coming to
         // the top; → counterclockwise.
         _view.turnCross(action == GameAction.glassLeft ? -1 : 1);
+        if (_lesson == 2) _didLesson();
       case GameAction.tipBack:
       case GameAction.tipFront:
         // A stick in front or behind moves up and down the screen; the one
@@ -449,8 +633,8 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
     } else if (action == GameAction.tipBack || action == GameAction.tipFront) {
       if (!_playing) {
         _view.cancelTip();
-      } else {
-        _view.commitTip(action == GameAction.tipBack);
+      } else if (_view.commitTip(action == GameAction.tipBack) && _lesson == 3) {
+        _didLesson();
       }
     }
   }
@@ -528,6 +712,8 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
 
     final levelPlayed = _levelPlayed;
     for (final event in events) {
+      if (event is Landed) _landed = true;
+      if (event is Matched) _matched = true;
       switch (event) {
         case Matched(:final score, :final combo):
           setState(() => _callout = Callout.score(id: ++_calloutId, points: score, combo: combo));
@@ -545,6 +731,10 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
         case SpeedUp(:final level):
           setState(() => _callout = Callout.speed(id: ++_calloutId, speed: level + 1));
           SoundEffects.instance.play(SoundGroup.level);
+        case GameEnded() when widget.tutorial:
+          // The tutorial's free play has no lost game: the cube empties.
+          _game = lessonGame(cubeLessonLast);
+          _view.reset(_game);
         case GameEnded(:final side) when !_finished && !(levelPlayed != null && _game.score >= levelPlayed.target):
           _finished = true;
           _letGo();
@@ -557,6 +747,11 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
       }
     }
 
+    if (widget.tutorial && !frozen) {
+      final lessonSeconds = math.min(_maxLessonFrameSeconds, math.max(0.0, frameMs / 1000));
+      _clock += lessonSeconds;
+      _checkLesson(lessonSeconds);
+    }
     // A level is passed once its points are in and the board is at rest.
     final level = _level;
     if (levelPlayed != null &&
@@ -625,8 +820,36 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
       child: Stack(
         children: [
           SafeArea(
-            child: Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) => Column(
               children: [
+                if (widget.tutorial) ...[
+                  // The same heading as the menus: a small arrow, the mode, the title.
+                  ScreenHeading(
+                    kicker: 'Куб',
+                    title: 'Обучение',
+                    onBack: handleBack,
+                    actions: [
+                      ?sound,
+                      GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                    ],
+                  ),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
+                    ),
+                    child: TutorialPanel(
+                      lessons: cubeLessons,
+                      step: _lesson,
+                      performed: _lessonDone,
+                      hint: _hint,
+                      urging: _urging,
+                      onPractice: _practice,
+                      onNext: _nextLesson,
+                      onSkip: () => widget.onTutorialDone?.call(false),
+                    ),
+                  ),
+                ] else
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(
@@ -684,11 +907,13 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
                         layouts: (settings.cubeLeftPad, settings.cubeRightPad),
                         onDown: _pads.down,
                         onUp: _pads.up,
+                        hint: widget.tutorial && !_lessonDone ? cubeLessonActions[_lesson] ?? const [] : const [],
                       ),
                     ),
                   ),
                 ),
               ],
+            ),
             ),
           ),
           if (!widget.blocked && _status == _Status.paused && !_looking) _dialog(_pauseDialog()),

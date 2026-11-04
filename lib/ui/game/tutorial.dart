@@ -31,7 +31,11 @@ class TutorialPanel extends StatelessWidget {
     this.hint,
     this.urging = false,
     this.onPractice,
+    this.lessons = tutorialLessons,
   });
+
+  /// The lessons shown: the flat game's, or Cube's.
+  final List<(String, String)> lessons;
   final int step;
   final bool performed;
 
@@ -45,8 +49,8 @@ class TutorialPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (title, body) = tutorialLessons[step];
-    final last = step == tutorialLessons.length - 1;
+    final (title, body) = lessons[step];
+    final last = step == lessons.length - 1;
     final waitsForButton = step == 0 || last;
     final media = MediaQuery.of(context);
     final scale = tabletScale(media.size);
@@ -83,7 +87,7 @@ class TutorialPanel extends StatelessWidget {
                     Row(
                       children: [
                         LText(
-                          '${step + 1} / ${tutorialLessons.length}',
+                          '${step + 1} / ${lessons.length}',
                           style: Type.label(12, color: Palette.accent).copyWith(letterSpacing: 2.4),
                         ),
                         const Spacer(),
