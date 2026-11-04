@@ -613,6 +613,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
               Positioned.fill(
                 child: SettingsScreen(
                   overlay: true,
+                  cube: _screen == _Screen.cubePlay,
                   settings: _settings,
                   stored: _stored,
                   onChange: _changeSettings,

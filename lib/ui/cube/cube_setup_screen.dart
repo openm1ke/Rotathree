@@ -196,11 +196,12 @@ class CubeSetupScreen extends StatelessWidget {
 /// What Cube's picture shows besides the game, each one a switch: the same
 /// on Cube's screen and in the settings.
 class CubeLookSection extends StatelessWidget {
-  const CubeLookSection({super.key, required this.cube, required this.onChange, this.title = 'Вид куба'});
+  const CubeLookSection({super.key, required this.cube, required this.onChange, this.title = 'Вид куба', this.note});
 
   final CubeOptions cube;
   final ValueChanged<CubeOptions> onChange;
   final String title;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +219,7 @@ class CubeLookSection extends StatelessWidget {
     ];
     return Section(
       title: title,
+      note: note,
       children: [
         for (final (label, value, change) in rows)
           SwitchRow(square: true, label: label, value: value, onChanged: (v) => onChange(change(v))),

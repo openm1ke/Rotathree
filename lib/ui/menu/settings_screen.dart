@@ -1,3 +1,4 @@
+import '../cube/cube_setup_screen.dart';
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
@@ -33,6 +34,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onChange,
     required this.onBack,
     this.overlay = false,
+    this.cube = false,
   });
 
   final Settings settings;
@@ -45,6 +47,9 @@ class SettingsScreen extends StatefulWidget {
   /// Shown over a game rather than as a screen of its own.
   final bool overlay;
 
+  /// Opened over a game of Cube: its look comes first, and its pads.
+  final bool cube;
+
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -56,10 +61,18 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   PadSide _editSide = PadSide.left;
   PadSlot _editSlot = PadSlot.up;
 
+  /// Which game's pad buttons are being laid out: the flat game's or Cube's.
+  /// Where the pads are and how they look is the same for both.
+  late ActionScope _padGame = widget.cube ? ActionScope.cube : ActionScope.flat;
+
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: _Tab.values.length, vsync: this);
+    _tabs = TabController(
+      length: _Tab.values.length,
+      vsync: this,
+      initialIndex: widget.cube ? _Tab.interface.index : 0,
+    );
   }
 
   @override
@@ -151,6 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
           PadSurface(
             settings: s,
+            layouts: _padGame == ActionScope.cube ? (s.cubeLeftPad, s.cubeRightPad) : null,
             onDown: (_) {},
             onUp: (_) {},
             onEdit: (positions) => widget.onChange(s.copyWith(padPositions: positions)),
@@ -282,20 +296,48 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         title: 'Экранные кнопки',
         note: 'Что делает каждая кнопка левого и правого креста. Можно нажимать обе крестовины одновременно.',
         children: [
-          for (final slot in PadSlot.values)
-            _padRow(
-              'Левый крест',
-              slot,
-              s.leftPad,
-              (action) => widget.onChange(s.copyWith(leftPad: {...s.leftPad, slot: action})),
-            ),
-          for (final slot in PadSlot.values)
-            _padRow(
-              'Правый крест',
-              slot,
-              s.rightPad,
-              (action) => widget.onChange(s.copyWith(rightPad: {...s.rightPad, slot: action})),
-            ),
+          OptionGroup<ActionScope>(
+            square: true,
+            label: 'Крестовины для',
+            value: _padGame,
+            options: const [(value: ActionScope.flat, label: '2D'), (value: ActionScope.cube, label: 'Куб')],
+            onChanged: (game) => setState(() => _padGame = game),
+          ),
+          if (_padGame == ActionScope.flat) ...[
+            for (final slot in PadSlot.values)
+              _padRow(
+                'Левый крест',
+                slot,
+                s.leftPad,
+                ActionScope.flat,
+                (action) => widget.onChange(s.copyWith(leftPad: {...s.leftPad, slot: action})),
+              ),
+            for (final slot in PadSlot.values)
+              _padRow(
+                'Правый крест',
+                slot,
+                s.rightPad,
+                ActionScope.flat,
+                (action) => widget.onChange(s.copyWith(rightPad: {...s.rightPad, slot: action})),
+              ),
+          ] else ...[
+            for (final slot in PadSlot.values)
+              _padRow(
+                'Левый крест',
+                slot,
+                s.cubeLeftPad,
+                ActionScope.cube,
+                (action) => widget.onChange(s.copyWith(cubeLeftPad: {...s.cubeLeftPad, slot: action})),
+              ),
+            for (final slot in PadSlot.values)
+              _padRow(
+                'Правый крест',
+                slot,
+                s.cubeRightPad,
+                ActionScope.cube,
+                (action) => widget.onChange(s.copyWith(cubeRightPad: {...s.cubeRightPad, slot: action})),
+              ),
+          ],
         ],
       ),
       Center(
@@ -306,6 +348,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               handling: const Handling(),
               leftPad: defaultLeftPad,
               rightPad: defaultRightPad,
+              cubeLeftPad: defaultCubeLeftPad,
+              cubeRightPad: defaultCubeRightPad,
               padPositions: const PadPositions(),
               padShape: PadShape.square,
               padButtons: const {},
@@ -318,7 +362,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     ];
   }
 
-  Widget _padRow(String pad, PadSlot slot, PadLayout layout, ValueChanged<GameAction> onChanged) {
+  Widget _padRow(String pad, PadSlot slot, PadLayout layout, ActionScope game, ValueChanged<GameAction> onChanged) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -331,18 +375,26 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             ),
           ),
           const SizedBox(width: 10),
-          DropdownButton<GameAction>(
-            value: layout[slot]!,
-            dropdownColor: Palette.panelStrong,
-            underline: const SizedBox.shrink(),
-            style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
-            items: [
-              for (final action in GameAction.values)
-                if (action.inScope(ActionScope.flat)) DropdownMenuItem(value: action, child: LText(action.label)),
-            ],
-            onChanged: (action) {
-              if (action != null) onChanged(action);
-            },
+          // Cube's actions have long names: the choice takes what room there is.
+          Flexible(
+            child: DropdownButton<GameAction>(
+              value: layout[slot]!,
+              isExpanded: true,
+              dropdownColor: Palette.panelStrong,
+              underline: const SizedBox.shrink(),
+              style: Type.body(13, color: Palette.accent, weight: FontWeight.w800),
+              items: [
+                for (final action in GameAction.values)
+                  if (action.inScope(game))
+                    DropdownMenuItem(
+                      value: action,
+                      child: LText(action.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+              ],
+              onChanged: (action) {
+                if (action != null) onChanged(action);
+              },
+            ),
           ),
         ],
       ),
@@ -535,7 +587,15 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   List<Widget> _interface() {
     final h = widget.settings.hud;
+    // Cube's switches: over its game, the first thing on the tab.
+    final cubeLook = CubeLookSection(
+      title: 'Куб',
+      note: 'Что показывать в режиме «Куб»',
+      cube: widget.settings.cube,
+      onChange: (cube) => widget.onChange(widget.settings.copyWith(cube: cube)),
+    );
     return [
+      if (widget.cube) cubeLook,
       Section(
         title: 'Язык',
         note: 'Авто — по языку устройства',
@@ -591,12 +651,22 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ],
       ),
+      if (!widget.cube) cubeLook,
       Center(
         child: OutlineButton(
           label: 'Сбросить интерфейс',
           onPressed: () {
             final defaults = Settings.defaults();
-            widget.onChange(widget.settings.copyWith(hud: defaults.hud, effects: defaults.effects));
+            final cube = widget.settings.cube;
+            // Cube's look goes back to its default; its game stays as set.
+            final look = const CubeOptions().copyWith(
+              colours: cube.colours,
+              width: cube.width,
+              arm: cube.arm,
+              depthFalls: cube.depthFalls,
+              inactiveFalls: cube.inactiveFalls,
+            );
+            widget.onChange(widget.settings.copyWith(hud: defaults.hud, effects: defaults.effects, cube: look));
           },
         ),
       ),
