@@ -7,6 +7,7 @@ import 'i18n/strings.dart';
 
 import '../game/config/modes.dart';
 import '../game/session.dart';
+import 'data/achievements.dart';
 import 'data/progress.dart';
 import 'data/settings.dart';
 import 'data/stats.dart';
@@ -16,6 +17,7 @@ import 'audio/music_service.dart';
 import 'audio/sound_effects.dart';
 import 'game/game_screen.dart';
 import 'layout.dart';
+import 'menu/achievements_screen.dart';
 import 'menu/campaign_screen.dart';
 import 'menu/custom_screen.dart';
 import 'cube/cube_screen.dart';
@@ -27,6 +29,7 @@ import 'menu/resume_screen.dart';
 import 'menu/settings_screen.dart';
 import 'menu/statistics_screen.dart';
 import 'style.dart';
+import 'widgets/achievement_toast.dart';
 import 'widgets/backdrop.dart';
 
 class RotathreeApp extends StatefulWidget {
@@ -70,7 +73,7 @@ class _RotathreeAppState extends State<RotathreeApp> {
   }
 }
 
-enum _Screen { home, resume, campaign, custom, statistics, settings, play, cube, cubePlay }
+enum _Screen { home, resume, campaign, custom, statistics, achievements, settings, play, cube, cubePlay }
 
 /// The app: the screens, the route between them, and everything the player
 /// sets up, kept on the device.
@@ -89,6 +92,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Progress _progress = Progress.initial();
   Stats _stats = Stats.empty();
   CustomSetup _custom = defaultCustom;
+  AchievementLog _achievements = const AchievementLog({});
+  final AchievementToasts _toasts = AchievementToasts();
 
   _Screen _screen = _Screen.home;
   Session? _session;
@@ -146,6 +151,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     SoundEffects.instance.duckMusic = null;
     unawaited(_music.dispose());
+    _toasts.dispose();
     super.dispose();
   }
 
@@ -165,9 +171,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _cubeRuns = store.loadCubeRuns()..removeWhere((_, save) => _stats.recent.any((run) => run.id == save.id));
       _cubeProgress = store.loadCubeProgress();
       _cubeTutorialDone = store.loadCubeTutorial();
+      _achievements = store.loadAchievements();
       if (!store.available) _failedWrites.add('storage');
       _stored = _failedWrites.isEmpty;
     });
+    // What was earned before the achievements were kept is given quietly.
+    _grantAchievements(announce: false);
     widget.onLanguageChanged(_settings.language);
     BlockTones.setColours(_settings.palettes.activeSet.colours);
     unawaited(_music.update(_settings.audio));
@@ -204,6 +213,26 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _saved('cubeRun', store.saveCubeRuns(_cubeRuns));
     _saved('cubeProgress', store.saveCubeProgress(_cubeProgress));
     _saved('cubeTutorial', store.saveCubeTutorial(_cubeTutorialDone));
+    _saved('achievements', store.saveAchievements(_achievements));
+  }
+
+  AchievementFacts get _facts => AchievementFacts(stats: _stats, progress: _progress, cubeProgress: _cubeProgress);
+
+  /// Gives the achievements the kept results now earn, and [also], earned by
+  /// what just happened; each announced unless [announce] is false.
+  void _grantAchievements({Iterable<String> also = const [], bool announce = true}) {
+    final store = _store;
+    if (store == null) return;
+    final earned = [
+      for (final id in also)
+        if (!_achievements.has(id)) ?achievementById(id),
+      ..._achievements.newlyEarned(_facts),
+    ];
+    if (earned.isEmpty) return;
+    final next = _achievements.withUnlocked(earned.map((a) => a.id), DateTime.now().millisecondsSinceEpoch);
+    setState(() => _achievements = next);
+    _saved('achievements', store.saveAchievements(next));
+    if (announce) _toasts.add(earned);
   }
 
   void _cubeCheckpoint(CubeKind kind, CubeSave? save) {
@@ -218,6 +247,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void _changeCubeProgress(Progress next) {
     setState(() => _cubeProgress = next);
     _saved('cubeProgress', _store!.saveCubeProgress(next));
+    _grantAchievements();
   }
 
   /// A new game of Cube, endless or a campaign level: one of the same kind
@@ -267,6 +297,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void _finishCubeTutorial(bool played) {
     _cubeTutorialDone = true;
     _saved('cubeTutorial', _store!.saveCubeTutorial(true));
+    if (played) _grantAchievements(also: const [cubeLessonsPlayed]);
     final then = _cubeThen;
     if (then.level != null) {
       _playCube(then.level);
@@ -325,12 +356,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void _changeProgress(Progress next) {
     setState(() => _progress = next);
     _saved('progress', _store!.saveProgress(next));
+    _grantAchievements();
   }
 
   void _recordRun(RunRecord run) {
     final next = _stats.withRun(run);
     setState(() => _stats = next);
     _saved('stats', _store!.saveStats(next));
+    _grantAchievements();
   }
 
   void _changeCustom(CustomSetup next) {
@@ -406,6 +439,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void _finishTutorial(bool played) {
     _tutorialDone = true;
     _saved('tutorial', _store!.saveTutorial(true));
+    if (played) _grantAchievements(also: const [lessonsPlayed]);
     final next = _afterTutorial;
     _afterTutorial = null;
     if (next != null) {
@@ -442,7 +476,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _cubeKey.currentState?.handleBack();
       return;
     }
-    if (_screen != _Screen.home) _show(_Screen.home);
+    if (_screen == _Screen.achievements) {
+      _show(_Screen.statistics);
+    } else if (_screen != _Screen.home) {
+      _show(_Screen.home);
+    }
   }
 
   @override
@@ -533,7 +571,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           stats: _stats,
           progress: _progress,
           cubeProgress: _cubeProgress,
+          achievements: (earned: _achievements.count, total: achievements.length),
+          onAchievements: () => _show(_Screen.achievements),
           onBack: () => _show(_Screen.home),
+        ),
+        _Screen.achievements => AchievementsScreen(
+          log: _achievements,
+          facts: _facts,
+          onBack: () => _show(_Screen.statistics),
         ),
         _Screen.settings => SettingsScreen(
           settings: _settings,
@@ -629,6 +674,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                   onBack: () => setState(() => _settingsOpen = false),
                 ),
               ),
+            Positioned.fill(child: AchievementToast(toasts: _toasts)),
           ],
         ),
       ),

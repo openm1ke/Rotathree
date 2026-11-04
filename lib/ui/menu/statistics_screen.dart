@@ -8,6 +8,7 @@ import '../data/stats.dart';
 import '../format.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
+import 'achievements_screen.dart';
 
 const _descriptions = {
   ModeId.campaign: 'Шестнадцать уровней, каждый со своей целью очков',
@@ -22,13 +23,25 @@ bool _isCampaign(ModeId mode) => mode == ModeId.campaign || mode == ModeId.cubeC
 
 /// Totals and records of every mode, and the last runs.
 class StatisticsScreen extends StatelessWidget {
-  const StatisticsScreen({super.key, required this.stats, required this.progress, this.cubeProgress, required this.onBack});
+  const StatisticsScreen({
+    super.key,
+    required this.stats,
+    required this.progress,
+    this.cubeProgress,
+    this.achievements,
+    this.onAchievements,
+    required this.onBack,
+  });
 
   final Stats stats;
   final Progress progress;
 
   /// How far Cube's campaign has been played.
   final Progress? cubeProgress;
+
+  /// How many achievements are earned of how many; and the way to them.
+  final ({int earned, int total})? achievements;
+  final VoidCallback? onAchievements;
   final VoidCallback onBack;
 
   @override
@@ -38,6 +51,11 @@ class StatisticsScreen extends StatelessWidget {
       title: 'Статистика',
       onBack: onBack,
       children: [
+        if (achievements case (:final earned, :final total))
+          Section(
+            title: 'Достижения',
+            children: [AchievementsSummary(earned: earned, total: total, onOpen: onAchievements)],
+          ),
         for (final mode in ModeId.values)
           _ModeCard(
             mode: mode,

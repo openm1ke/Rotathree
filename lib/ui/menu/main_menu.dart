@@ -7,40 +7,9 @@ import '../../game/config/campaign.dart';
 import '../data/progress.dart';
 import '../layout.dart';
 import '../style.dart';
+import '../widgets/block_picture.dart';
 import '../widgets/controls.dart';
 import '../audio/sound_effects.dart';
-
-/// The classic set's colours for the tiles' little pictures (MainMenu.tsx).
-const _red = 0, _blue = 1, _yellow = 2, _green = 3, _violet = 4, _orange = 6;
-
-/// How a block of a tile's picture is drawn: whole, see-through, or as a thin
-/// line across its row, under the blocks.
-enum _Look { solid, faint, track }
-
-/// A picture made of the game's own blocks: column, row and colour on a
-/// three-by-three grid.
-typedef _Block = (double x, double y, int colour, _Look look);
-
-const _pictures = <String, List<_Block>>{
-  // A play sign, stacked.
-  'resume': [(0, 0, _green, _Look.solid), (0, 1, _green, _Look.solid), (0, 2, _green, _Look.solid),
-      (1, 0.5, _green, _Look.solid), (1, 1.5, _green, _Look.solid), (2, 1, _green, _Look.solid)],
-  // Three in a row, the game in one picture.
-  'campaign': [(0, 2, _red, _Look.solid), (1, 2, _red, _Look.solid), (2, 2, _red, _Look.solid), (1, 1, _blue, _Look.solid)],
-  // A cube: its front, and its back showing behind.
-  'cube': [(1, 0, _blue, _Look.faint), (2, 0, _blue, _Look.faint), (2, 1, _blue, _Look.faint),
-      (0, 1, _blue, _Look.solid), (1, 1, _blue, _Look.solid), (0, 2, _blue, _Look.solid), (1, 2, _blue, _Look.solid)],
-  // A stick of three colours, as the player sets them.
-  'custom': [(1, 0, _yellow, _Look.solid), (1, 1, _green, _Look.solid), (1, 2, _violet, _Look.solid)],
-  // A stick coming down into the gap that makes the line.
-  'tutorial': [(1, 0, _green, _Look.solid), (0, 2, _green, _Look.solid), (2, 2, _green, _Look.solid), (1, 2, _green, _Look.faint)],
-  // Columns growing: the records.
-  'statistics': [(0, 2, _violet, _Look.solid), (1, 2, _violet, _Look.solid), (1, 1, _violet, _Look.solid),
-      (2, 2, _violet, _Look.solid), (2, 1, _violet, _Look.solid), (2, 0, _violet, _Look.solid)],
-  // Three sliders, each set somewhere else.
-  'settings': [(0, 0, _orange, _Look.track), (0, 1, _orange, _Look.track), (0, 2, _orange, _Look.track),
-      (2, 0, _orange, _Look.solid), (0, 1, _orange, _Look.solid), (1, 2, _orange, _Look.solid)],
-};
 
 /// The first screen, as on the web: a tile for each way to play, with a
 /// picture made of the game's blocks and a line that says where the player
@@ -322,8 +291,8 @@ class _Tile extends StatelessWidget {
               children: [
                 // A small tile on the narrowest phones gives its picture's room to the name.
                 if (!(small && narrow)) ...[
-                  _BlockPicture(
-                    blocks: _pictures[picture]!,
+                  BlockPicture(
+                    picture,
                     size: (small ? _lerp(30, 26, squeeze) : _lerp(44, 32, squeeze)) * s,
                   ),
                   SizedBox(width: (small ? 10 : 14) * s),
@@ -362,53 +331,4 @@ class _Tile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A tile's picture: blocks with the bevel of the game's own, on a
-/// three-by-three grid.
-class _BlockPicture extends StatelessWidget {
-  const _BlockPicture({required this.blocks, required this.size});
-
-  final List<_Block> blocks;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) =>
-      SizedBox.square(dimension: size, child: CustomPaint(painter: _BlocksPainter(blocks)));
-}
-
-class _BlocksPainter extends CustomPainter {
-  _BlocksPainter(this.blocks);
-
-  final List<_Block> blocks;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final unit = size.width;
-    final side = unit * 0.31;
-    // Tracks first: the blocks sit on them.
-    for (final (x, y, colour, _) in blocks.where((b) => b.$4 == _Look.track)) {
-      final rect = Rect.fromLTWH(x * unit * 0.34, y * unit * 0.34 + unit * 0.11, unit, unit * 0.09);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, Radius.circular(rect.height / 2)),
-        Paint()..color = classicColours[colour].withValues(alpha: 0.35),
-      );
-    }
-    for (final (x, y, colour, look) in blocks.where((b) => b.$4 != _Look.track)) {
-      final rect = Rect.fromLTWH(x * unit * 0.34, y * unit * 0.34, side, side);
-      final shape = RRect.fromRectAndRadius(rect, Radius.circular(side * 0.22));
-      final tones = BlockTones.fromBase(classicColours[colour]);
-      final alpha = look == _Look.faint ? 0.32 : 1.0;
-      final bevel = (side * 0.1).clamp(1.0, 2.0);
-      canvas.save();
-      canvas.clipRRect(shape);
-      canvas.drawRect(rect, Paint()..color = tones.base.withValues(alpha: alpha));
-      canvas.drawRect(Rect.fromLTWH(rect.left, rect.top, rect.width, bevel), Paint()..color = tones.light.withValues(alpha: alpha));
-      canvas.drawRect(Rect.fromLTWH(rect.left, rect.bottom - bevel, rect.width, bevel), Paint()..color = tones.dark.withValues(alpha: alpha));
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(_BlocksPainter old) => old.blocks != blocks;
 }

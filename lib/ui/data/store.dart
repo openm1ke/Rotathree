@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../cube/campaign.dart';
 import '../../cube/save.dart';
 import '../../game/config/modes.dart';
+import 'achievements.dart';
 import 'progress.dart';
 import 'settings.dart';
 import 'stats.dart';
@@ -24,6 +25,7 @@ class AppStore {
   static const _cubeRunKey = 'rotathree.cube-run.v1';
   static const _cubeTutorialKey = 'rotathree.cube-tutorial.v1';
   static const _cubeProgressKey = 'rotathree.cube-progress.v1';
+  static const _achievementsKey = 'rotathree.achievements.v1';
 
   static Future<AppStore> open() async {
     try {
@@ -91,4 +93,6 @@ class AppStore {
   Future<bool> saveCubeTutorial(bool done) => _write(_cubeTutorialKey, done);
   Progress loadCubeProgress() => _read(_cubeProgressKey, cubeProgressFromJson);
   Future<bool> saveCubeProgress(Progress value) => _write(_cubeProgressKey, value.toJson());
+  AchievementLog loadAchievements() => _read(_achievementsKey, AchievementLog.fromJson);
+  Future<bool> saveAchievements(AchievementLog value) => _write(_achievementsKey, value.toJson());
 }
