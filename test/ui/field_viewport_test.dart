@@ -117,6 +117,38 @@ void main() {
     }
   });
 
+  test('texture resolution stays steady through turns and growth', () {
+    const config = GameConfig(glassCount: 2);
+    FieldGeometry geometry({
+      double size = 640,
+      double ratio = 2,
+      double angle = 0,
+      Side? building,
+      double progress = 1,
+      bool showNextPiece = false,
+    }) => FieldGeometry(
+      size,
+      config,
+      devicePixelRatio: ratio,
+      angle: angle,
+      building: building,
+      progress: progress,
+      focusSingleGlass: true,
+      showNextPiece: showNextPiece,
+    );
+
+    final resting = geometry();
+    final turning = geometry(angle: math.pi / 4);
+    final growing = geometry(building: config.sides.last, progress: 0.15);
+    expect(turning.unit, isNot(resting.unit));
+    expect(growing.unit, isNot(resting.unit));
+    expect(turning.textureUnit, resting.textureUnit);
+    expect(growing.textureUnit, resting.textureUnit);
+    expect(geometry(size: 320).textureUnit, lessThan(resting.textureUnit));
+    expect(geometry(ratio: 1).textureUnit, lessThan(resting.textureUnit));
+    expect(geometry(showNextPiece: true).textureUnit, lessThan(resting.textureUnit));
+  });
+
   test('touch targets follow the zoom around the fixed center and ignore absent arms', () {
     const config = GameConfig(glassCount: 2);
     final g = FieldGeometry(320, config, devicePixelRatio: 3);

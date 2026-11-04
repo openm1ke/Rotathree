@@ -49,8 +49,8 @@ class FieldGeometry {
     Side? building,
     double progress = 1,
     bool reduceMotion = false,
-    bool focusSingleGlass = false,
-    bool showNextPiece = false,
+    this.focusSingleGlass = false,
+    this.showNextPiece = false,
   }) : n = config.boardSize,
        arm = config.armLength,
        grid = config.gridSize,
@@ -79,6 +79,8 @@ class FieldGeometry {
   final int grid;
   final double angle;
   final List<Side> sides;
+  final bool focusSingleGlass;
+  final bool showNextPiece;
   final FieldViewport viewport;
 
   double get half => n / 2;
@@ -89,7 +91,21 @@ class FieldGeometry {
 
   /// Physical pixels to a cell while the cross is at rest. A whole number, so
   /// that a block is copied to the screen pixel for pixel.
-  int get unit => math.max(1, (size * devicePixelRatio * fit / viewport.span).floor());
+  int get unit => _unitFor(viewport.span);
+
+  int _unitFor(double span) => math.max(1, (size * devicePixelRatio * fit / span).floor());
+
+  /// Resolution of reusable textures. Turns and growth scale their existing
+  /// images; only a change to the resting layout needs a new resolution.
+  late final int textureUnit = _unitFor(
+    FieldViewport.fit(
+      boardSize: n,
+      armLength: arm,
+      sides: sides,
+      focusSingleGlass: focusSingleGlass,
+      showNextPiece: showNextPiece,
+    ).span,
+  );
 
   /// A cell as drawn at rest, in logical pixels.
   double get drawnCell => unit / devicePixelRatio;
@@ -227,11 +243,12 @@ class FieldAssets {
 
   ui.Image? _atlas;
   int _unit = 0;
+  (double, double, int, int, int, bool, bool)? _textureLayout;
   int _revision = -1;
   final List<Rect> _blocks = [];
   Rect _whitePatch = Rect.zero;
 
-  String _glowKey = '';
+  (int, double, int, int)? _glowKey;
   _Glow? _well;
   _Glow? _warning;
   final Map<int, _Glow> _halos = {};
@@ -279,18 +296,24 @@ class FieldAssets {
     _well = null;
     _warning = null;
     _halos.clear();
-    _glowKey = '';
+    _glowKey = null;
   }
 
   /// Makes sure everything fits the canvas, the board and the palette.
   void _prepare(FieldGeometry g) {
-    final unit = g.unit;
+    var sides = 0;
+    for (final side in g.sides) {
+      sides |= 1 << side.index;
+    }
+    final layout = (g.size, g.devicePixelRatio, g.n, g.arm, sides, g.focusSingleGlass, g.showNextPiece);
+    final unit = layout == _textureLayout ? _unit : g.textureUnit;
+    _textureLayout = layout;
     if (_atlas == null || unit != _unit || _revision != BlockTones.revision) {
       _unit = unit;
       _revision = BlockTones.revision;
       _makeAtlas(unit);
     }
-    final glowKey = '$unit:${g.devicePixelRatio}:${g.n}:${g.arm}';
+    final glowKey = (unit, g.devicePixelRatio, g.n, g.arm);
     if (glowKey != _glowKey) {
       _disposeGlows();
       _glowKey = glowKey;
@@ -356,7 +379,7 @@ class FieldAssets {
   }
 
   void _makeGlows(FieldGeometry g) {
-    final px = g.devicePixelRatio / g.unit;
+    final px = g.devicePixelRatio / _unit;
     final n = g.n.toDouble();
     final depth = (g.arm + g.n).toDouble();
 
@@ -417,7 +440,7 @@ class FieldAssets {
   /// [_haloColors].
   _Glow _halo(int width, int depth, int tone, FieldGeometry g) {
     return _halos[width * 100 + depth * 10 + tone] ??= _makeGlow(width.toDouble(), depth.toDouble(), g, 16, (canvas) {
-      final px = g.devicePixelRatio / g.unit;
+      final px = g.devicePixelRatio / _unit;
       canvas.drawRRect(
         _haloShape(0, 0, width, depth),
         Paint()
@@ -437,14 +460,14 @@ class FieldAssets {
   /// Draws a glowing shape once, into an image with room for its glow.
   /// [draw] works in cells with the origin of the shape at (0, 0); [reach]
   /// is how far the glow spreads, in logical pixels.
-  static _Glow _makeGlow(
+  _Glow _makeGlow(
     double width,
     double height,
     FieldGeometry g,
     double reach,
     void Function(Canvas canvas) draw,
   ) {
-    final unit = g.unit;
+    final unit = _unit;
     final pad = (reach * g.devicePixelRatio).ceil() + 2;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
