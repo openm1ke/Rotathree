@@ -64,6 +64,9 @@ export class GameRenderer {
   /** Side of the canvas in device pixels; always even. */
   private pixels = 0;
 
+  private textureLayout = '';
+  /** Device pixels per cell at the resting camera scale. */
+  private textureUnit = 1;
   private sprites: HTMLCanvasElement[] = [];
   private spriteSize = 0;
   private spriteRevision = -1;
@@ -97,8 +100,6 @@ export class GameRenderer {
   private half = 0;
   private reach = 0;
   private grid = 0;
-  /** Device pixels to a cell while the cross is at rest; a whole number. */
-  private unit = 1;
   /** One CSS pixel, in cells. */
   private px = 1;
   /** Scale and origin of the cross on the canvas, in device pixels. */
@@ -180,9 +181,16 @@ export class GameRenderer {
     this.half = this.n / 2;
     this.reach = this.half + this.arm;
     this.grid = grid;
-    this.unit = unit;
     this.px = scale / unit;
-    this.ensureSprites(unit);
+    // Camera movement scales the existing textures. Only the resting layout
+    // and the canvas resolution determine how large to rasterize them.
+    const textureLayout = `${pixels}:${this.n}:${this.arm}:${this.visible.join(',')}:${focusSingleGlass}:${showNextPiece}`;
+    if (textureLayout !== this.textureLayout) {
+      const resting = fieldViewport(this.n, this.arm, this.visible, 0, null, 1, false, focusSingleGlass, showNextPiece);
+      this.textureUnit = Math.max(1, Math.floor(pixels * FIT / resting.span));
+      this.textureLayout = textureLayout;
+    }
+    this.ensureSprites(this.textureUnit);
     this.ensureGlows(scale);
     this.ensurePaths();
 
@@ -370,11 +378,12 @@ export class GameRenderer {
   // --------------------------------------------------------------- glows
 
   private ensureGlows(scale: number): void {
-    const key = `${this.unit}:${scale}:${this.n}:${this.arm}`;
+    const { textureUnit: unit, n } = this;
+    const key = `${unit}:${scale}:${n}:${this.arm}`;
     if (key === this.glowKey) return;
     this.glowKey = key;
     this.halos.clear();
-    const { unit, px, n } = this;
+    const px = scale / unit;
     const depth = this.arm + n;
 
     // The active glass: one tall well — its arm and the central square —
@@ -422,8 +431,9 @@ export class GameRenderer {
     const key = `${width}x${depth}:${rgb}`;
     let halo = this.halos.get(key);
     if (halo === undefined) {
-      const { px } = this;
-      halo = makeGlow(width, depth, this.unit, HALO_BLUR, (g) => {
+      const { textureUnit: unit } = this;
+      const px = this.pixels / this.cssSize / unit;
+      halo = makeGlow(width, depth, unit, HALO_BLUR, (g) => {
         g.shadowColor = rgba(rgb, 0.9);
         g.shadowBlur = HALO_BLUR;
         g.strokeStyle = rgba(rgb, 0.95);
@@ -438,7 +448,7 @@ export class GameRenderer {
 
   /** Draws a glow with its shape's origin at (`x`, `y`) of the current frame. */
   private glow(glow: Glow, x: number, y: number, alpha: number): void {
-    const { ctx, unit } = this;
+    const { ctx, textureUnit: unit } = this;
     const { image, pad } = glow;
     ctx.globalAlpha = Math.min(1, alpha);
     ctx.drawImage(image, x - pad / unit, y - pad / unit, image.width / unit, image.height / unit);
