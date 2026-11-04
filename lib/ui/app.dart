@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'i18n/strings.dart';
 
@@ -565,7 +566,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       },
     };
 
-    return PopScope(
+    final page = _inGame ? body : MenuWidth(child: body);
+    final shell = PopScope(
       canPop: _screen == _Screen.home && !_settingsOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _back();
@@ -586,7 +588,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
               child: Column(
                 children: [
                   // The game lays out its own column, so its dialogs still cover the whole window.
-                  Expanded(child: _inGame ? body : MenuWidth(child: body)),
+                  Expanded(
+                    child: usesDesktopKeyboard
+                        ? FocusScope(
+                            key: ValueKey(_screen),
+                            child: ExcludeFocus(excluding: _settingsOpen, child: page),
+                          )
+                        : page,
+                  ),
                   if (!_stored)
                     SafeArea(
                       top: false,
@@ -623,6 +632,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           ],
         ),
       ),
+    );
+    if (!usesDesktopKeyboard) return shell;
+    return CallbackShortcuts(
+      bindings: {
+        if (_settingsOpen || (!_inGame && _screen != _Screen.home))
+          const SingleActivator(LogicalKeyboardKey.escape): _back,
+      },
+      child: shell,
     );
   }
 }

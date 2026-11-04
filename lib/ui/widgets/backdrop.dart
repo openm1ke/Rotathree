@@ -86,11 +86,22 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    // On macOS the large game backdrop changes often enough that repeatedly
+    // raster-caching the whole surface is more expensive than drawing it.
+    final changingGameBackdrop = defaultTargetPlatform == TargetPlatform.macOS &&
+        !widget.menu &&
+        widget.animated &&
+        !widget.paused &&
+        !_reduceMotion;
     return Stack(
       fit: StackFit.expand,
       children: [
         RepaintBoundary(
-          child: CustomPaint(painter: _BackdropPainter(_time), size: Size.infinite),
+          child: CustomPaint(
+            painter: _BackdropPainter(_time),
+            size: Size.infinite,
+            willChange: changingGameBackdrop,
+          ),
         ),
         if (widget.menu)
           RepaintBoundary(

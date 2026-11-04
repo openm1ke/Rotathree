@@ -1,4 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+
+/// Desktop apps use physical controls at any window size.
+bool get usesDesktopKeyboard => !kIsWeb && switch (defaultTargetPlatform) {
+  TargetPlatform.macOS || TargetPlatform.windows || TargetPlatform.linux => true,
+  _ => false,
+};
 
 /// The widest column a menu takes on a tablet. Phones use the whole width.
 const double tabletMenuWidth = 880;

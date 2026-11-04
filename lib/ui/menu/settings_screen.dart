@@ -2,12 +2,14 @@ import '../cube/cube_setup_screen.dart';
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
 
+import '../data/bindings.dart';
 import '../data/settings.dart';
 import '../i18n/language_picker.dart';
 import '../input/game_action.dart';
 import '../input/pad_placement.dart';
 import '../input/pad_shape.dart';
 import '../input/pad_surface.dart';
+import '../layout.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import 'colour_picker.dart';
@@ -71,7 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     _tabs = TabController(
       length: _Tab.values.length,
       vsync: this,
-      initialIndex: widget.cube ? _Tab.interface.index : 0,
+      initialIndex: widget.cube && !usesDesktopKeyboard ? _Tab.interface.index : 0,
     );
   }
 
@@ -147,8 +149,64 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   // --------------------------------------------------------------- controls
 
+  List<Widget> _keyboardControls(Settings settings) => [
+        for (final group in ActionGroup.values)
+          Section(
+            title: group.title,
+            note: group == ActionGroup.piece ? 'Tab — выбрать кнопку, Enter — нажать, Esc — назад или пауза.' : null,
+            children: [
+              for (final action in keyActions.where((action) => action.group == group))
+                if (settings.bindings[action]!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: LText(
+                            action.label,
+                            style: Type.body(14, weight: FontWeight.w800),
+                          ),
+                        ),
+                        for (final key in settings.bindings[action]!)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Keycap(label: keyLabel(key)),
+                          ),
+                      ],
+                    ),
+                  ),
+            ],
+          ),
+      ];
+
+  Widget _repeatControls(Settings s) => Section(
+    title: 'Автоповтор движения',
+    children: [
+      SliderRow(
+        label: 'Задержка перед повтором (DAS)',
+        value: s.handling.dasMs,
+        min: 0,
+        max: 300,
+        step: 5,
+        unit: 'мс',
+        onChanged: (value) => widget.onChange(s.copyWith(handling: s.handling.copyWith(dasMs: value.round()))),
+      ),
+      SliderRow(
+        label: 'Интервал повтора (ARR)',
+        value: s.handling.arrMs,
+        min: 0,
+        max: 100,
+        step: 5,
+        unit: 'мс',
+        note: s.handling.arrMs == 0 ? 'сразу до стенки' : null,
+        onChanged: (value) => widget.onChange(s.copyWith(handling: s.handling.copyWith(arrMs: value.round()))),
+      ),
+    ],
+  );
+
   List<Widget> _controls() {
     final s = widget.settings;
+    if (usesDesktopKeyboard) return [..._keyboardControls(s), _repeatControls(s)];
     final tweak = s.padButtons[_editSide]?[_editSlot] ?? const PadTweak();
     return [
       Section(
@@ -268,30 +326,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ],
       ),
-      Section(
-        title: 'Автоповтор движения',
-        children: [
-          SliderRow(
-            label: 'Задержка перед повтором (DAS)',
-            value: s.handling.dasMs,
-            min: 0,
-            max: 300,
-            step: 5,
-            unit: 'мс',
-            onChanged: (value) => widget.onChange(s.copyWith(handling: s.handling.copyWith(dasMs: value.round()))),
-          ),
-          SliderRow(
-            label: 'Интервал повтора (ARR)',
-            value: s.handling.arrMs,
-            min: 0,
-            max: 100,
-            step: 5,
-            unit: 'мс',
-            note: s.handling.arrMs == 0 ? 'сразу до стенки' : null,
-            onChanged: (value) => widget.onChange(s.copyWith(handling: s.handling.copyWith(arrMs: value.round()))),
-          ),
-        ],
-      ),
+      _repeatControls(s),
       Section(
         title: 'Экранные кнопки',
         note: 'Что делает каждая кнопка левого и правого креста. Можно нажимать обе крестовины одновременно.',

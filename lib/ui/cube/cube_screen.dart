@@ -304,6 +304,16 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   }
 
   @override
+  void didUpdateWidget(CubeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (usesDesktopKeyboard && oldWidget.blocked && !widget.blocked) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.requestFocus();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _idle?.cancel();
@@ -423,7 +433,12 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   /// held a moment for the volume.
   VoidCallback? get _practice {
     if (!widget.tutorial || _lessonDone) return null;
-    final missing = missingOnPads(_lesson, widget.settings.cubeLeftPad, widget.settings.cubeRightPad);
+    final actions = cubeLessonActions[_lesson] ?? const [];
+    final missing = usesDesktopKeyboard
+        ? (actions.isNotEmpty && actions.every((action) => widget.settings.bindings[action]!.isEmpty)
+            ? actions.first
+            : null)
+        : missingOnPads(_lesson, widget.settings.cubeLeftPad, widget.settings.cubeRightPad);
     if (missing == null) return null;
     return () {
       _pads.down(missing);
@@ -483,7 +498,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
       if (widget.blocked || !_appActive) return _armIdle();
       setState(() {
         _urging = true;
-        _hint ??= 'Нажми подсвеченную кнопку';
+        if (!usesDesktopKeyboard) _hint ??= 'Нажми подсвеченную кнопку';
       });
     });
   }
@@ -505,7 +520,9 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   bool _lets(GameAction action) {
     if (!widget.tutorial) return true;
     if (!_allows(action)) {
-      if (_lesson > 0 && !_lessonDone) setState(() => _hint = 'Нажми подсвеченную кнопку');
+      if (!usesDesktopKeyboard && _lesson > 0 && !_lessonDone) {
+        setState(() => _hint = 'Нажми подсвеченную кнопку');
+      }
       return false;
     }
     // On the right track: the reminder goes, and waits again.
@@ -641,11 +658,24 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (widget.blocked) return KeyEventResult.ignored;
+    if (usesDesktopKeyboard && widget.tutorial && event is KeyDownEvent) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter when node.hasPrimaryFocus:
+          _nextLesson();
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.backspace || LogicalKeyboardKey.escape:
+          handleBack();
+          return KeyEventResult.handled;
+      }
+    }
     final action = actionForKey(widget.settings.bindings, event.physicalKey, ActionScope.cube);
     if (action == null) return KeyEventResult.ignored;
     if (_status == _Status.paused && !_looking) {
-      if (event is KeyDownEvent && action == GameAction.pause) _togglePause();
-      return KeyEventResult.handled;
+      if (action == GameAction.pause) {
+        if (event is KeyDownEvent) _togglePause();
+        return KeyEventResult.handled;
+      }
+      return usesDesktopKeyboard ? KeyEventResult.ignored : KeyEventResult.handled;
     }
     // Looking around: the pause key brings the dialog back.
     if (_looking && action == GameAction.pause) {
@@ -809,6 +839,7 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final settings = widget.settings;
+    final desktop = usesDesktopKeyboard;
     final level = _level, levelPlayed = _levelPlayed;
     final sound = widget.onToggleMusic == null
         ? null
@@ -816,104 +847,110 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
     return Focus(
       focusNode: _focus,
       autofocus: true,
+      skipTraversal: desktop,
       onKeyEvent: _onKey,
       child: Stack(
         children: [
           SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) => Column(
-              children: [
-                if (widget.tutorial) ...[
-                  // The same heading as the menus: a small arrow, the mode, the title.
-                  ScreenHeading(
-                    kicker: 'Куб',
-                    title: 'Обучение',
-                    onBack: handleBack,
-                    actions: [
-                      ?sound,
-                      GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
-                    ],
-                  ),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
-                    ),
-                    child: TutorialPanel(
-                      lessons: cubeLessons,
-                      step: _lesson,
-                      performed: _lessonDone,
-                      hint: _hint,
-                      urging: _urging,
-                      onPractice: _practice,
-                      onNext: _nextLesson,
-                      onSkip: () => widget.onTutorialDone?.call(false),
-                    ),
-                  ),
-                ] else
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    children: [
-                      GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: ValueListenableBuilder<HudState>(
-                            valueListenable: _hud,
-                            builder: (context, hud, _) => GameReadout(
-                              hud: hud,
-                              options: settings.hud,
-                              callout: _callout,
-                              levelCount: cubeCampaignLast + 1,
+            child: ExcludeFocus(
+              excluding: desktop && !widget.tutorial && _status != _Status.playing && !_looking,
+              child: LayoutBuilder(
+                builder: (context, constraints) => Column(
+                  children: [
+                    if (widget.tutorial) ...[
+                      // The same heading as the menus: a small arrow, the mode, the title.
+                      ScreenHeading(
+                        kicker: 'Куб',
+                        title: 'Обучение',
+                        onBack: handleBack,
+                        actions: [
+                          ?sound,
+                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                        ],
+                      ),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
+                        ),
+                        child: TutorialPanel(
+                          lessons: cubeLessons,
+                          step: _lesson,
+                          performed: _lessonDone,
+                          bindings: desktop ? settings.bindings : null,
+                          actions: cubeLessonActions[_lesson] ?? const [],
+                          hint: _hint,
+                          urging: _urging,
+                          onPractice: _practice,
+                          onNext: _nextLesson,
+                          onSkip: () => widget.onTutorialDone?.call(false),
+                        ),
+                      ),
+                    ] else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: ValueListenableBuilder<HudState>(
+                                valueListenable: _hud,
+                                builder: (context, hud, _) => GameReadout(
+                                  hud: hud,
+                                  options: settings.hud,
+                                  callout: _callout,
+                                  levelCount: cubeCampaignLast + 1,
+                                ),
+                              ),
                             ),
+                          ),
+                          if (sound != null) ...[sound, const SizedBox(width: 6)],
+                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                        ],
+                      ),
+                    ),
+                    if (levelPlayed != null && level != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                        child: ValueListenableBuilder<HudState>(
+                          valueListenable: _hud,
+                          builder: (context, hud, _) => CampaignProgress(
+                            level: level + 1,
+                            into: hud.into,
+                            target: levelPlayed.target,
+                            compact: true,
+                            animated: _status == _Status.playing && !widget.blocked && settings.effects.fieldBackground,
                           ),
                         ),
                       ),
-                      if (sound != null) ...[sound, const SizedBox(width: 6)],
-                      GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
-                    ],
-                  ),
-                ),
-                if (levelPlayed != null && level != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                    child: ValueListenableBuilder<HudState>(
-                      valueListenable: _hud,
-                      builder: (context, hud, _) => CampaignProgress(
-                        level: level + 1,
-                        into: hud.into,
-                        target: levelPlayed.target,
-                        compact: true,
-                        animated: _status == _Status.playing && !widget.blocked && settings.effects.fieldBackground,
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, box) {
+                          final side = math.min(box.maxWidth, box.maxHeight);
+                          _view.resize(side, side);
+                          return Center(child: SizedBox.square(dimension: side, child: _stage(side)));
+                        },
                       ),
                     ),
-                  ),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, box) {
-                      final side = math.min(box.maxWidth, box.maxHeight);
-                      _view.resize(side, side);
-                      return Center(child: SizedBox.square(dimension: side, child: _stage(side)));
-                    },
-                  ),
-                ),
-                RepaintBoundary(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    child: IgnorePointer(
-                      ignoring: (_status != _Status.playing && !_looking) || widget.blocked,
-                      child: PadSurface(
-                        settings: settings,
-                        layouts: (settings.cubeLeftPad, settings.cubeRightPad),
-                        onDown: _pads.down,
-                        onUp: _pads.up,
-                        hint: widget.tutorial && !_lessonDone ? cubeLessonActions[_lesson] ?? const [] : const [],
+                    if (!desktop) RepaintBoundary(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: IgnorePointer(
+                          ignoring: (_status != _Status.playing && !_looking) || widget.blocked,
+                          child: PadSurface(
+                            settings: settings,
+                            layouts: (settings.cubeLeftPad, settings.cubeRightPad),
+                            onDown: _pads.down,
+                            onUp: _pads.up,
+                            hint: widget.tutorial && !_lessonDone ? cubeLessonActions[_lesson] ?? const [] : const [],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
             ),
           ),
           if (!widget.blocked && _status == _Status.paused && !_looking) _dialog(_pauseDialog()),
@@ -974,7 +1011,10 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
             Positioned.fill(
               child: SafeArea(
                 child: Center(
-                  child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: TabletScale(child: card)),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: FocusScope(autofocus: usesDesktopKeyboard, child: TabletScale(child: card)),
+                  ),
                 ),
               ),
             ),

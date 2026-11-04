@@ -1,5 +1,7 @@
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
+import '../data/bindings.dart';
+import '../input/game_action.dart';
 import '../audio/sound_effects.dart';
 import '../layout.dart';
 import '../style.dart';
@@ -31,6 +33,8 @@ class TutorialPanel extends StatelessWidget {
     this.hint,
     this.urging = false,
     this.onPractice,
+    this.bindings,
+    this.actions = const [],
     this.lessons = tutorialLessons,
   });
 
@@ -45,6 +49,8 @@ class TutorialPanel extends StatelessWidget {
   /// The player has waited: the call to the pads beats faster.
   final bool urging;
   final VoidCallback? onPractice;
+  final Bindings? bindings;
+  final List<GameAction> actions;
   final VoidCallback onNext, onSkip;
 
   @override
@@ -52,6 +58,8 @@ class TutorialPanel extends StatelessWidget {
     final (title, body) = lessons[step];
     final last = step == lessons.length - 1;
     final waitsForButton = step == 0 || last;
+    final keys = bindings;
+    final keyboard = keys != null;
     final media = MediaQuery.of(context);
     final scale = tabletScale(media.size);
     // A low phone keeps its glass tall: the lesson's type is smaller there.
@@ -99,7 +107,13 @@ class TutorialPanel extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: LText('Пропустить', style: Type.body(13, color: Palette.textDim)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              LText('Пропустить', style: Type.body(13, color: Palette.textDim)),
+                              if (keyboard) ...[const SizedBox(width: 8), const Keycap(label: 'Backspace')],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -135,7 +149,31 @@ class TutorialPanel extends StatelessWidget {
                             if (!waitsForButton)
                               Padding(
                                 padding: EdgeInsets.only(top: compact ? 4 : 8),
-                                child: dimmed(_PadsCall(urging: urging && !performed, still: performed, compact: compact)),
+                                child: dimmed(
+                                  keys == null
+                                      ? _PadsCall(urging: urging && !performed, still: performed, compact: compact)
+                                      : Wrap(
+                                          spacing: 12,
+                                          runSpacing: 4,
+                                          alignment: WrapAlignment.center,
+                                          children: [
+                                            for (final action in actions)
+                                              if (keys[action]!.isNotEmpty)
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    LText(action.label, style: Type.body(13, color: Palette.accent)),
+                                                    const SizedBox(width: 6),
+                                                    for (final key in keys[action]!)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(right: 4),
+                                                        child: Keycap(label: keyLabel(key)),
+                                                      ),
+                                                  ],
+                                                ),
+                                          ],
+                                        ),
+                                ),
                               ),
                             if (hint case final said?)
                               Padding(
@@ -151,7 +189,9 @@ class TutorialPanel extends StatelessWidget {
                             if (onPractice != null && !performed) ...[
                               const SizedBox(height: 6),
                               LText(
-                                'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.',
+                                keyboard
+                                    ? 'Нет назначенной клавиши. Выберите «Попробовать».'
+                                    : 'Нет кнопки. Нажмите «Попробовать» или назначьте в настройках.',
                                 style: Type.body(12, color: Palette.textDim),
                                 textAlign: TextAlign.center,
                               ),
@@ -160,9 +200,17 @@ class TutorialPanel extends StatelessWidget {
                             if (waitsForButton)
                               Padding(
                                 padding: EdgeInsets.only(top: compact ? 6 : 10),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minWidth: 200 * scale),
-                                  child: GoButton(label: last ? 'Играть' : 'Начать', onPressed: onNext),
+                                child: Wrap(
+                                  spacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(minWidth: 200 * scale),
+                                      child: GoButton(label: last ? 'Играть' : 'Начать', onPressed: onNext),
+                                    ),
+                                    if (keyboard) const Keycap(label: 'Enter'),
+                                  ],
                                 ),
                               ),
                           ],

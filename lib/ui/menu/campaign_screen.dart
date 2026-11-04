@@ -131,6 +131,7 @@ class _CampaignScreenState extends State<CampaignScreen> {
                           '${best > 0 ? '. Лучший результат: ${formatNumber(best)}' : ''}',
                       tall: tall,
                       status: status,
+                      autofocus: !widget.cube && index == progress.unlocked,
                       onTap: () => widget.onStart(index),
                     );
                   },
@@ -188,6 +189,7 @@ class _CampaignScreenState extends State<CampaignScreen> {
                         description: description,
                         tall: tall,
                         status: status,
+                        autofocus: widget.cube && index == cube.unlocked,
                         onTap: () => widget.onCubeStart!(index),
                       );
                     },
@@ -261,6 +263,7 @@ class _LevelTile extends StatelessWidget {
     required this.rules,
     required this.description,
     required this.onTap,
+    this.autofocus = false,
     this.coloursKey,
     this.title,
     this.tall = false,
@@ -276,6 +279,7 @@ class _LevelTile extends StatelessWidget {
   final String? title;
   final Key? coloursKey;
   final VoidCallback onTap;
+  final bool autofocus;
 
   /// On a tablet the tile is stretched to its height and its contents spread out.
   final bool tall;
@@ -306,6 +310,8 @@ class _LevelTile extends StatelessWidget {
               side: BorderSide(color: status == _LevelStatus.open ? Palette.accent : Palette.line),
             ),
             child: InkWell(
+              autofocus: usesDesktopKeyboard && autofocus,
+              focusColor: Palette.accent.withValues(alpha: 0.25),
               onTap: locked ? null : clicking(onTap),
               borderRadius: BorderRadius.circular(4 * s),
               child: Padding(

@@ -1,9 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/ui/app.dart';
 import 'package:rotathree/ui/data/store.dart';
+import 'package:rotathree/ui/cube/cube_screen.dart';
+import 'package:rotathree/ui/input/pad_surface.dart';
+import 'package:rotathree/ui/menu/campaign_screen.dart';
+import 'package:rotathree/ui/menu/settings_screen.dart';
 import 'package:rotathree/ui/i18n/strings.dart';
 import 'package:rotathree/game/config/modes.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
@@ -23,6 +28,115 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({'rotathree.tutorial.v1': 'true'});
   });
+
+  Future<void> desktopApp(WidgetTester tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const RotathreeApp());
+    await settle(tester);
+  }
+
+  testWidgets('desktop campaign and its first lessons work from the keyboard', (tester) async {
+    await desktopApp(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(CampaignScreen), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(GameScreen), findsOneWidget);
+    expect(find.byType(PadSurface), findsNothing);
+    expect(find.text('Enter'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('2 / 6'), findsOneWidget);
+    expect(find.text('A'), findsOneWidget);
+    expect(find.text('D'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('3 / 6'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(find.text('3 / 6'), findsNothing);
+    final game = tester.state<GameScreenState>(find.byType(GameScreen));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.text('Продолжить'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.text('Продолжить'), findsNothing);
+    expect(tester.state<GameScreenState>(find.byType(GameScreen)), same(game));
+  }, variant: TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets('desktop Cube tutorial and controls list use keys instead of pads', (tester) async {
+    await desktopApp(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.text('Куб'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(CubeScreen), findsOneWidget);
+    expect(find.byType(PadSurface), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('2 / 6'), findsOneWidget);
+    expect(find.text('Пробел'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.byType(PadSurface), findsNothing);
+    expect(find.text('A'), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.byType(SettingsScreen), findsNothing);
+    expect(find.text('2 / 6'), findsOneWidget);
+    Future<void> playFrames() async {
+      for (var i = 0; i < 140; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+    }
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await playFrames();
+    expect(find.text('3 / 6'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await playFrames();
+    expect(find.text('4 / 6'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowUp);
+    await playFrames();
+    expect(find.text('5 / 6'), findsOneWidget);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await playFrames();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await playFrames();
+    expect(find.text('6 / 6'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(tester.widget<CubeScreen>(find.byType(CubeScreen)).tutorial, isFalse);
+    expect(find.byType(PadSurface), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.text('Продолжить'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(find.text('Продолжить'), findsNothing);
+  }, variant: TargetPlatformVariant({TargetPlatform.macOS}));
 
   testWidgets('the menu opens and leads to the campaign', (tester) async {
     tester.binding.platformDispatcher.localesTestValue = const [Locale('ru')];

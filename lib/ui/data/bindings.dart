@@ -139,13 +139,6 @@ int keyToJson(PhysicalKeyboardKey key) => key.usbHidUsage;
 PhysicalKeyboardKey? _keyFromJson(Object? raw) => raw is int ? PhysicalKeyboardKey(raw) : null;
 
 const _labels = {
-  'Arrow Left': '←',
-  'Arrow Right': '→',
-  'Arrow Up': '↑',
-  'Arrow Down': '↓',
-  'Space': 'Пробел',
-  'Escape': 'Esc',
-  'Backspace': 'Backspace',
   'Delete': 'Del',
   'Shift Left': 'Shift ←',
   'Shift Right': 'Shift →',
@@ -157,6 +150,28 @@ const _labels = {
 
 /// A short name for a key, for showing on a keycap.
 String keyLabel(PhysicalKeyboardKey key) {
+  // PhysicalKeyboardKey.debugName is stripped in release builds.
+  final id = key.usbHidUsage;
+  final firstLetter = PhysicalKeyboardKey.keyA.usbHidUsage;
+  if (id >= firstLetter && id <= PhysicalKeyboardKey.keyZ.usbHidUsage) {
+    return String.fromCharCode(65 + id - firstLetter);
+  }
+  final firstDigit = PhysicalKeyboardKey.digit1.usbHidUsage;
+  if (id >= firstDigit && id <= PhysicalKeyboardKey.digit0.usbHidUsage) {
+    return ((id - firstDigit + 1) % 10).toString();
+  }
+  final label = switch (key) {
+    PhysicalKeyboardKey.arrowLeft => '←',
+    PhysicalKeyboardKey.arrowRight => '→',
+    PhysicalKeyboardKey.arrowUp => '↑',
+    PhysicalKeyboardKey.arrowDown => '↓',
+    PhysicalKeyboardKey.space => 'Пробел',
+    PhysicalKeyboardKey.escape => 'Esc',
+    PhysicalKeyboardKey.enter || PhysicalKeyboardKey.numpadEnter => 'Enter',
+    PhysicalKeyboardKey.backspace => 'Backspace',
+    _ => null,
+  };
+  if (label != null) return label;
   final name = key.debugName ?? '';
   if (_labels.containsKey(name)) return _labels[name]!;
   if (name.startsWith('Key ')) return name.substring(4);

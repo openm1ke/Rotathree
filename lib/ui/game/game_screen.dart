@@ -761,6 +761,19 @@ class GameScreenState extends State<GameScreen>
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (widget.blocked) return KeyEventResult.ignored;
+    if (usesDesktopKeyboard && widget.tutorial && event is KeyDownEvent) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter when node.hasPrimaryFocus:
+          _tutorialNext();
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.backspace:
+          widget.onTutorialDone?.call(false);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.escape:
+          handleBack();
+          return KeyEventResult.handled;
+      }
+    }
     if (_status != _Status.playing &&
         event.physicalKey != PhysicalKeyboardKey.escape &&
         event.physicalKey != PhysicalKeyboardKey.keyP) {
@@ -927,118 +940,128 @@ class GameScreenState extends State<GameScreen>
     final settings = widget.settings;
     _pixelRatio = MediaQuery.devicePixelRatioOf(context);
     _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final desktop = usesDesktopKeyboard;
+    final lessonHasControl = desktop
+        ? _lessonActions.any((action) => settings.bindings[action]!.isNotEmpty)
+        : _lessonHasButton;
     // Whatever made this build happen may have changed the picture too.
     _still = 0;
     return Focus(
       focusNode: _focus,
       autofocus: true,
+      skipTraversal: desktop,
       onKeyEvent: _onKey,
       child: Stack(
         children: [
           SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Column(
-                  children: [
-                    if (widget.tutorial)
-                      // The same heading as the menus: a small arrow, the mode, the title.
-                      ScreenHeading(
-                        kicker: 'Режим',
-                        title: 'Обучение',
-                        onBack: handleBack,
-                        actions: [
-                          ?_soundButton,
-                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
-                        ],
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Row(
-                          children: [
-                            GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
-                                child: ValueListenableBuilder<HudState>(
-                                  valueListenable: _hud,
-                                  builder: (context, hud, _) => GameReadout(hud: hud, options: settings.hud, callout: _callout),
-                                ),
-                              ),
-                            ),
-                            if (_soundButton case final sound?) ...[sound, const SizedBox(width: 6)],
+            child: ExcludeFocus(
+              excluding: desktop && !widget.tutorial && _status != _Status.playing,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    children: [
+                      if (widget.tutorial)
+                        // The same heading as the menus: a small arrow, the mode, the title.
+                        ScreenHeading(
+                          kicker: 'Режим',
+                          title: 'Обучение',
+                          onBack: handleBack,
+                          actions: [
+                            ?_soundButton,
                             GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
                           ],
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            children: [
+                              GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: ValueListenableBuilder<HudState>(
+                                    valueListenable: _hud,
+                                    builder: (context, hud, _) => GameReadout(hud: hud, options: settings.hud, callout: _callout),
+                                  ),
+                                ),
+                              ),
+                              if (_soundButton case final sound?) ...[sound, const SizedBox(width: 6)],
+                              GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                            ],
+                          ),
+                        ),
+                      // Read top-down: the lesson, then the glass, then the pads.
+                      if (widget.tutorial)
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
+                          ),
+                          child: TutorialPanel(
+                            step: _tutorialStep,
+                            performed: _tutorialPerformed,
+                            bindings: desktop ? settings.bindings : null,
+                            actions: _lessonActions,
+                            hint: desktop ? null : _tutorialHint,
+                            urging: _urging,
+                            onPractice: _lessonActions.isNotEmpty && !lessonHasControl
+                                ? () {
+                                    _pads.down(_lessonActions.first);
+                                    _pads.up(_lessonActions.first);
+                                  }
+                                : null,
+                            onNext: _tutorialNext,
+                            onSkip: () => widget.onTutorialDone?.call(false),
+                          ),
+                        ),
+                      if (_isCampaign && !widget.tutorial)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                          child: ValueListenableBuilder<HudState>(
+                            valueListenable: _hud,
+                            builder: (context, hud, _) => CampaignProgress(
+                              level: hud.level, into: hud.into, target: hud.target, compact: true,
+                              animated: _status == _Status.playing && !widget.blocked && _appActive &&
+                                  !_reduceMotion && settings.effects.fieldBackground,
+                            ),
+                          ),
+                        ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, box) {
+                            // A whole number of physical pixels, set on a whole
+                            // pixel: the field is then drawn pixel for pixel.
+                            final ratio = _pixelRatio;
+                            double snap(double logical) => (logical * ratio).floorToDouble() / ratio;
+                            final side = snap(math.min(box.maxWidth, box.maxHeight));
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                left: snap((box.maxWidth - side) / 2),
+                                top: snap((box.maxHeight - side) / 2),
+                              ),
+                              child: Align(
+                                alignment: Alignment.topLeft,
+                                child: SizedBox.square(dimension: side, child: _stage(side)),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    // Read top-down: the lesson, then the glass, then the pads.
-                    if (widget.tutorial)
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
-                        ),
-                        child: TutorialPanel(
-                          step: _tutorialStep,
-                          performed: _tutorialPerformed,
-                          hint: _tutorialHint,
-                          urging: _urging,
-                          onPractice: _lessonActions.isNotEmpty && !_lessonHasButton
-                              ? () {
-                                  _pads.down(_lessonActions.first);
-                                  _pads.up(_lessonActions.first);
-                                }
-                              : null,
-                          onNext: _tutorialNext,
-                          onSkip: () => widget.onTutorialDone?.call(false),
-                        ),
-                      ),
-                    if (_isCampaign && !widget.tutorial)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                        child: ValueListenableBuilder<HudState>(
-                          valueListenable: _hud,
-                          builder: (context, hud, _) => CampaignProgress(
-                            level: hud.level, into: hud.into, target: hud.target, compact: true,
-                            animated: _status == _Status.playing && !widget.blocked && _appActive &&
-                                !_reduceMotion && settings.effects.fieldBackground,
+                      if (!desktop) RepaintBoundary(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          child: PadSurface(
+                            settings: settings,
+                            onDown: _inputDown,
+                            onUp: _pads.up,
+                            hint: _tutorialPerformed ? const [] : _lessonActions,
                           ),
                         ),
                       ),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, box) {
-                          // A whole number of physical pixels, set on a whole
-                          // pixel: the field is then drawn pixel for pixel.
-                          final ratio = _pixelRatio;
-                          double snap(double logical) => (logical * ratio).floorToDouble() / ratio;
-                          final side = snap(math.min(box.maxWidth, box.maxHeight));
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              left: snap((box.maxWidth - side) / 2),
-                              top: snap((box.maxHeight - side) / 2),
-                            ),
-                            child: Align(
-                              alignment: Alignment.topLeft,
-                              child: SizedBox.square(dimension: side, child: _stage(side)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    RepaintBoundary(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                        child: PadSurface(
-                          settings: settings,
-                          onDown: _inputDown,
-                          onUp: _pads.up,
-                          hint: _tutorialPerformed ? const [] : _lessonActions,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           if (!widget.tutorial && !widget.blocked && _status == _Status.paused) _dialog(_pauseDialog()),
@@ -1105,7 +1128,10 @@ class GameScreenState extends State<GameScreen>
         Positioned.fill(
           child: SafeArea(
             child: Center(
-              child: SingleChildScrollView(padding: const EdgeInsets.all(16), child: TabletScale(child: card)),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: FocusScope(autofocus: usesDesktopKeyboard, child: TabletScale(child: card)),
+              ),
             ),
           ),
         ),

@@ -486,5 +486,7 @@
   "Куб · 3D": "Cube · 3D",
   "пройдено {passed} из {count}": "{passed} of {count} passed",
   "куб: уровень {n} из {total}": "cube: level {n} of {total}",
-  "Сетка клеток в стаканах": "Cell grid in the glasses"
+  "Сетка клеток в стаканах": "Cell grid in the glasses",
+  "Нет назначенной клавиши. Выберите «Попробовать».": "No key is assigned. Choose Try it.",
+  "Tab — выбрать кнопку, Enter — нажать, Esc — назад или пауза.": "Tab to select, Enter to activate, Esc to go back or pause."
 }

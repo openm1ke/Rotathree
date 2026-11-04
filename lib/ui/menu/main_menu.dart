@@ -164,6 +164,7 @@ class MainMenu extends StatelessWidget {
         title: 'Кампания',
         caption: campaign,
         picture: 'campaign',
+        autofocus: !_continues,
         done: ((progress.completed ? levels : progress.unlocked) + cubePassed) / total,
         onTap: onCampaign,
       ),
@@ -181,7 +182,7 @@ class MainMenu extends StatelessWidget {
     ];
     return [
       if (_continues)
-        [_Tile(key: const ValueKey('menu-resume'), title: 'Продолжить', caption: 'Сохранённые игры', picture: 'resume', accent: true, onTap: onResume!)],
+        [_Tile(key: const ValueKey('menu-resume'), title: 'Продолжить', caption: 'Сохранённые игры', picture: 'resume', accent: true, autofocus: true, onTap: onResume!)],
       for (var i = 0; i < ways.length; i += columns) ways.sublist(i, (i + columns).clamp(0, ways.length)),
       [
         _Tile(key: const ValueKey('menu-statistics'), title: 'Статистика', picture: 'statistics', small: true, onTap: onStatistics),
@@ -277,6 +278,7 @@ class _Tile extends StatelessWidget {
     this.done,
     this.small = false,
     this.accent = false,
+    this.autofocus = false,
     required this.onTap,
   });
 
@@ -284,7 +286,7 @@ class _Tile extends StatelessWidget {
   final String? caption;
   final String picture;
   final double? done;
-  final bool small, accent;
+  final bool small, accent, autofocus;
   final VoidCallback onTap;
 
   @override
@@ -300,6 +302,7 @@ class _Tile extends StatelessWidget {
     );
     return Semantics(
       button: true,
+      onTap: onTap,
       label: [context.tr(this.title), if (caption != null) context.tr(caption!)].join(', '),
       excludeSemantics: true,
       child: Material(
@@ -310,6 +313,8 @@ class _Tile extends StatelessWidget {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(14 * s),
+          autofocus: usesDesktopKeyboard && autofocus,
+          focusColor: Palette.accent.withValues(alpha: 0.25),
           onTap: clicking(onTap),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: (small ? 12 : 16) * s, vertical: 6 * s),
