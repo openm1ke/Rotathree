@@ -20,8 +20,8 @@ const words = query.get('text') ?? 'en';
 const art = document.getElementById('art');
 art.dataset.format = format;
 const TAGLINES = {
-  en: '<b>Turn</b> the cross. <b>Match</b> three.',
-  ru: '<b>Поверни</b> крест. <b>Собери</b> три.',
+  en: '<b>Turn</b> the glass. <b>Match</b> three.',
+  ru: '<b>Поверни</b> стакан. <b>Собери</b> три.',
 };
 document.getElementById('copy').hidden = !(words in TAGLINES);
 document.getElementById('tagline').innerHTML = TAGLINES[words] ?? '';

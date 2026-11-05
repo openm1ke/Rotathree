@@ -19,7 +19,7 @@ in Exo 2 as in the game.
 | `rotathree-keyart-1x1-{en,ru,none}.png` | 2160 × 2160 | Square covers, social posts |
 | `rotathree-keyart-feature-{en,ru}.png` | 1024 × 500 | Google Play's feature graphic |
 
-`en` carries "Turn the cross. Match three.", `ru` "Поверни крест. Собери три.",
+`en` carries "Turn the glass. Match three.", `ru` "Поверни стакан. Собери три.",
 and `none` has no words, for platforms that set their own.
 
 ## Rendering again
