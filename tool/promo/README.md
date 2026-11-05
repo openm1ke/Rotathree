@@ -25,8 +25,8 @@ The first two take about two minutes together; the video takes about fifteen.
 | `store/appstore-iphone-6.9/{ru,en}` | 1320 × 2868 | App Store, 6.9-inch iPhone |
 | `store/appstore-ipad-13/{ru,en}` | 2064 × 2752 | App Store, 13-inch iPad |
 | `store/rustore-phone/ru`, `store/rustore-tablet/ru` | 1080 × 1920 | RuStore |
-| `preview-{ru,en}.mp4` | 886 × 1920, 19 s | App Store app previews |
-| `promo-ru.mp4` | 1080 × 1920, 23 s | RuStore (through VK Video), feeds |
+| `preview-{ru,en}.mp4` | 886 × 1920, 20 s | App Store app previews |
+| `promo-ru.mp4` | 1080 × 1920, 25 s | RuStore (through VK Video), feeds |
 
 Each screenshot has a kicker, a title and a line (`captions.dart`) over the
 key art, and under them the game as large as fits: the field enlarged, the
@@ -34,6 +34,12 @@ pads under it, the empty room the app leaves between them cut out
 (`GameWindow` in `look.dart`; where the field and the pads are on each
 device is in `layouts`). Lists — the campaign, the achievements — are shown
 from their top.
+
+The screenshots lead with the game of glasses (the cross, a cascade, the
+Nightmare, the campaign), then Cube, the settings and the achievements. The
+videos go the same way: the cross, its cascades and the Nightmare, then
+Cube's play, a tip and a look into its volume; the promo has a title before
+and the key art after.
 
 ## How the shots are made
 

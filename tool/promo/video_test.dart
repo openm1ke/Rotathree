@@ -16,27 +16,35 @@ const reel = 'build/promo/reel';
 const out = 'build/promo/video';
 const plainArt = 'docs/marketing/keyart/rotathree-keyart-9x16-none.png';
 
-/// What the reel's scenes say, in turn; the cross says two things.
+/// What the footage says, in turn, in frames: the cross says two things,
+/// and each change of game takes [_fade] frames from the one before.
 const _words = <String, List<(int, Caption)>>{
   'ru': [
-    (180, Caption('Новый режим', 'Куб · 3D', 'Шесть стаканов вокруг куба')),
-    (90, Caption('Куб', 'Опрокинь куб', 'Глубина станет новой картинкой')),
-    (90, Caption('Куб', 'Загляни в объём', 'Видно всё, что лежит внутри')),
-    (105, Caption('Головоломка', 'Поверни крест', 'Четыре стакана вокруг одного центра')),
-    (105, Caption('Каскады', 'Собери три', 'Линии лопаются — всё сверху осыпается')),
+    (150, Caption('Головоломка', 'Поверни крест', 'Четыре стакана вокруг одного центра')),
+    (110, Caption('Каскады', 'Собери три', 'Линии лопаются — всё сверху осыпается')),
+    (95, Caption('Испытание', 'Кошмар', 'Шесть цветов, и скорость растёт')),
+    (90, Caption('Новый режим', 'Куб · 3D', 'Шесть стаканов вокруг куба')),
+    (75, Caption('Куб', 'Опрокинь куб', 'Глубина станет новой картинкой')),
+    (75, Caption('Куб', 'Загляни в объём', 'Видно всё, что лежит внутри')),
   ],
   'en': [
-    (180, Caption('New mode', 'Cube · 3D', 'Six glasses around a cube')),
-    (90, Caption('Cube', 'Tip the cube', 'Its depth becomes the new picture')),
-    (90, Caption('Cube', 'Look inside', 'See everything that lies in its depth')),
-    (105, Caption('Puzzle', 'Turn the cross', 'Four glasses around one centre')),
-    (105, Caption('Cascades', 'Match three', 'Lines pop, everything above falls')),
+    (150, Caption('Puzzle', 'Turn the cross', 'Four glasses around one centre')),
+    (110, Caption('Cascades', 'Match three', 'Lines pop, everything above falls')),
+    (95, Caption('Challenge', 'Nightmare', 'Six colours and rising speed')),
+    (90, Caption('New mode', 'Cube · 3D', 'Six glasses around a cube')),
+    (75, Caption('Cube', 'Tip the cube', 'Its depth becomes the new picture')),
+    (75, Caption('Cube', 'Look inside', 'See everything that lies in its depth')),
   ],
 };
 
-const _scenes = ['cube', 'tip', 'volume', 'cross'];
+/// The games filmed, each a run of scenes, in turn.
+const _games = [
+  ['cross'],
+  ['nightmare'],
+  ['cube', 'tip', 'volume'],
+];
 
-/// Frames a cross-fade takes, between the cube and the cross.
+/// Frames a cross-fade takes, from one game to the next.
 const _fade = 10;
 
 /// A frame of the reel: which raw frame, and what to blend into it.
@@ -48,17 +56,26 @@ class _Shot {
   final double mix;
 }
 
-/// The reel's raw frames in order, the cube cross-fading into the cross.
+/// The reel's raw frames in order, each game cross-fading into the next.
 List<_Shot> _footage(String language) {
   List<String> frames(String scene) =>
       (Directory('$reel/$language/$scene').listSync().map((f) => f.path).toList()..sort());
-  final cube = [for (final scene in _scenes.take(3)) ...frames(scene)];
-  final cross = frames('cross');
-  return [
-    for (var i = 0; i < cube.length - _fade; i++) _Shot(cube[i]),
-    for (var i = 0; i < _fade; i++) _Shot(cross[i], under: cube[cube.length - _fade + i], mix: (i + 1) / (_fade + 1)),
-    for (var i = _fade; i < cross.length; i++) _Shot(cross[i]),
-  ];
+  final shots = <_Shot>[];
+  List<String>? last;
+  for (final game in _games) {
+    final now = [for (final scene in game) ...frames(scene)];
+    if (last != null) {
+      shots.removeRange(shots.length - _fade, shots.length);
+      for (var i = 0; i < _fade; i++) {
+        shots.add(_Shot(now[i], under: last[last.length - _fade + i], mix: (i + 1) / (_fade + 1)));
+      }
+      shots.addAll(now.skip(_fade).map(_Shot.new));
+    } else {
+      shots.addAll(now.map(_Shot.new));
+    }
+    last = now;
+  }
+  return shots;
 }
 
 /// The caption on frame [i] of the footage, and how far it has faded in.
@@ -181,9 +198,20 @@ void main() {
             opacity: shown,
             child: Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const CaptionBlock(caption: Caption('Новый режим', 'Куб · 3D', 'Шесть стаканов вокруг куба'), base: 1080, titleScale: 1.6),
-                const SizedBox(height: 90),
-                const Wordmark(size: 92),
+                const Wordmark(size: 150),
+                const SizedBox(height: 34),
+                Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: 'Поверни', style: exo(60, FontWeight.w900, italic: true, color: cyan)),
+                    TextSpan(text: ' крест. ', style: exo(60, FontWeight.w800, italic: true)),
+                    TextSpan(text: 'Собери', style: exo(60, FontWeight.w900, italic: true, color: cyan)),
+                    TextSpan(text: ' три.', style: exo(60, FontWeight.w800, italic: true)),
+                  ]),
+                ),
+                const SizedBox(height: 70),
+                Text('НОВОЕ: КУБ · 3D', style: exo(40, FontWeight.w800, color: pink, spacing: 6, glow: [
+                  Shadow(color: pink.withValues(alpha: 0.7), blurRadius: 24),
+                ])),
               ]),
             ),
           ),
