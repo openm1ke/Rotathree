@@ -20,7 +20,7 @@ const plainArt = 'docs/marketing/keyart/rotathree-keyart-9x16-none.png';
 /// and each change of game takes [_fade] frames from the one before.
 const _words = <String, List<(int, Caption)>>{
   'ru': [
-    (150, Caption('Головоломка', 'Поверни крест', 'Четыре стакана вокруг одного центра')),
+    (150, Caption('Головоломка', 'Поверни стакан', 'Четыре стакана вокруг одного центра')),
     (110, Caption('Каскады', 'Собери три', 'Линии лопаются — всё сверху осыпается')),
     (95, Caption('Испытание', 'Кошмар', 'Шесть цветов, и скорость растёт')),
     (90, Caption('Новый режим', 'Куб · 3D', 'Шесть стаканов вокруг куба')),
@@ -28,7 +28,7 @@ const _words = <String, List<(int, Caption)>>{
     (75, Caption('Куб', 'Загляни в объём', 'Видно всё, что лежит внутри')),
   ],
   'en': [
-    (150, Caption('Puzzle', 'Turn the cross', 'Four glasses around one centre')),
+    (150, Caption('Puzzle', 'Turn the glass', 'Four glasses around one centre')),
     (110, Caption('Cascades', 'Match three', 'Lines pop, everything above falls')),
     (95, Caption('Challenge', 'Nightmare', 'Six colours and rising speed')),
     (90, Caption('New mode', 'Cube · 3D', 'Six glasses around a cube')),
@@ -187,7 +187,6 @@ void main() {
     const size = Size(1080, 1920);
     final shots = _footage('ru');
     final art = await loadImage(tester, plainArt);
-    final signed = await loadImage(tester, 'docs/marketing/keyart/rotathree-keyart-9x16-ru.png');
     const title = 54, ending = 78;
     await render(tester, size, 'promo-ru', title + shots.length + ending, (i) async {
       if (i < title) {
@@ -203,7 +202,7 @@ void main() {
                 Text.rich(
                   TextSpan(children: [
                     TextSpan(text: 'Поверни', style: exo(60, FontWeight.w900, italic: true, color: cyan)),
-                    TextSpan(text: ' крест. ', style: exo(60, FontWeight.w800, italic: true)),
+                    TextSpan(text: ' стакан. ', style: exo(60, FontWeight.w800, italic: true)),
                     TextSpan(text: 'Собери', style: exo(60, FontWeight.w900, italic: true, color: cyan)),
                     TextSpan(text: ' три.', style: exo(60, FontWeight.w800, italic: true)),
                   ]),
@@ -221,7 +220,35 @@ void main() {
       if (f >= shots.length) {
         final e = f - shots.length;
         return Stack(fit: StackFit.expand, children: [
-          KeyartBackground(image: signed, zoom: 1.04 - e * 0.0005, dim: false),
+          KeyartBackground(image: art, zoom: 1.04 - e * 0.0005, dim: false),
+          // Darker at the bottom, under the words, as the key art has it.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [navy.withValues(alpha: 0), navy.withValues(alpha: 0.85)],
+                stops: const [0.5, 0.95],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 230,
+            child: Column(children: [
+              const Wordmark(size: 132),
+              const SizedBox(height: 22),
+              Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: 'Поверни', style: exo(52, FontWeight.w900, italic: true, color: cyan)),
+                  TextSpan(text: ' стакан. ', style: exo(52, FontWeight.w800, italic: true)),
+                  TextSpan(text: 'Собери', style: exo(52, FontWeight.w900, italic: true, color: cyan)),
+                  TextSpan(text: ' три.', style: exo(52, FontWeight.w800, italic: true)),
+                ]),
+              ),
+            ]),
+          ),
           Opacity(opacity: (1 - math.min(1.0, (e + 1) / 12)).clamp(0.0, 1.0).toDouble(), child: const ColoredBox(color: navy)),
           if (e > ending - 12) Opacity(opacity: ((e - (ending - 12)) / 12).clamp(0.0, 1.0).toDouble(), child: const ColoredBox(color: Colors.black)),
         ]);

@@ -11,8 +11,8 @@ class Caption {
 /// achievements.
 const shots = <String, Map<String, Caption>>{
   'cross': {
-    'ru': Caption('Головоломка', 'Поверни крест', 'Четыре стакана вокруг одного центра'),
-    'en': Caption('Puzzle', 'Turn the cross', 'Four glasses around one centre'),
+    'ru': Caption('Головоломка', 'Поверни стакан', 'Четыре стакана вокруг одного центра'),
+    'en': Caption('Puzzle', 'Turn the glass', 'Four glasses around one centre'),
   },
   'combo': {
     'ru': Caption('Каскады', 'Собери три', 'Линии лопаются — всё сверху осыпается'),
