@@ -153,7 +153,7 @@ test('tutorial teaches by doing: lesson above the glass, hints on wrong keys, st
   await expect(page.locator('.tutorial__next')).toHaveCount(0);
   // The arrows turn the cross: pressed here, they say which keys move the piece.
   await page.keyboard.press('ArrowLeft');
-  await expect(page.locator('.tutorial__hint')).toHaveText('Стрелки поворачивают крест — фигуру двигают эти клавиши');
+  await expect(page.locator('.tutorial__hint')).toHaveText('Стрелки поворачивают стаканы — фигуру двигают эти клавиши');
   await page.keyboard.press('KeyD');
   await expect(page.locator('.tutorial--done')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Поверни фигуру' })).toBeVisible();
@@ -161,7 +161,7 @@ test('tutorial teaches by doing: lesson above the glass, hints on wrong keys, st
   await page.keyboard.press('KeyW');
   await expect(page.getByRole('heading', { name: 'Брось — собери 3' })).toBeVisible();
   await page.keyboard.press('Space');
-  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни стакан' })).toBeVisible();
   // Left and right only: with two glasses there is none opposite to bring up.
   // Q and E do it too, for a hand that stays on A, W, S, D.
   await expect(page.locator('.tutorial__control')).toHaveText(['Q или ←', 'E или →']);
@@ -184,7 +184,7 @@ test('a player who tries the basics before Start goes straight to turning the cr
   await page.keyboard.press('KeyW');
   await expect(page.getByRole('heading', { name: 'Собирай 3 в ряд' })).toBeVisible();
   await page.keyboard.press('KeyS');
-  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни стакан' })).toBeVisible();
   await expect(page.locator('.tutorial__count')).toHaveText('5 / 6');
   await expect.poll(phase).toBe('playing');
   await page.keyboard.press('KeyE');
@@ -243,7 +243,7 @@ test('phone-sized browser gets touch controls and a complete tutorial', async ({
   await right.getByRole('button', { name: 'Повернуть фигуру на четверть оборота', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Брось — собери 3' })).toBeVisible();
   await left.getByRole('button', { name: 'Мгновенно поставить фигуру', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни стакан' })).toBeVisible();
   // The two glass buttons glow, not the opposite one.
   await expect(right.locator('.dpad__button.is-hinted')).toHaveCount(2);
   await expect(right.getByRole('button', { name: 'Развернуть поле на 180°', exact: true })).not.toHaveClass(/is-hinted/);
@@ -686,7 +686,7 @@ test.describe('automatic English locale', () => {
     await right.getByRole('button', { name: 'Rotate the piece a quarter turn', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Drop it — match 3' })).toBeVisible();
     await left.getByRole('button', { name: 'Drop the piece instantly', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Turn the cross' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Turn the glass' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __rotathree: GameEngine }).__rotathree.phase)).toBe('playing');
     await right.getByRole('button', { name: 'Bring the right glass to the top', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Watch every glass' })).toBeVisible();

@@ -69,7 +69,7 @@ class CubeSetupScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 14),
           child: LText(
-            'Крест на экране — вид на куб спереди. За ним и перед ним ещё два стакана: в каждой клетке видно ближайший '
+            'На экране — четыре стакана куба, вид спереди. За ними и перед ними ещё два: в каждой клетке видно ближайший '
             'блок, и линии собираются из того, что видно. Опрокиньте куб — и то, что лежало в глубине, станет новой '
             'картинкой: она осыплется и лопнет по своим линиям.',
             style: Type.body(13, color: Palette.textDim),
@@ -209,7 +209,7 @@ class CubeLookSection extends StatelessWidget {
       ('Следующие фигуры над стаканами', cube.nextPiece, (v) => cube.copyWith(nextPiece: v)),
       ('Сетка клеток в стаканах', cube.grid, (v) => cube.copyWith(grid: v)),
       ('Рёбра стаканов в объёме (3D-сетка)', cube.volumeEdges, (v) => cube.copyWith(volumeEdges: v)),
-      ('Линии объёма вокруг креста', cube.depthHint, (v) => cube.copyWith(depthHint: v)),
+      ('Линии объёма вокруг стаканов', cube.depthHint, (v) => cube.copyWith(depthHint: v)),
       ('Спрятанные фигуры сквозь блоки в объёме', cube.xray, (v) => cube.copyWith(xray: v)),
       ('Спрятанные блоки: метка цвета за клеткой', cube.behind, (v) => cube.copyWith(behind: v)),
       ('Дорожка до места посадки', cube.lane, (v) => cube.copyWith(lane: v)),

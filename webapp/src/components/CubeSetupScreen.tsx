@@ -31,7 +31,7 @@ const KEYS: readonly { actions: readonly Action[]; label: string }[] = [
   { actions: ['moveLeft', 'moveRight'], label: 'Влево, вправо' },
   { actions: ['rotateCW', 'rotateCCW'], label: 'Повернуть фигуру' },
   { actions: ['hardDrop', 'softDrop'], label: 'Сбросить, ускорить' },
-  { actions: ['glassLeft', 'glassRight'], label: 'Повернуть крест по часовой и против часовой' },
+  { actions: ['glassLeft', 'glassRight'], label: 'Повернуть стаканы по часовой и против часовой' },
   { actions: ['tipBack', 'tipFront'], label: 'Скрытые стаканы наверх: задний или передний. Держать — показать, отпустить — повернуть' },
   { actions: ['frontGlass', 'backGlass', 'depthGlass'], label: 'Вести фигуру стакана спереди или сзади; ↑ ↓ двигают её' },
   { actions: ['peek'], label: 'Держать — заглянуть в объём; с A W S D — откуда смотреть' },
@@ -66,7 +66,7 @@ export function CubeSetupScreen({ settings, stats, colours, onChange, onStart, s
       <div className="form-layout">
         <div className="form">
           <p className="hint cube-about"><T>
-            Крест на экране — вид на куб спереди. За ним и перед ним ещё два стакана: в каждой клетке видно ближайший
+            На экране — четыре стакана куба, вид спереди. За ними и перед ними ещё два: в каждой клетке видно ближайший
             блок, и линии собираются из того, что видно. Опрокиньте куб — и то, что лежало в глубине, станет новой
             картинкой: она осыплется и лопнет по своим линиям.
           </T></p>

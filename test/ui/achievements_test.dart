@@ -101,11 +101,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Первый стакан'), findsOneWidget);
-    expect(find.text('Крест собран'), findsNothing);
+    expect(find.text('Все четыре стакана'), findsNothing);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Первый стакан'), findsNothing);
-    expect(find.text('Крест собран'), findsOneWidget);
+    expect(find.text('Все четыре стакана'), findsOneWidget);
     await tester.pump(const Duration(seconds: 4));
     expect(find.text('Достижение открыто'), findsNothing);
     expect(toasts.current, isNull);

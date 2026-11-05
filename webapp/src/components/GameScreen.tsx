@@ -515,7 +515,7 @@ export function GameScreen(props: Props) {
       if (!tutorial || lessonPerformed || lessonActionsOf(lesson).length === 0 || lessonActionsOf(lesson).includes(action)) return;
       // The arrows are what a falling-block player tries first.
       setTutorialHint(from === 'key' && lesson === 1 && code.startsWith('Arrow')
-        ? 'Стрелки поворачивают крест — фигуру двигают эти клавиши'
+        ? 'Стрелки поворачивают стаканы — фигуру двигают эти клавиши'
         : from === 'key' ? 'Нажми подсвеченную клавишу' : 'Нажми подсвеченную кнопку');
       setUrging(true);
       hintOnce('wrong_key');

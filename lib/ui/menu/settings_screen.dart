@@ -341,7 +341,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           if (_padGame == ActionScope.flat) ...[
             for (final slot in PadSlot.values)
               _padRow(
-                'Левый крест',
+                'Левая крестовина',
                 slot,
                 s.leftPad,
                 ActionScope.flat,
@@ -349,7 +349,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ),
             for (final slot in PadSlot.values)
               _padRow(
-                'Правый крест',
+                'Правая крестовина',
                 slot,
                 s.rightPad,
                 ActionScope.flat,
@@ -358,7 +358,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ] else ...[
             for (final slot in PadSlot.values)
               _padRow(
-                'Левый крест',
+                'Левая крестовина',
                 slot,
                 s.cubeLeftPad,
                 ActionScope.cube,
@@ -366,7 +366,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ),
             for (final slot in PadSlot.values)
               _padRow(
-                'Правый крест',
+                'Правая крестовина',
                 slot,
                 s.cubeRightPad,
                 ActionScope.cube,

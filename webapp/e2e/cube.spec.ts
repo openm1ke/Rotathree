@@ -45,7 +45,7 @@ test('every lesson is done with the keys it teaches, and a miss lays it out agai
   await page.keyboard.press('Space');
   await expect(page.locator('.tutorial__hint')).toHaveText('Мимо — попробуй ещё раз');
   await page.keyboard.press('Space');
-  await expect(page.getByRole('heading', { name: 'Поверни крест' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Поверни куб' })).toBeVisible();
   // A key the lesson does not teach is answered with what to press.
   await page.keyboard.press('Space');
   await expect(page.locator('.tutorial__hint')).toHaveText('Нажми подсвеченную клавишу');

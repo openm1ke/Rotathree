@@ -102,7 +102,7 @@ void main() {
     expect(find.text('Мимо — попробуй ещё раз'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await frames(120);
-    expect(lesson('Поверни крест'), findsOneWidget);
+    expect(lesson('Поверни куб'), findsOneWidget);
     // A key the lesson does not teach is answered with what to press.
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await frames(2);
