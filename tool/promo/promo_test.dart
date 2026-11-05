@@ -116,6 +116,28 @@ void main() {
           );
         }
 
+        // The Nightmare: six colours, four glasses, the speed rising.
+        await openApp(tester, key, language, also: campaignDone());
+        final nightmare = await startNightmare(tester);
+        await shootFullest(
+          'nightmare',
+          plan: FlatPlayer(nightmare.engine, seed: 9).plan,
+          from: 1200,
+          to: 2400,
+          moment: () => nightmare.engine.phase == GamePhase.matching,
+          blocks: () => nightmare.engine.board.blockCount,
+        );
+
+        // The settings: the colours and the pads.
+        await openApp(tester, key, language);
+        await tapKey(tester, 'menu-settings');
+        await tester.tap(find.byType(Tab).at(1));
+        await settleApp(tester, frames: 6);
+        await shoot('settings-colours');
+        await tester.tap(find.byType(Tab).at(0));
+        await settleApp(tester, frames: 6);
+        await shoot('settings-controls');
+
         await openApp(tester, key, language);
         await tapKey(tester, 'menu-campaign');
         await shoot('campaign');

@@ -50,10 +50,20 @@ Map<String, Object> playedPrefs() {
   };
 }
 
-/// Opens the app afresh in [language] under [key], on its menu.
-Future<void> openApp(WidgetTester tester, GlobalKey key, String language) async {
+/// The campaign played through, which opens the Nightmare.
+Map<String, Object> campaignDone() {
+  var progress = Progress.initial();
+  for (var level = 0; level < campaignLevels.length; level++) {
+    progress = progress.levelFinished(level, campaignLevels[level].target + 400);
+  }
+  return {'rotathree.progress.v1': jsonEncode(progress.toJson())};
+}
+
+/// Opens the app afresh in [language] under [key], on its menu, with
+/// [also] in its store over [playedPrefs].
+Future<void> openApp(WidgetTester tester, GlobalKey key, String language, {Map<String, Object> also = const {}}) async {
   tester.binding.platformDispatcher.localesTestValue = [Locale(language)];
-  SharedPreferences.setMockInitialValues(playedPrefs());
+  SharedPreferences.setMockInitialValues({...playedPrefs(), ...also});
   await tester.pumpWidget(const SizedBox());
   await tester.pumpWidget(RepaintBoundary(key: key, child: const RotathreeApp()));
   await settleApp(tester);
@@ -114,6 +124,14 @@ Future<CubeScreenState> startCube(WidgetTester tester) async {
 /// A game of four glasses and four colours, from Custom.
 Future<GameScreenState> startCross(WidgetTester tester) async {
   await tapKey(tester, 'menu-custom');
+  await tapGo(tester);
+  return tester.state<GameScreenState>(find.byType(GameScreen));
+}
+
+/// The Nightmare, from the campaign: the app must have been opened with
+/// [campaignDone].
+Future<GameScreenState> startNightmare(WidgetTester tester) async {
+  await tapKey(tester, 'menu-campaign');
   await tapGo(tester);
   return tester.state<GameScreenState>(find.byType(GameScreen));
 }

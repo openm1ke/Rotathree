@@ -39,7 +39,7 @@ const _centres = {
 };
 
 /// Screens that are lists: shown from their top, as wide as the window.
-const _lists = {'campaign', 'achievements'};
+const _lists = {'campaign', 'achievements', 'settings-controls'};
 
 /// One screenshot: the key art, dimmed, the words at the top, and right
 /// under them a window of neon down to the bottom with the game as large as
