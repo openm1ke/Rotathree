@@ -163,7 +163,8 @@ void main() {
     await tester.flingFrom(tester.getTopLeft(view) + const Offset(280, 24), const Offset(-250, 0), 800);
     await tester.pumpAndSettle();
     expect(controller.index, 1);
-    expect(find.text('НАБОРЫ'), findsOneWidget);
+    // The look: how the blocks are drawn comes first.
+    expect(find.text('БЛОКИ'), findsOneWidget);
     await tester.flingFrom(tester.getTopLeft(view) + const Offset(40, 24), const Offset(250, 0), 800);
     await tester.pumpAndSettle();
     expect(controller.index, 0);

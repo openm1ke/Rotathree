@@ -47,6 +47,37 @@ const classicColours = <Color>[
   Color(0xFFFF5FB0),
 ];
 
+/// How a block is drawn: its colour and what is on its face. The game is
+/// the same in every one — blocks of a slot match — only what tells the slots
+/// apart changes.
+enum BlockSkin {
+  /// Cut stones in the slots' colours.
+  classic('Классика'),
+
+  /// Dice of one ivory: a slot is told by its number of pips.
+  dice('Кости'),
+
+  /// Dice in the slots' colours with white pips: the colour and the number.
+  colourDice('Цветные кости'),
+
+  /// Stones in the slots' colours, each with its own sign on it, for eyes
+  /// that tell colours apart poorly.
+  symbols('Знаки');
+
+  const BlockSkin(this.title);
+
+  final String title;
+
+  /// Whether the slots keep their colours.
+  bool get coloured => this != dice;
+
+  /// Dice are rounder and softer than stones.
+  bool get isDice => this == dice || this == colourDice;
+
+  static BlockSkin fromName(Object? name) =>
+      values.firstWhere((skin) => skin.name == name, orElse: () => classic);
+}
+
 /// Tones of one block colour, for the bevel of a block.
 class BlockTones {
   const BlockTones(this.base, this.light, this.dark);
@@ -71,15 +102,31 @@ class BlockTones {
   final Color light;
   final Color dark;
 
+  /// The ivory of the dice that have no colour.
+  static const ivory = BlockTones(Color(0xFFF2EDE3), Color(0xFFFFFFFF), Color(0xFFB9AE9C));
+
   static List<BlockTones> _tones = [for (final c in classicColours) BlockTones.fromBase(c)];
+  static List<Color> _colours = classicColours;
+  static BlockSkin _skin = BlockSkin.classic;
   static int _revision = 0;
 
-  /// Changes whenever the block colours change, so cached pictures can check.
+  /// Changes whenever the block colours or their skin change, so cached
+  /// pictures can check.
   static int get revision => _revision;
 
+  /// How the blocks are drawn now.
+  static BlockSkin get skin => _skin;
+
   /// Replaces the colours of the block slots. [colours] has one per slot.
-  static void setColours(List<Color> colours) {
-    _tones = [for (final c in colours) BlockTones.fromBase(c)];
+  static void setColours(List<Color> colours) => setLook(colours, _skin);
+
+  /// Replaces the colours of the block slots and how they are drawn. A skin
+  /// without colours gives every slot the same tones.
+  static void setLook(List<Color> colours, BlockSkin skin) {
+    if (identical(colours, _colours) && skin == _skin) return;
+    _colours = colours;
+    _skin = skin;
+    _tones = skin.coloured ? [for (final c in colours) BlockTones.fromBase(c)] : List.filled(colours.length, ivory);
     _revision++;
   }
 

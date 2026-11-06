@@ -539,5 +539,12 @@
   "Час за стаканами": "An hour with the glasses",
   "Провести в играх час": "Play for an hour in all",
   "Десять часов": "Ten hours",
-  "Провести в играх десять часов": "Play for ten hours in all"
+  "Провести в играх десять часов": "Play for ten hours in all",
+  "Вид": "Look",
+  "Блоки": "Blocks",
+  "Кости": "Dice",
+  "Цветные кости": "Color dice",
+  "Знаки": "Symbols",
+  "Как выглядят фигуры в обеих играх. Совпадают по-прежнему блоки одного цвета.": "How the pieces look in both games. Blocks of one color still match.",
+  "У костей нет цветов: блоки различаются числом точек. Наборы цветов ниже — для других рисунков.": "Dice have no colors: blocks differ by their number of pips. The palettes below are for the other looks."
 }

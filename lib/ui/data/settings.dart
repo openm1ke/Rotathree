@@ -383,6 +383,7 @@ class Settings {
     this.cube = const CubeOptions(),
     this.cubeLeftPad = defaultCubeLeftPad,
     this.cubeRightPad = defaultCubeRightPad,
+    this.skin = BlockSkin.classic,
   });
 
   factory Settings.defaults() => Settings(
@@ -446,6 +447,7 @@ class Settings {
       cubeRightPad: _padFromJson(section('cubePads')['right'], defaultCubeRightPad, ActionScope.cube),
       padShape: PadShape.fromName(pads['shape']),
       padButtons: _buttonsFromJson(pads['buttons']),
+      skin: BlockSkin.fromName(section('look')['skin']),
     );
   }
 
@@ -475,6 +477,9 @@ class Settings {
   final PadLayout cubeLeftPad;
   final PadLayout cubeRightPad;
 
+  /// How the blocks are drawn, in both games.
+  final BlockSkin skin;
+
   /// The same settings with one button of one pad changed. A default tweak
   /// removes the entry.
   Settings withButton(PadSide side, PadSlot slot, PadTweak tweak) {
@@ -503,6 +508,7 @@ class Settings {
     CubeOptions? cube,
     PadLayout? cubeLeftPad,
     PadLayout? cubeRightPad,
+    BlockSkin? skin,
   }) =>
       Settings(
         language: language ?? this.language,
@@ -520,6 +526,7 @@ class Settings {
         cube: cube ?? this.cube,
         cubeLeftPad: cubeLeftPad ?? this.cubeLeftPad,
         cubeRightPad: cubeRightPad ?? this.cubeRightPad,
+        skin: skin ?? this.skin,
       );
 
   Map<String, Object?> toJson() => {
@@ -550,6 +557,7 @@ class Settings {
           'sounds': audio.sounds,
           'soundsVolume': audio.soundsVolume,
         },
+        'look': {'skin': skin.name},
         'padPositions': padPositions.toJson(),
         'cube': cube.toJson(),
         'cubePads': {

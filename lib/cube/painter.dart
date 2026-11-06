@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 
 import '../game/model/color.dart';
+import '../ui/field/block_look.dart';
 import '../ui/style.dart';
 import 'math3d.dart';
 import 'view.dart';
@@ -148,6 +149,10 @@ class CubePainter extends CustomPainter {
 
   /// The block's turn as columns: where each of its axes points.
   static final _axes = Float64List(9);
+
+  /// The points of one mark on a face, its centre first.
+  static final _markXs = Float64List(32);
+  static final _markYs = Float64List(32);
 
   late List<double> _m;
   late Size _size;
@@ -297,6 +302,9 @@ class CubePainter extends CustomPainter {
       axes[axis * 3 + 2] = vz + qw * tz + qx * ty - qy * tx;
     }
     final xs = _xs, ys = _ys, ups = _ups, rims = _rims, fills = _fills;
+    final skin = BlockTones.skin;
+    final marks = faceMarks(skin, s.color.clamp(0, BlockColor.values.length - 1));
+    final carved = markInk(skin) == MarkInk.carved;
     for (final (normalAxis, sign, uAxis, vAxis) in _faceAxes) {
       final nx = sign * axes[normalAxis * 3], ny = sign * axes[normalAxis * 3 + 1], nz = sign * axes[normalAxis * 3 + 2];
       final ux = axes[uAxis * 3], uy = axes[uAxis * 3 + 1], uz = axes[uAxis * 3 + 2];
@@ -377,6 +385,36 @@ class CubePainter extends CustomPainter {
         for (var c = 0; c < 2; c++) {
           final p00 = _gridAt + r * 3 + c, p01 = p00 + 1, p10 = p00 + 3, p11 = p00 + 4;
           t.quadAt(xs, ys, p00, p01, p11, p10, fills[p00], fills[p01], fills[p11], fills[p10]);
+        }
+      }
+
+      // The skin's pips or sign on the face, as fans over it; not on a face
+      // too small to read them on.
+      if (marks.isEmpty || -area < 81) continue;
+      final ink = carved ? finish(0.12, 0.11, 0.15) : finish(1, 1, 1);
+      final mx = _markXs, my = _markYs;
+      // A point of the face at (a, b), y down as the marks are drawn, and
+      // just off it towards the eye so that it lies over the face.
+      void put(int i, double a, double b) {
+        final x = nx * 0.502 + ux * a - vx * b;
+        final y = ny * 0.502 + uy * a - vy * b;
+        final z = nz * 0.502 + uz * a - vz * b;
+        final sx = at.x + x * half, sy = at.y + y * half, sz = at.z + z * half - distance;
+        final cx = m[0] * sx + m[4] * sy + m[8] * sz + m[12];
+        final cy = m[1] * sx + m[5] * sy + m[9] * sz + m[13];
+        final cw = m[3] * sx + m[7] * sy + m[11] * sz + m[15];
+        mx[i] = (cx / cw + 1) / 2 * width;
+        my[i] = (1 - cy / cw) / 2 * height;
+      }
+
+      for (final mark in marks) {
+        final centre = mark.centre, points = mark.points;
+        put(0, centre.dx, centre.dy);
+        for (var k = 0; k < points.length; k++) {
+          put(k + 1, centre.dx + points[k].dx, centre.dy + points[k].dy);
+        }
+        for (var k = 0; k < points.length; k++) {
+          t.addAt(mx, my, 0, ink, k + 1, ink, (k + 1) % points.length + 1, ink);
         }
       }
     }

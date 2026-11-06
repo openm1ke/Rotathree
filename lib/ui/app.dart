@@ -178,7 +178,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // What was earned before the achievements were kept is given quietly.
     _grantAchievements(announce: false);
     widget.onLanguageChanged(_settings.language);
-    BlockTones.setColours(_settings.palettes.activeSet.colours);
+    BlockTones.setLook(_settings.palettes.activeSet.colours, _settings.skin);
     unawaited(_music.update(_settings.audio));
     SoundEffects.instance.setSettings(_settings.audio);
     if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
@@ -336,7 +336,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final wasMusicEnabled = _settings.audio.music;
     setState(() => _settings = next);
     widget.onLanguageChanged(next.language);
-    BlockTones.setColours(next.palettes.activeSet.colours);
+    BlockTones.setLook(next.palettes.activeSet.colours, next.skin);
     unawaited(_music.update(next.audio));
     SoundEffects.instance.setSettings(next.audio);
     if (!wasMusicEnabled && next.audio.music &&

@@ -382,7 +382,7 @@ class FieldAssets {
       canvas.save();
       canvas.translate(left + unit / 2, top + unit / 2);
       canvas.scale(unit.toDouble());
-      paintBlock(canvas, BlockTones.of(color));
+      paintBlock(canvas, BlockTones.of(color), skin: BlockTones.skin, slot: color.index);
       canvas.restore();
     }
     final patchLeft = (count * pitch).toDouble();

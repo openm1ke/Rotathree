@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../data/bindings.dart';
 import '../data/settings.dart';
+import '../field/block_look.dart';
 import '../i18n/language_picker.dart';
 import '../input/game_action.dart';
 import '../input/pad_placement.dart';
 import '../input/pad_shape.dart';
 import '../input/pad_surface.dart';
 import '../layout.dart';
+import '../audio/sound_effects.dart';
 import '../style.dart';
 import '../widgets/controls.dart';
 import 'colour_picker.dart';
@@ -19,7 +21,7 @@ enum _Tab { controls, colours, effects, interface, sound, licenses }
 
 const _tabNames = {
   _Tab.controls: 'Управление',
-  _Tab.colours: 'Цвета',
+  _Tab.colours: 'Вид',
   _Tab.effects: 'Эффекты',
   _Tab.interface: 'Интерфейс',
   _Tab.sound: 'Звуки',
@@ -445,7 +447,44 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   List<Widget> _colours() {
     final palettes = widget.settings.palettes;
     final active = palettes.activeSet;
+    final skin = widget.settings.skin;
     return [
+      Section(
+        title: 'Блоки',
+        note: 'Как выглядят фигуры в обеих играх. Совпадают по-прежнему блоки одного цвета.',
+        children: [
+          LayoutBuilder(
+            builder: (context, box) {
+              final width = box.maxWidth >= 520 ? (box.maxWidth - 10) / 2 : box.maxWidth;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final option in BlockSkin.values)
+                    SizedBox(
+                      width: width,
+                      child: _SkinCard(
+                        key: ValueKey('skin-${option.name}'),
+                        skin: option,
+                        colours: active.colours,
+                        selected: option == skin,
+                        onTap: () => widget.onChange(widget.settings.copyWith(skin: option)),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+      if (!skin.coloured)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: LText(
+            'У костей нет цветов: блоки различаются числом точек. Наборы цветов ниже — для других рисунков.',
+            style: Type.body(13, color: Palette.textDim),
+          ),
+        ),
       Section(
         title: 'Наборы',
         children: [
@@ -511,17 +550,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       Section(
         title: 'Так это выглядит',
         children: [
-          Row(
-            children: [
-              for (final colour in active.colours)
-                Expanded(
-                  child: Container(
-                    height: 28,
-                    margin: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: colour, borderRadius: BorderRadius.circular(6)),
-                  ),
-                ),
-            ],
+          LayoutBuilder(
+            builder: (context, box) => Center(
+              child: BlockRow(
+                skin: skin,
+                colours: active.colours,
+                height: (box.maxWidth / active.colours.length).clamp(20.0, 48.0),
+              ),
+            ),
           ),
         ],
       ),
@@ -767,5 +803,61 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       ),
       const SizedBox(height: 20),
     ];
+  }
+}
+
+/// One way to draw the blocks: five of them drawn so, and its name.
+class _SkinCard extends StatelessWidget {
+  const _SkinCard({super.key, required this.skin, required this.colours, required this.selected, required this.onTap});
+
+  final BlockSkin skin;
+  final List<Color> colours;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(14);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: context.tr(skin.title),
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: clicking(onTap),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              color: selected ? Palette.accent.withValues(alpha: 0.1) : Palette.panel,
+              border: Border.all(color: selected ? Palette.accent : Palette.line, width: selected ? 1.5 : 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: BlockRow(skin: skin, colours: colours, count: 5, height: 36),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: LText(skin.title, style: Type.body(15, weight: FontWeight.w800, color: selected ? Palette.accent : Palette.text)),
+                    ),
+                    if (selected) const Icon(Icons.check_circle_rounded, size: 20, color: Palette.accent),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
