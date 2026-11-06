@@ -23,7 +23,7 @@ tutorial, a campaign level, the pause and Cube at the sizes of a computer's
 window (1280 × 690 and 1920 × 1040 at 100 %, a MacBook) and of a phone, into
 `build/promo/desktop`: to look at while the desktop layout is worked on.
 `flutter test tool/promo/skins_test.dart` draws a campaign level and Cube in
-every way to draw the blocks (classic, dice, colour dice, symbols), and the
+every way to draw the blocks (classic, retro, colour dice), and the
 settings page that picks one, into `build/promo/skins`.
 
 ## What is made

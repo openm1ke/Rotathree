@@ -284,11 +284,7 @@ class CubePainter extends CustomPainter {
   void _solid(_Triangles t, CubeSolid s, double opacity) {
     final tones = BlockTones.of(BlockColor.values[s.color.clamp(0, BlockColor.values.length - 1)]);
     final skin = BlockTones.skin;
-    // Neon and gems sit in dark glass tinted by their colour.
-    final glass = skin.darkBody;
-    final base = glass ? Color.lerp(const Color(0xFF07060C), tones.base, 0.2)! : tones.base;
-    final light = glass ? Color.lerp(const Color(0xFF07060C), tones.base, 0.5)! : tones.light;
-    final dark = glass ? Color.lerp(const Color(0xFF07060C), tones.base, 0.06)! : tones.dark;
+    final base = tones.base, light = tones.light, dark = tones.dark;
     final q = s.turn;
     final half = s.size;
     final at = s.at;
@@ -409,9 +405,9 @@ class CubePainter extends CustomPainter {
         my[i] = (1 - cy / cw) / 2 * height;
       }
 
+      final colour = markColour(tones);
+      final ink = finish(colour.r, colour.g, colour.b);
       for (final mark in marks) {
-        final colour = markColour(mark, skin, tones);
-        final ink = finish(colour.r, colour.g, colour.b);
         final centre = mark.centre, points = mark.points;
         put(0, centre.dx, centre.dy);
         for (var k = 0; k < points.length; k++) {

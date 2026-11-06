@@ -502,14 +502,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ],
       ),
-      if (!skin.coloured)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: LText(
-            'У костей нет цветов: блоки различаются числом точек. Наборы цветов ниже — для других рисунков.',
-            style: Type.body(13, color: Palette.textDim),
-          ),
-        ),
       Section(
         title: 'Наборы',
         children: [

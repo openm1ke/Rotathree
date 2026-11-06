@@ -78,7 +78,7 @@ void main() {
         await play(tester, plan: CubePlayer(cube.game, seed: 3).plan, frames: 500);
         await shoot('cube');
 
-        if (skin == BlockSkin.dice) {
+        if (skin == BlockSkin.retro) {
           await openApp(tester, key, 'ru', also: settings);
           await tapKey(tester, 'menu-settings');
           await tester.tap(find.byType(Tab).at(1));
