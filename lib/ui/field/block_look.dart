@@ -5,9 +5,9 @@ import 'package:flutter/widgets.dart';
 
 import '../style.dart';
 
-/// Half the side of a block in a cell one unit wide: a little room is left
-/// round it for the gap between blocks and its shadow.
-const blockHalf = 0.455;
+/// Half the side of a block in a cell one unit wide: blocks nearly touch,
+/// a thin dark line between them, as close as Cube's.
+const blockHalf = 0.485;
 
 /// One mark on a block's face — a pip — as a polygon round its centre that
 /// every point of it can be seen from, so that it is drawn as a fan from the
@@ -99,7 +99,7 @@ void _paintCushion(Canvas canvas, BlockTones tones, {required double radius, req
   final base = tones.base;
 
   // The shadow it casts on what is under it.
-  canvas.drawRRect(body.shift(const Offset(0, 0.03)), Paint()..color = const Color(0x5C000000));
+  canvas.drawRRect(body.shift(const Offset(0, 0.015)), Paint()..color = const Color(0x5C000000));
 
   // The block's slope, lit at the top left.
   canvas.drawRRect(
@@ -197,7 +197,7 @@ Path _facet(Offset a, Offset b, Offset c, Offset d) => Path()
   ..close();
 
 void _paintRetro(Canvas canvas, BlockTones tones) {
-  const h = 0.47;
+  const h = 0.49;
   const outer = Rect.fromLTRB(-h, -h, h, h);
   final inner = outer.deflate(0.13);
   final base = tones.base;

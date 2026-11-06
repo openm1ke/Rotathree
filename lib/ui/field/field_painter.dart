@@ -240,7 +240,7 @@ class FieldAssets {
   static const _patch = 4;
 
   static final _flashShape = RRect.fromRectAndRadius(
-    const Rect.fromLTRB(-0.455, -0.455, 0.455, 0.455),
+    const Rect.fromLTRB(-blockHalf, -blockHalf, blockHalf, blockHalf),
     const Radius.circular(0.15),
   );
   static const _unitRect = Rect.fromLTRB(-0.5, -0.5, 0.5, 0.5);
