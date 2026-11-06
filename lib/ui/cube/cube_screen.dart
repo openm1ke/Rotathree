@@ -992,6 +992,10 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   Widget _pauseDialog() => PauseCard(
         kicker: _mode,
         onResume: _togglePause,
+        sound: switch (widget.onToggleMusic) {
+          final toggle? => (on: widget.settings.audio.music || widget.settings.audio.sounds, onToggle: toggle),
+          null => null,
+        },
         tiles: [
           PauseAction(icon: Icons.view_in_ar_rounded, label: 'Осмотреть куб', onPressed: () => _look(true)),
           PauseAction(icon: Icons.replay_rounded, label: _retryLabel, onPressed: _retry),

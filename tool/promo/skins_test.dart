@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/ui/data/settings.dart';
+import 'package:rotathree/ui/field/block_look.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
 import 'package:rotathree/ui/style.dart';
 
@@ -20,6 +21,36 @@ const window = Device('win-1080', 1920, 1040, 1);
 
 void main() {
   setUpAll(loadFonts);
+
+  testWidgets('skins: close up', (tester) async {
+    useDevice(tester, const Device('close-up', 1500, 1320, 2));
+    final key = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: RepaintBoundary(
+          key: key,
+          child: ColoredBox(
+            color: const Color(0xFF0B0B14),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final skin in BlockSkin.values)
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: BlockRow(skin: skin, colours: classicColours, height: 72),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await savePng(tester, await capture(tester, key, 2), '$out/close-up.png');
+  });
 
   for (final skin in BlockSkin.values) {
     testWidgets('skin: ${skin.name}', (tester) async {

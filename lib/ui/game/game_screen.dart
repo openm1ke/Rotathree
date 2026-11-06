@@ -1121,6 +1121,10 @@ class GameScreenState extends State<GameScreen>
           ? null
           : 'Цель ${formatPoints(level.target)} · ${level.colours} цв. · ${level.glasses} ст.',
       onResume: _togglePause,
+      sound: switch (widget.onToggleMusic) {
+        final toggle? => (on: widget.settings.audio.music || widget.settings.audio.sounds, onToggle: toggle),
+        null => null,
+      },
       tiles: [
         PauseAction(icon: Icons.replay_rounded, label: campaign ? 'Повторить уровень' : 'Заново', onPressed: _retry),
         PauseAction(icon: Icons.tune_rounded, label: 'Настройки', onPressed: widget.onSettings),

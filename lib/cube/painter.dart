@@ -283,7 +283,12 @@ class CubePainter extends CustomPainter {
   /// eye a little darker.
   void _solid(_Triangles t, CubeSolid s, double opacity) {
     final tones = BlockTones.of(BlockColor.values[s.color.clamp(0, BlockColor.values.length - 1)]);
-    final base = tones.base, light = tones.light, dark = tones.dark;
+    final skin = BlockTones.skin;
+    // Neon and gems sit in dark glass tinted by their colour.
+    final glass = skin.darkBody;
+    final base = glass ? Color.lerp(const Color(0xFF07060C), tones.base, 0.2)! : tones.base;
+    final light = glass ? Color.lerp(const Color(0xFF07060C), tones.base, 0.5)! : tones.light;
+    final dark = glass ? Color.lerp(const Color(0xFF07060C), tones.base, 0.06)! : tones.dark;
     final q = s.turn;
     final half = s.size;
     final at = s.at;
@@ -302,9 +307,7 @@ class CubePainter extends CustomPainter {
       axes[axis * 3 + 2] = vz + qw * tz + qx * ty - qy * tx;
     }
     final xs = _xs, ys = _ys, ups = _ups, rims = _rims, fills = _fills;
-    final skin = BlockTones.skin;
     final marks = faceMarks(skin, s.color.clamp(0, BlockColor.values.length - 1));
-    final carved = markInk(skin) == MarkInk.carved;
     for (final (normalAxis, sign, uAxis, vAxis) in _faceAxes) {
       final nx = sign * axes[normalAxis * 3], ny = sign * axes[normalAxis * 3 + 1], nz = sign * axes[normalAxis * 3 + 2];
       final ux = axes[uAxis * 3], uy = axes[uAxis * 3 + 1], uz = axes[uAxis * 3 + 2];
@@ -391,7 +394,6 @@ class CubePainter extends CustomPainter {
       // The skin's pips or sign on the face, as fans over it; not on a face
       // too small to read them on.
       if (marks.isEmpty || -area < 81) continue;
-      final ink = carved ? finish(0.12, 0.11, 0.15) : finish(1, 1, 1);
       final mx = _markXs, my = _markYs;
       // A point of the face at (a, b), y down as the marks are drawn, and
       // just off it towards the eye so that it lies over the face.
@@ -408,6 +410,8 @@ class CubePainter extends CustomPainter {
       }
 
       for (final mark in marks) {
+        final colour = markColour(mark, skin, tones);
+        final ink = finish(colour.r, colour.g, colour.b);
         final centre = mark.centre, points = mark.points;
         put(0, centre.dx, centre.dy);
         for (var k = 0; k < points.length; k++) {

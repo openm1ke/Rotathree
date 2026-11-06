@@ -47,32 +47,61 @@ const classicColours = <Color>[
   Color(0xFFFF5FB0),
 ];
 
+/// What a block of a skin is made of, under the marks on its face.
+enum BlockBody {
+  /// A cut stone: bevels lit from the top left, a domed face, a gloss.
+  stone,
+
+  /// Rounder and softer than a stone.
+  die,
+
+  /// A square with four hard bevels and a flat face, as the old games drew.
+  retro,
+
+  /// Dark glass lit from inside by a tube of its colour.
+  neon,
+
+  /// None: the marks — a cut gem — are the block.
+  gem,
+}
+
 /// How a block is drawn: its colour and what is on its face. The game is
 /// the same in every one — blocks of a slot match — only what tells the slots
 /// apart changes.
 enum BlockSkin {
   /// Cut stones in the slots' colours.
-  classic('Классика'),
+  classic('Классика', BlockBody.stone),
+
+  /// Square blocks with four hard bevels, as the old falling-block games.
+  retro('Ретро', BlockBody.retro),
+
+  /// Dark glass, each block outlined by a glowing tube of its colour.
+  neon('Неон', BlockBody.neon),
+
+  /// A cut gem for each colour: a ruby rhombus, a hexagonal topaz, a round
+  /// sapphire, an emerald…
+  gems('Самоцветы', BlockBody.gem),
 
   /// Dice of one ivory: a slot is told by its number of pips.
-  dice('Кости'),
+  dice('Кости', BlockBody.die),
 
   /// Dice in the slots' colours with white pips: the colour and the number.
-  colourDice('Цветные кости'),
+  colourDice('Цветные кости', BlockBody.die),
 
   /// Stones in the slots' colours, each with its own sign on it, for eyes
   /// that tell colours apart poorly.
-  symbols('Знаки');
+  symbols('Знаки', BlockBody.stone);
 
-  const BlockSkin(this.title);
+  const BlockSkin(this.title, this.body);
 
   final String title;
+  final BlockBody body;
 
   /// Whether the slots keep their colours.
   bool get coloured => this != dice;
 
-  /// Dice are rounder and softer than stones.
-  bool get isDice => this == dice || this == colourDice;
+  /// Whether a block's own body is dark, its colour only in its light.
+  bool get darkBody => body == BlockBody.neon || body == BlockBody.gem;
 
   static BlockSkin fromName(Object? name) =>
       values.firstWhere((skin) => skin.name == name, orElse: () => classic);

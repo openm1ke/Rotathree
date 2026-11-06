@@ -40,21 +40,29 @@ void main() {
     final signs = {for (var slot = 0; slot < BlockColor.values.length; slot++) faceMarks(BlockSkin.symbols, slot)};
     expect(signs, hasLength(BlockColor.values.length));
     expect(faceMarks(BlockSkin.classic, 0), isEmpty);
-    // Every mark stays on the face.
+    // Every mark stays on the face; a gem is the whole block, within it.
     for (final skin in BlockSkin.values) {
+      final edge = skin.body == BlockBody.gem ? blockHalf : 0.36;
       for (var slot = 0; slot < BlockColor.values.length; slot++) {
         for (final mark in faceMarks(skin, slot)) {
           for (final point in mark.points) {
             final at = mark.centre + point;
-            expect(at.dx.abs(), lessThan(0.36));
-            expect(at.dy.abs(), lessThan(0.36));
+            expect(at.dx.abs(), lessThan(edge));
+            expect(at.dy.abs(), lessThan(edge));
           }
         }
       }
     }
+    // Each gem has its own cut.
+    final cuts = {for (var slot = 0; slot < BlockColor.values.length; slot++) faceMarks(BlockSkin.gems, slot).length};
+    expect(cuts.length, greaterThan(4));
   });
 
   testWidgets('the look tab picks how the blocks are drawn', (tester) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var settings = Settings.defaults();
     await tester.pumpWidget(
       MaterialApp(

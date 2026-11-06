@@ -548,5 +548,7 @@
   "Как выглядят фигуры в обеих играх. Совпадают по-прежнему блоки одного цвета.": "How the pieces look in both games. Blocks of one color still match.",
   "У костей нет цветов: блоки различаются числом точек. Наборы цветов ниже — для других рисунков.": "Dice have no colors: blocks differ by their number of pips. The palettes below are for the other looks.",
   "Мгновенный сброс": "Instant hard drop",
-  "Мгновенный: фигура сразу встаёт на место, без полёта вниз — как в tetr.io.": "Instant: the piece lands at once, with no flight down, as in tetr.io."
+  "Мгновенный: фигура сразу встаёт на место, без полёта вниз — как в tetr.io.": "Instant: the piece lands at once, with no flight down, as in tetr.io.",
+  "Ретро": "Retro",
+  "Самоцветы": "Gems"
 }

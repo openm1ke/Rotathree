@@ -236,6 +236,7 @@ class PauseCard extends StatelessWidget {
     this.note,
     this.tiles = const [],
     this.links = const [],
+    this.sound,
   });
 
   final String kicker;
@@ -243,6 +244,10 @@ class PauseCard extends StatelessWidget {
   final VoidCallback onResume;
   final List<PauseAction> tiles;
   final List<PauseAction> links;
+
+  /// The sound switch beside the pause sign: whether it is on, and how to
+  /// turn it. None where the game has no sound switch.
+  final ({bool on, VoidCallback onToggle})? sound;
 
   @override
   Widget build(BuildContext context) {
@@ -320,7 +325,26 @@ class PauseCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      _PauseBadge(size: 52 * s),
+                      if (sound case final sound?) ...[
+                        _RingButton(
+                          size: 44 * s,
+                          icon: sound.on ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                          tooltip: sound.on ? 'Выключить звук' : 'Включить звук',
+                          gradient: const [Palette.accent, Palette.violet],
+                          glow: Palette.accent,
+                          onPressed: sound.onToggle,
+                        ),
+                        SizedBox(width: 10 * s),
+                      ],
+                      _RingButton(
+                        size: 52 * s,
+                        icon: Icons.pause_rounded,
+                        hoverIcon: Icons.play_arrow_rounded,
+                        tooltip: 'Продолжить',
+                        gradient: Palette.go,
+                        glow: Palette.pink,
+                        onPressed: onResume,
+                      ),
                     ],
                   ),
                   if (note case final note?) ...[
@@ -396,40 +420,80 @@ class PauseCard extends StatelessWidget {
 }
 
 /// Two bars in a ring of the "go" colours.
-class _PauseBadge extends StatelessWidget {
-  const _PauseBadge({required this.size});
+/// A round button in a ring of [gradient]: the pause sign that leads back
+/// into the game, turning into a play sign when pointed at, and the sound.
+class _RingButton extends StatefulWidget {
+  const _RingButton({
+    required this.size,
+    required this.icon,
+    required this.tooltip,
+    required this.gradient,
+    required this.glow,
+    required this.onPressed,
+    this.hoverIcon,
+  });
 
   final double size;
+  final IconData icon;
+  final IconData? hoverIcon;
+  final String tooltip;
+  final List<Color> gradient;
+  final Color glow;
+  final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: Palette.go,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Palette.pink.withValues(alpha: 0.35),
-            blurRadius: size * 0.4,
+  State<_RingButton> createState() => _RingButtonState();
+}
+
+class _RingButtonState extends State<_RingButton> {
+  bool _lit = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size;
+    return Tooltip(
+      message: context.tr(widget.tooltip),
+      child: Semantics(
+        button: true,
+        label: context.tr(widget.tooltip),
+        excludeSemantics: true,
+        child: AnimatedScale(
+          scale: _lit ? 1.08 : 1,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: widget.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+              boxShadow: [BoxShadow(color: widget.glow.withValues(alpha: _lit ? 0.6 : 0.35), blurRadius: size * (_lit ? 0.6 : 0.4))],
+            ),
+            padding: EdgeInsets.all(size * 0.045),
+            child: Material(
+              color: _lit ? const Color(0xFF221F35) : const Color(0xFF151423),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: clicking(widget.onPressed),
+                onHover: (lit) => setState(() => _lit = lit),
+                onFocusChange: (lit) => setState(() => _lit = lit),
+                focusColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+                child: Center(
+                  child: Icon(
+                    _lit ? widget.hoverIcon ?? widget.icon : widget.icon,
+                    size: size * 0.5,
+                    color: Palette.text,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ],
-      ),
-      padding: EdgeInsets.all(size * 0.045),
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: Color(0xFF151423),
         ),
-        child: Icon(Icons.pause_rounded, size: size * 0.5, color: Palette.text),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Back into the game: the gradient of "go", a play sign, and on a computer
