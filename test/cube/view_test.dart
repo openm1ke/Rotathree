@@ -48,6 +48,25 @@ void main() {
     expect(view.tilting, isFalse);
   });
 
+  test('the landing place fades out as a tip begins and back in after it', () {
+    final game = CubeGame(const CubeConfig(seed: 5, inactiveFalls: false));
+    final view = CubeView(game)..resize(400, 800);
+    settle(view, play: true);
+    expect(view.ghostShown, 1);
+    view.startTip(true);
+    view.commitTip(true);
+    final seen = <double>[];
+    for (var i = 0; i < 90; i++) {
+      view.frame(1 / 60, true);
+      seen.add(view.ghostShown);
+    }
+    // Gone while the hub leans over, then back by steps, not at once.
+    expect(seen.reduce((a, b) => a < b ? a : b), 0);
+    final back = seen.lastIndexOf(0) + 1;
+    expect(seen[back], lessThan(0.2));
+    expect(seen.last, greaterThan(0.95));
+  });
+
   test('looking into the volume opens the picture into perspective and back', () {
     final view = CubeView(CubeGame(const CubeConfig(seed: 6)))..resize(400, 800);
     view.peeking = true;

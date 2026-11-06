@@ -1072,6 +1072,33 @@ class CubeView {
     }
   }
 
+  /// How much of the landing place shows, 0 to 1: it fades out as a tip
+  /// begins and back in where the stick will land once the tip is done, so
+  /// that the old one does not hang on and the new one does not jump in.
+  double _ghostShown = 1;
+
+  /// How much of the landing place shows, for the tests.
+  double get ghostShown => _ghostShown;
+
+  /// Where the stick on top will land — the blocks themselves, see-through,
+  /// with an outline, as the flat game shows it — and the lane down to it.
+  void _pushGhost(double dt, CubeGame game, Stick? piece, List<StickCell>? ghost) {
+    _ghostShown = tilting ? math.max(0.0, _ghostShown - dt / 0.12) : math.min(1.0, _ghostShown + dt / 0.3);
+    if (piece == null || ghost == null || _ghostShown < 0.01) return;
+    final cells = cellsOf(piece);
+    var same = true;
+    for (var i = 0; i < ghost.length; i++) {
+      if (ghost[i].p != cells[i].p) same = false;
+    }
+    if (same) return;
+    final shown = _ghostShown * _ghostShown * (3 - 2 * _ghostShown);
+    for (final c in ghost) {
+      _pushSolid(_local(c.p), c.color, alpha: 0.4 * shown);
+      _pushClear(_local(c.p), tone(c.color, light: true), shown, 0, 1);
+    }
+    if (look.lane) _pushLanes(piece, ghost, alpha: shown);
+  }
+
   /// The colour of a block's slot for the outlines, light or plain; set by
   /// the painter from the active set.
   Color Function(int color, {bool light}) tone = (color, {light = false}) => _white;
@@ -1187,25 +1214,8 @@ class CubeView {
     // Where the stick on top will land, and the lane down to it. A stick in
     // front or behind lands in the cells it is over, and says so itself.
     final piece = game.activePiece;
-    if (piece != null && game.inPlane(piece.side) && !game.isGameOver) {
-      final ghost = game.ghost();
-      final cells = cellsOf(piece);
-      var same = ghost != null;
-      if (ghost != null) {
-        for (var i = 0; i < ghost.length; i++) {
-          if (ghost[i].p != cells[i].p) same = false;
-        }
-      }
-      if (ghost != null && !same) {
-        // The blocks themselves, see-through, where they will lie, and an
-        // outline round each, as the flat game shows its landing place.
-        for (final c in ghost) {
-          _pushSolid(_local(c.p), c.color, alpha: 0.4);
-          _pushClear(_local(c.p), tone(c.color, light: true), 1, 0, 1);
-        }
-        if (look.lane) _pushLanes(piece, ghost);
-      }
-    }
+    final aimed = piece != null && game.inPlane(piece.side) && !game.isGameOver;
+    _pushGhost(dt, game, piece, aimed ? game.ghost() : null);
     _pushBehindMarks(game, 'game:${hub.version}:${_targetQ.key}');
     _pushNext();
     _flushLayers();
@@ -1239,7 +1249,7 @@ class CubeView {
 
   /// A faint column under each lane of the stick, down to the landing spot —
   /// the flat game's aiming lane.
-  void _pushLanes(Stick piece, List<StickCell> ghost) {
+  void _pushLanes(Stick piece, List<StickCell> ghost, {double alpha = 1}) {
     final n = normalOf(piece.side);
     final axis = sides[piece.side].axis;
     final lanes = <String, ({Vec p, int height, Vec ghost})>{};
@@ -1257,7 +1267,7 @@ class CubeView {
       if (length < 0.05) continue;
       final size = [0.91, 0.91, 0.91];
       size[axis] = length;
-      _pushClear(top.add(bottom).scale(0.5), _white, 1, 0.07, 0, size: (size[0], size[1], size[2]));
+      _pushClear(top.add(bottom).scale(0.5), _white, alpha, 0.07, 0, size: (size[0], size[1], size[2]));
     }
   }
 }
