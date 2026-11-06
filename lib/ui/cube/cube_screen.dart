@@ -20,6 +20,7 @@ import '../data/stats.dart';
 import '../format.dart';
 import '../game/campaign_progress.dart';
 import '../game/hud.dart';
+import '../game/play_layout.dart';
 import '../game/tutorial.dart';
 import '../i18n/strings.dart';
 import '../input/game_action.dart';
@@ -854,12 +855,10 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
           SafeArea(
             child: ExcludeFocus(
               excluding: desktop && !widget.tutorial && _status != _Status.playing && !_looking,
-              child: LayoutBuilder(
-                builder: (context, constraints) => Column(
-                  children: [
-                    if (widget.tutorial) ...[
-                      // The same heading as the menus: a small arrow, the mode, the title.
-                      ScreenHeading(
+              child: PlayLayout(
+                heading: widget.tutorial
+                    // The same heading as the menus: a small arrow, the mode, the title.
+                    ? ScreenHeading(
                         kicker: 'Куб',
                         title: 'Обучение',
                         onBack: handleBack,
@@ -867,99 +866,90 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
                           ?sound,
                           GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
                         ],
-                      ),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: math.min(constraints.maxHeight * 0.4, 260 * tabletScale(MediaQuery.sizeOf(context))),
-                        ),
-                        child: TutorialPanel(
-                          lessons: cubeLessons,
-                          step: _lesson,
-                          performed: _lessonDone,
-                          bindings: desktop ? settings.bindings : null,
-                          actions: cubeLessonActions[_lesson] ?? const [],
-                          hint: _hint,
-                          urging: _urging,
-                          onPractice: _practice,
-                          onNext: _nextLesson,
-                          onSkip: () => widget.onTutorialDone?.call(false),
-                        ),
-                      ),
-                    ] else
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
-                              child: ValueListenableBuilder<HudState>(
-                                valueListenable: _hud,
-                                builder: (context, hud, _) => GameReadout(
-                                  hud: hud,
-                                  options: settings.hud,
-                                  callout: _callout,
-                                  levelCount: cubeCampaignLast + 1,
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          children: [
+                            GameIconButton(icon: Icons.pause_rounded, label: 'Пауза', onPressed: _togglePause),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                child: ValueListenableBuilder<HudState>(
+                                  valueListenable: _hud,
+                                  builder: (context, hud, _) => GameReadout(
+                                    hud: hud,
+                                    options: settings.hud,
+                                    callout: _callout,
+                                    levelCount: cubeCampaignLast + 1,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (sound != null) ...[sound, const SizedBox(width: 6)],
-                          GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
-                        ],
+                            if (sound != null) ...[sound, const SizedBox(width: 6)],
+                            GameIconButton(icon: Icons.settings_rounded, label: 'Настройки', onPressed: widget.onSettings),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (levelPlayed != null && level != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                        child: ValueListenableBuilder<HudState>(
-                          valueListenable: _hud,
-                          builder: (context, hud, _) => CampaignProgress(
-                            level: level + 1,
-                            into: hud.into,
-                            target: levelPlayed.target,
-                            compact: true,
-                            animated: _status == _Status.playing && !widget.blocked && settings.effects.fieldBackground,
+                lesson: widget.tutorial
+                    ? TutorialPanel(
+                        lessons: cubeLessons,
+                        step: _lesson,
+                        performed: _lessonDone,
+                        bindings: desktop ? settings.bindings : null,
+                        actions: cubeLessonActions[_lesson] ?? const [],
+                        hint: _hint,
+                        urging: _urging,
+                        onPractice: _practice,
+                        onNext: _nextLesson,
+                        onSkip: () => widget.onTutorialDone?.call(false),
+                      )
+                    : null,
+                progress: levelPlayed != null && level != null
+                    ? ValueListenableBuilder<HudState>(
+                        valueListenable: _hud,
+                        builder: (context, hud, _) => CampaignProgress(
+                          level: level + 1,
+                          into: hud.into,
+                          target: levelPlayed.target,
+                          compact: !desktop,
+                          animated: _status == _Status.playing && !widget.blocked && settings.effects.fieldBackground,
+                        ),
+                      )
+                    : null,
+                stage: (side) {
+                  _view.resize(side, side);
+                  return _stage(side);
+                },
+                pads: desktop
+                    ? null
+                    : RepaintBoundary(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          child: IgnorePointer(
+                            ignoring: (_status != _Status.playing && !_looking) || widget.blocked,
+                            child: PadSurface(
+                              settings: settings,
+                              layouts: (settings.cubeLeftPad, settings.cubeRightPad),
+                              onDown: _pads.down,
+                              onUp: _pads.up,
+                              hint: widget.tutorial && !_lessonDone ? cubeLessonActions[_lesson] ?? const [] : const [],
+                            ),
                           ),
                         ),
                       ),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, box) {
-                          final side = math.min(box.maxWidth, box.maxHeight);
-                          _view.resize(side, side);
-                          return Center(child: SizedBox.square(dimension: side, child: _stage(side)));
-                        },
-                      ),
-                    ),
-                    if (!desktop) RepaintBoundary(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                        child: IgnorePointer(
-                          ignoring: (_status != _Status.playing && !_looking) || widget.blocked,
-                          child: PadSurface(
-                            settings: settings,
-                            layouts: (settings.cubeLeftPad, settings.cubeRightPad),
-                            onDown: _pads.down,
-                            onUp: _pads.up,
-                            hint: widget.tutorial && !_lessonDone ? cubeLessonActions[_lesson] ?? const [] : const [],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ),
-          if (!widget.blocked && _status == _Status.paused && !_looking) _dialog(_pauseDialog()),
+          if (!widget.blocked && _status == _Status.paused && !_looking) GameDialog(child: _pauseDialog()),
           if (!widget.blocked && _status == _Status.over && _result != null && !_looking)
-            _dialog(_resultsSeen
-                ? _overDialog(_result!)
-                : ArmedLayer(builder: (context, armed) => _overDialog(_result!, armed: armed))),
+            GameDialog(
+              child: _resultsSeen
+                  ? _overDialog(_result!)
+                  : ArmedLayer(builder: (context, armed) => _overDialog(_result!, armed: armed)),
+            ),
           if (!widget.blocked && _status == _Status.done && _result != null && level != null)
-            _dialog(ArmedLayer(builder: (context, armed) => _doneDialog(_result!, level, armed: armed))),
+            GameDialog(child: ArmedLayer(builder: (context, armed) => _doneDialog(_result!, level, armed: armed))),
         ],
       ),
     );
@@ -997,44 +987,23 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
         ],
       );
 
-  /// A dialog over the game: the game stands still behind it.
-  Widget _dialog(Widget card) => Positioned.fill(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {},
-                child: const ColoredBox(color: Color(0xC4050508)),
-              ),
-            ),
-            Positioned.fill(
-              child: SafeArea(
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: FocusScope(autofocus: usesDesktopKeyboard, child: TabletScale(child: card)),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _pauseDialog() => DialogCard(
+  Widget _pauseDialog() => PauseCard(
         kicker: _mode,
-        title: 'Пауза',
-        children: [
-          _buttons([
-            GoButton(label: 'Продолжить', expand: true, onPressed: _togglePause),
-            OutlineButton(label: 'Осмотреть куб', onPressed: () => _look(true)),
-            OutlineButton(label: _retryLabel, onPressed: _retry),
-            OutlineButton(label: 'Настройки', onPressed: widget.onSettings),
-            OutlineButton(label: _backLabel, onPressed: () => _leave(_back)),
-            OutlineButton(label: 'В меню', onPressed: () => _leave(widget.onExit)),
-            OutlineButton(label: 'Завершить партию', onPressed: () => _leave(widget.onExit, keep: false)),
-          ]),
+        onResume: _togglePause,
+        tiles: [
+          PauseAction(icon: Icons.view_in_ar_rounded, label: 'Осмотреть куб', onPressed: () => _look(true)),
+          PauseAction(icon: Icons.replay_rounded, label: _retryLabel, onPressed: _retry),
+          PauseAction(icon: Icons.tune_rounded, label: 'Настройки', onPressed: widget.onSettings),
+          PauseAction(icon: Icons.grid_view_rounded, label: _backLabel, onPressed: () => _leave(_back)),
+        ],
+        links: [
+          PauseAction(icon: Icons.home_rounded, label: 'В меню', onPressed: () => _leave(widget.onExit)),
+          PauseAction(
+            icon: Icons.flag_rounded,
+            label: 'Завершить партию',
+            danger: true,
+            onPressed: () => _leave(widget.onExit, keep: false),
+          ),
         ],
       );
 

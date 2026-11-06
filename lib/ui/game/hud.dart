@@ -135,62 +135,89 @@ class GameReadout extends StatelessWidget {
     opacity: options.opacity,
     child: SizedBox(
       height: 44,
-      child: Row(
-        children: [
-          if (options.score)
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Semantics(
-                        label: context.tr(formatPoints(hud.score)),
-                        excludeSemantics: true,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: LText(formatNumber(hud.score), style: Type.display(20)),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // On a phone each figure has its share of the row; in a wide
+          // window they keep together at its right end.
+          final wide = box.maxWidth >= 560;
+          final total = levelCount ?? campaignLevels.length;
+          final stats = [
+            if (options.score && hud.level > 0)
+              _ReadoutStat(icon: Icons.layers_outlined, value: '${hud.level}/$total',
+                label: 'Уровень ${hud.level} / $total', accent: true, flexible: !wide),
+            if (options.score && hud.speed > 0)
+              _ReadoutStat(icon: Icons.speed_rounded, value: '${hud.speed}', label: 'Скорость ${hud.speed}',
+                accent: true, flexible: !wide),
+            if (options.stats) ...[
+              _ReadoutStat(icon: Icons.schedule_rounded, value: formatClock(hud.seconds), label: 'Время', flexible: !wide),
+              _ReadoutStat(icon: Icons.view_module_outlined, value: formatNumber(hud.pieces), label: 'Фигуры',
+                flexible: !wide),
+            ],
+          ];
+          return Row(
+            children: [
+              if (options.score)
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Semantics(
+                            label: context.tr(formatPoints(hud.score)),
+                            excludeSemantics: true,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: LText(formatNumber(hud.score), style: Type.display(20)),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      if (callout != null)
+                        Positioned(
+                          left: 0, right: 0, bottom: 0,
+                          child: ClipRect(child: IgnorePointer(child: _CalloutView(callout: callout!, base: 6))),
+                        ),
+                    ],
                   ),
-                  if (callout != null)
-                    Positioned(
-                      left: 0, right: 0, bottom: 0,
-                      child: ClipRect(child: IgnorePointer(child: _CalloutView(callout: callout!, base: 6))),
-                    ),
-                ],
-              ),
-            )
-          else
-            const Spacer(),
-          if (options.score && hud.level > 0)
-            _ReadoutStat(icon: Icons.layers_outlined, value: '${hud.level}/${levelCount ?? campaignLevels.length}',
-              label: 'Уровень ${hud.level} / ${levelCount ?? campaignLevels.length}', accent: true),
-          if (options.score && hud.speed > 0)
-            _ReadoutStat(icon: Icons.speed_rounded, value: '${hud.speed}', label: 'Скорость ${hud.speed}', accent: true),
-          if (options.stats) ...[
-            _ReadoutStat(icon: Icons.schedule_rounded, value: formatClock(hud.seconds), label: 'Время'),
-            _ReadoutStat(icon: Icons.view_module_outlined, value: formatNumber(hud.pieces), label: 'Фигуры'),
-          ],
-        ],
+                )
+              else
+                const Spacer(),
+              if (wide)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [for (final stat in stats) Padding(padding: const EdgeInsets.only(left: 10), child: stat)],
+                )
+              else
+                ...stats,
+            ],
+          );
+        },
       ),
     ),
   );
 }
 
 class _ReadoutStat extends StatelessWidget {
-  const _ReadoutStat({required this.icon, required this.value, required this.label, this.accent = false});
+  const _ReadoutStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+    this.accent = false,
+    this.flexible = true,
+  });
   final IconData icon;
   final String value, label;
   final bool accent;
+
+  /// Shrinks to its share of a narrow row.
+  final bool flexible;
 
   @override
   Widget build(BuildContext context) {
     final caption = context.tr(label);
     final color = accent ? Palette.accent : Palette.textDim;
-    return Flexible(
-      child: Padding(
+    final stat = Padding(
         padding: const EdgeInsets.only(left: 6),
         child: Tooltip(
           message: caption,
@@ -207,7 +234,7 @@ class _ReadoutStat extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      );
+    return flexible ? Flexible(child: stat) : stat;
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../field/block_look.dart';
 import '../style.dart';
 
 /// The classic set's colours for the little pictures (MainMenu.tsx).
@@ -81,15 +82,15 @@ class _BlocksPainter extends CustomPainter {
     }
     for (final (x, y, colour, look) in blocks.where((b) => b.$4 != _Look.track)) {
       final rect = Rect.fromLTWH(x * unit * 0.34, y * unit * 0.34, side, side);
-      final shape = RRect.fromRectAndRadius(rect, Radius.circular(side * 0.22));
       final tones = BlockTones.fromBase(classicColours[colour]);
-      final alpha = look == _Look.faint ? 0.32 : 1.0;
-      final bevel = (side * 0.1).clamp(1.0, 2.0);
+      // The field's block, its body as big as the square; a faint one dimmed.
       canvas.save();
-      canvas.clipRRect(shape);
-      canvas.drawRect(rect, Paint()..color = tones.base.withValues(alpha: alpha));
-      canvas.drawRect(Rect.fromLTWH(rect.left, rect.top, rect.width, bevel), Paint()..color = tones.light.withValues(alpha: alpha));
-      canvas.drawRect(Rect.fromLTWH(rect.left, rect.bottom - bevel, rect.width, bevel), Paint()..color = tones.dark.withValues(alpha: alpha));
+      canvas.translate(rect.center.dx, rect.center.dy);
+      canvas.scale(side / (2 * blockHalf));
+      final faint = look == _Look.faint;
+      if (faint) canvas.saveLayer(const Rect.fromLTRB(-0.5, -0.5, 0.5, 0.5), Paint()..color = const Color(0x52000000));
+      paintBlock(canvas, tones);
+      if (faint) canvas.restore();
       canvas.restore();
     }
   }

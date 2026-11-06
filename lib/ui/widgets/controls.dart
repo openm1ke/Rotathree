@@ -539,19 +539,24 @@ class Keycap extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: clicking(onPressed),
+      // No alignment: a box that aligns its child takes all the width it is
+      // given, and a key in a wrapping row is given the whole row.
       child: Container(
         constraints: const BoxConstraints(minWidth: 44, minHeight: 36),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: waiting ? Palette.warning.withValues(alpha: 0.14) : Palette.panelStrong,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: waiting ? Palette.warning : Palette.lineStrong),
         ),
-        child: LText(
-          label,
-          style: Type.body(13, weight: FontWeight.w800, color: color),
-          textAlign: TextAlign.center,
+        child: Center(
+          widthFactor: 1,
+          heightFactor: 1,
+          child: LText(
+            label,
+            style: Type.body(13, weight: FontWeight.w800, color: color),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );
@@ -578,7 +583,7 @@ class DialogCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // On a tablet the card is wider and its padding and corners grow with the text.
-    final s = tabletScale(MediaQuery.sizeOf(context));
+    final s = tabletScaleOf(context);
     return Container(
       constraints: BoxConstraints(maxWidth: 420 * s),
       padding: EdgeInsets.fromLTRB(20, 18, 20, 20) * s,

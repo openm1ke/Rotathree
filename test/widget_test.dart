@@ -66,7 +66,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.text('Продолжить'), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    // The pause opens with its way back into the game in focus.
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(find.text('Продолжить'), findsNothing);
@@ -132,7 +132,6 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.text('Продолжить'), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
     expect(find.text('Продолжить'), findsNothing);

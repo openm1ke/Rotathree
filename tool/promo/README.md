@@ -18,6 +18,11 @@ tool/promo/encode.sh                       # MP4s with the game's music → buil
 
 The first two take about two minutes together; the video takes about fifteen.
 
+`flutter test tool/promo/desktop_test.dart` draws the desktop app's menu,
+tutorial, a campaign level, the pause and Cube at the sizes of a computer's
+window (1280 × 690 and 1920 × 1040 at 100 %, a MacBook) and of a phone, into
+`build/promo/desktop`: to look at while the desktop layout is worked on.
+
 ## What is made
 
 | Folder | Size | For |

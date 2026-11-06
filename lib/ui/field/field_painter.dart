@@ -15,6 +15,7 @@ import '../../game/model/side.dart';
 import '../../game/state/game_state.dart';
 import '../data/settings.dart' show ExplosionStyle;
 import '../style.dart';
+import 'block_look.dart';
 import 'effects.dart';
 import 'field_viewport.dart';
 
@@ -238,14 +239,6 @@ class FieldAssets {
   /// Side of the white square that particles are tinted copies of.
   static const _patch = 4;
 
-  static final _blockShape = RRect.fromRectAndRadius(
-    const Rect.fromLTRB(-0.455, -0.455, 0.455, 0.455),
-    const Radius.circular(0.16),
-  );
-  static final _faceShape = RRect.fromRectAndRadius(
-    const Rect.fromLTRB(-0.34, -0.34, 0.34, 0.34),
-    const Radius.circular(0.096),
-  );
   static final _flashShape = RRect.fromRectAndRadius(
     const Rect.fromLTRB(-0.455, -0.455, 0.455, 0.455),
     const Radius.circular(0.15),
@@ -374,8 +367,8 @@ class FieldAssets {
     }
   }
 
-  /// One block per colour, exactly a cell big — flat, with a lit top edge and
-  /// a shaded bottom one — and a white square for the particles.
+  /// One block per colour, exactly a cell big ([paintBlock]), and a white
+  /// square for the particles.
   static _Atlas _makeAtlas(int unit) {
     final pitch = unit + 2 * _gutter;
     final count = BlockColor.values.length;
@@ -389,7 +382,7 @@ class FieldAssets {
       canvas.save();
       canvas.translate(left + unit / 2, top + unit / 2);
       canvas.scale(unit.toDouble());
-      _paintBlock(canvas, BlockTones.of(color));
+      paintBlock(canvas, BlockTones.of(color));
       canvas.restore();
     }
     final patchLeft = (count * pitch).toDouble();
@@ -398,31 +391,6 @@ class FieldAssets {
     final image = picture.toImageSync(count * pitch + _patch, math.max(pitch, _patch));
     picture.dispose();
     return _Atlas(image, unit, blocks, Rect.fromLTWH(patchLeft + 1, 1, 2, 2));
-  }
-
-  /// A block a cell wide, centred on the origin.
-  static void _paintBlock(Canvas canvas, BlockTones tones) {
-    final body = _blockShape.outerRect;
-    canvas.drawRRect(
-      _blockShape,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          body.topCenter,
-          body.bottomCenter,
-          [tones.light, tones.base, tones.dark],
-          const [0, 0.3, 1],
-        ),
-    );
-    // A flat face set into the bevel, with a soft highlight across its top.
-    canvas.drawRRect(_faceShape, Paint()..color = tones.base);
-    canvas.drawRRect(
-      _faceShape,
-      Paint()
-        ..shader = ui.Gradient.linear(_faceShape.outerRect.topCenter, _faceShape.outerRect.center, const [
-          Color(0x61FFFFFF),
-          Color(0x00FFFFFF),
-        ]),
-    );
   }
 
   void _makeGlows(FieldGeometry g) {

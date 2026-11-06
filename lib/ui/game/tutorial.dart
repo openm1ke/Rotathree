@@ -61,7 +61,7 @@ class TutorialPanel extends StatelessWidget {
     final keys = bindings;
     final keyboard = keys != null;
     final media = MediaQuery.of(context);
-    final scale = tabletScale(media.size);
+    final scale = tabletScaleOf(context);
     // A low phone keeps its glass tall: the lesson's type is smaller there.
     final compact = media.size.height < 700;
     // A done lesson keeps its size: its call and hint dim instead of leaving.
@@ -98,21 +98,30 @@ class TutorialPanel extends StatelessWidget {
                           '${step + 1} / ${lessons.length}',
                           style: Type.label(12, color: Palette.accent).copyWith(letterSpacing: 2.4),
                         ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: clicking(onSkip),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Palette.textDim,
-                            minimumSize: const Size(48, 34),
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              LText('Пропустить', style: Type.body(13, color: Palette.textDim)),
-                              if (keyboard) ...[const SizedBox(width: 8), const Keycap(label: 'Backspace')],
-                            ],
+                        const SizedBox(width: 8),
+                        // Beside the glass the panel is narrow: the way out shrinks.
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: TextButton(
+                                onPressed: clicking(onSkip),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Palette.textDim,
+                                  minimumSize: const Size(48, 34),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    LText('Пропустить', style: Type.body(13, color: Palette.textDim)),
+                                    if (keyboard) ...[const SizedBox(width: 8), const Keycap(label: 'Backspace')],
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
