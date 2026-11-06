@@ -277,6 +277,11 @@ class GameScreenState extends State<GameScreen>
             title: b.title,
             sub: b.sub,
             colours: _stageColours(b.colours),
+            kind: b.pendingLevel != null
+                ? BannerKind.passed
+                : b.colours > 0
+                ? BannerKind.stage
+                : BannerKind.level,
           ),
           left: b.left,
           blocking: b.blocking,
@@ -355,7 +360,9 @@ class GameScreenState extends State<GameScreen>
     widget.onPauseChanged?.call(status == _Status.paused);
   }
 
-  GameEngine _newEngine(RunPlan plan) => GameEngine(config: plan.config)..setRamp(plan.ramp);
+  GameEngine _newEngine(RunPlan plan) => GameEngine(config: plan.config)
+    ..setRamp(plan.ramp)
+    ..instantDrop = widget.settings.handling.instantDrop;
 
   /// Replaces the engine, keeping the totals of the run so far.
   void _swapEngine(GameEngine next) {
@@ -388,6 +395,7 @@ class GameScreenState extends State<GameScreen>
     required String title,
     String? sub,
     List<Color> colours = const [],
+    BannerKind kind = BannerKind.level,
     required double seconds,
     required bool blocking,
     VoidCallback? then,
@@ -395,7 +403,7 @@ class GameScreenState extends State<GameScreen>
     _bannerId++;
     setState(() {
       _banner = _BannerState(
-        data: BannerData(id: _bannerId, kicker: kicker, title: title, sub: sub, colours: colours),
+        data: BannerData(id: _bannerId, kicker: kicker, title: title, sub: sub, colours: colours, kind: kind),
         left: seconds,
         blocking: blocking,
         then: then,
@@ -461,6 +469,7 @@ class GameScreenState extends State<GameScreen>
       kicker: 'Уровень ${index + 1} пройден',
       title: formatPoints(levelScore),
       sub: 'Дальше: ${to.colours} цв. · ${to.glasses} ст. · цель ${formatNumber(to.target)}',
+      kind: BannerKind.passed,
       seconds: 2.2,
       blocking: true,
       then: () => _advanceTo(next),
@@ -484,6 +493,7 @@ class GameScreenState extends State<GameScreen>
         title: formatColours(to.colours),
         sub: 'стаканы снова по одному',
         colours: _stageColours(to.colours),
+        kind: BannerKind.stage,
         seconds: 2.2,
         blocking: true,
       );
@@ -495,6 +505,7 @@ class GameScreenState extends State<GameScreen>
           kicker: 'Новый стакан',
           title: '${to.glasses}-й стакан',
           sub: 'первая фигура уже в пути',
+          kind: BannerKind.glass,
           seconds: 1.6,
           blocking: false,
         );
@@ -943,6 +954,8 @@ class GameScreenState extends State<GameScreen>
   @override
   Widget build(BuildContext context) {
     final settings = widget.settings;
+    // The settings may change in a game, from its own settings page.
+    _engine.instantDrop = settings.handling.instantDrop;
     _pixelRatio = MediaQuery.devicePixelRatioOf(context);
     _reduceMotion = MediaQuery.disableAnimationsOf(context);
     final desktop = usesDesktopKeyboard;
@@ -1081,10 +1094,17 @@ class GameScreenState extends State<GameScreen>
         ),
         if (banner != null)
           Positioned(
-            top: side * 0.3,
-            left: side * 0.1,
-            right: side * 0.1,
-            child: LevelBanner(banner: banner.data),
+            top: side * 0.24,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: IgnorePointer(
+                child: Scaled(
+                  scale: desktopScale(MediaQuery.sizeOf(context)),
+                  child: LevelBanner(banner: banner.data),
+                ),
+              ),
+            ),
           ),
       ],
     );

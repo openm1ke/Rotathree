@@ -28,6 +28,22 @@ void main() {
     expect(engine.phase, GamePhase.pieceDropping);
   });
 
+  test('an instant hard drop lands at the next step, a flying one later', () {
+    final flying = newEngine();
+    flying.incoming.put(Side.top, horizontal([r, b, y]), column: 0);
+    flying.dropActive();
+    flying.update(0.001);
+    expect(flying.phase, GamePhase.pieceDropping);
+    expect(flying.state.piecesPlaced, 0);
+
+    final instant = newEngine()..instantDrop = true;
+    instant.incoming.put(Side.top, horizontal([r, b, y]), column: 0);
+    instant.dropActive();
+    instant.update(0.001);
+    expect(instant.phase, isNot(GamePhase.pieceDropping));
+    expect(instant.state.piecesPlaced, 1);
+  });
+
   test('second tap after a short flight cannot drop the next piece', () {
     final engine = newEngine();
     engine.incoming.put(Side.top, horizontal([r, b, y]), row: 15);

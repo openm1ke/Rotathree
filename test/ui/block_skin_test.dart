@@ -16,6 +16,12 @@ void main() {
     expect(Settings.fromJson(const {}).skin, BlockSkin.classic);
   });
 
+  test('an instant hard drop is kept with the settings', () {
+    final settings = Settings.defaults().copyWith(handling: const Handling(instantDrop: true));
+    expect(Settings.fromJson(settings.toJson()).handling.instantDrop, isTrue);
+    expect(Settings.defaults().handling.instantDrop, isFalse);
+  });
+
   test('dice have one ivory for every slot, coloured skins keep the palette', () {
     final before = BlockTones.revision;
     BlockTones.setLook(classicColours, BlockSkin.dice);

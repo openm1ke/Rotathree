@@ -96,7 +96,7 @@ class AudioOptions {
 }
 
 class Handling {
-  const Handling({this.dasMs = 150, this.arrMs = 35});
+  const Handling({this.dasMs = 150, this.arrMs = 35, this.instantDrop = false});
 
   /// Delay before a held direction repeats, in milliseconds.
   final int dasMs;
@@ -104,8 +104,14 @@ class Handling {
   /// Interval between repeats, in milliseconds; 0 slides to the wall.
   final int arrMs;
 
-  Handling copyWith({int? dasMs, int? arrMs}) =>
-      Handling(dasMs: dasMs ?? this.dasMs, arrMs: arrMs ?? this.arrMs);
+  /// A hard drop lands at once, with no flight down.
+  final bool instantDrop;
+
+  Handling copyWith({int? dasMs, int? arrMs, bool? instantDrop}) => Handling(
+        dasMs: dasMs ?? this.dasMs,
+        arrMs: arrMs ?? this.arrMs,
+        instantDrop: instantDrop ?? this.instantDrop,
+      );
 }
 
 class PaletteSet {
@@ -418,6 +424,7 @@ class Settings {
       handling: Handling(
         dasMs: _intIn(handling['dasMs'], 0, 400, base.handling.dasMs),
         arrMs: _intIn(handling['arrMs'], 0, 150, base.handling.arrMs),
+        instantDrop: handling['instantDrop'] == true,
       ),
       palettes: Palettes.fromJson(map['palettes']),
       effects: EffectOptions(
@@ -535,7 +542,7 @@ class Settings {
           for (final action in keyActions)
             action.name: [for (final key in bindings[action]!) keyToJson(key)],
         },
-        'handling': {'dasMs': handling.dasMs, 'arrMs': handling.arrMs},
+        'handling': {'dasMs': handling.dasMs, 'arrMs': handling.arrMs, 'instantDrop': handling.instantDrop},
         'palettes': palettes.toJson(),
         'effects': {
           'explosion': effects.explosion.name,

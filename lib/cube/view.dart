@@ -1197,8 +1197,11 @@ class CubeView {
         }
       }
       if (ghost != null && !same) {
+        // The blocks themselves, see-through, where they will lie, and an
+        // outline round each, as the flat game shows its landing place.
         for (final c in ghost) {
-          _pushClear(_local(c.p), tone(c.color, light: true), 1, 0.16, 1);
+          _pushSolid(_local(c.p), c.color, alpha: 0.4);
+          _pushClear(_local(c.p), tone(c.color, light: true), 1, 0, 1);
         }
         if (look.lane) _pushLanes(piece, ghost);
       }

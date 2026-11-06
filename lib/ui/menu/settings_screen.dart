@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../cube/cube_setup_screen.dart';
 import '../i18n/strings.dart';
 import 'package:flutter/material.dart';
@@ -118,8 +120,18 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
       ),
     );
-    if (!widget.overlay) return frame;
-    return ColoredBox(color: const Color(0xF2070710), child: frame);
+    // A column, not a strip across a wide window: 62 % of the window, at
+    // least 640 and at most a menu's width, the same in a game as in the
+    // menus; a narrower screen gives it all its width.
+    final screen = MediaQuery.sizeOf(context).width;
+    final page = LayoutBuilder(
+      builder: (context, box) {
+        final width = math.min(box.maxWidth, (screen * 0.62).clamp(640.0, tabletMenuWidth));
+        return Center(child: SizedBox(width: width, child: frame));
+      },
+    );
+    if (!widget.overlay) return page;
+    return ColoredBox(color: const Color(0xF2070710), child: page);
   }
 
   Widget _page(_Tab tab) {
@@ -206,9 +218,21 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     ],
   );
 
+  Widget _dropControls(Settings s) => Section(
+    title: 'Сброс',
+    note: 'Мгновенный: фигура сразу встаёт на место, без полёта вниз — как в tetr.io.',
+    children: [
+      SwitchRow(
+        label: 'Мгновенный сброс',
+        value: s.handling.instantDrop,
+        onChanged: (instant) => widget.onChange(s.copyWith(handling: s.handling.copyWith(instantDrop: instant))),
+      ),
+    ],
+  );
+
   List<Widget> _controls() {
     final s = widget.settings;
-    if (usesDesktopKeyboard) return [..._keyboardControls(s), _repeatControls(s)];
+    if (usesDesktopKeyboard) return [..._keyboardControls(s), _repeatControls(s), _dropControls(s)];
     final tweak = s.padButtons[_editSide]?[_editSlot] ?? const PadTweak();
     return [
       Section(
@@ -329,6 +353,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ],
       ),
       _repeatControls(s),
+      _dropControls(s),
       Section(
         title: 'Экранные кнопки',
         note: 'Что делает каждая кнопка левого и правого креста. Можно нажимать обе крестовины одновременно.',

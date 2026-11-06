@@ -840,6 +840,8 @@ class CubeScreenState extends State<CubeScreen> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final settings = widget.settings;
+    // The settings may change in a game, from its own settings page.
+    _game.instantDrop = settings.handling.instantDrop;
     final desktop = usesDesktopKeyboard;
     final level = _level, levelPlayed = _levelPlayed;
     final sound = widget.onToggleMusic == null

@@ -524,6 +524,10 @@ class CubeGame {
   }
 
   CubeConfig config;
+
+  /// A hard drop lands at once instead of flying down: a player's choice, not
+  /// a rule, so it is neither saved nor part of the config.
+  bool instantDrop = false;
   final int seed;
   late math.Random random;
   Hub hub;
@@ -1058,7 +1062,7 @@ class CubeGame {
     pieces.remove(piece.side);
     drop = DropInFlight(piece.copy(pivot: rest), piece.pivot, cells);
     events.add(Dropped(piece.side, cells));
-    _enterPhase(CubePhase.dropping, config.dropBaseSeconds + config.dropSecondsPerCell * cells);
+    _enterPhase(CubePhase.dropping, instantDrop ? 0 : config.dropBaseSeconds + config.dropSecondsPerCell * cells);
   }
 
   void _commit(Stick piece, bool dropped) {

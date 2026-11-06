@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rotathree/game/state/game_state.dart';
 import 'package:rotathree/ui/game/game_screen.dart';
+import 'package:rotathree/ui/game/level_banner.dart';
 
 import 'players.dart';
 import 'scenes.dart';
@@ -26,6 +27,37 @@ const windows = [
 
 void main() {
   setUpAll(loadFonts);
+
+  testWidgets('desktop: banners', (tester) async {
+    useDevice(tester, const Device('banners', 1400, 420, 1));
+    final key = GlobalKey();
+    const banners = [
+      BannerData(id: 1, kicker: 'Уровень 7 пройден', title: '4 100 очков', sub: 'Дальше: 4 цв. · 4 ст. · цель 3 800', kind: BannerKind.passed),
+      BannerData(id: 2, kicker: 'Новый этап', title: '5 цветов', sub: 'стаканы снова по одному', kind: BannerKind.stage,
+        colours: [Color(0xFFFF3D5E), Color(0xFF3B82FF), Color(0xFFFFC531), Color(0xFF2FD985), Color(0xFFA65CFF)]),
+      BannerData(id: 3, kicker: 'Новый стакан', title: '3-й стакан', sub: 'первая фигура уже в пути', kind: BannerKind.glass),
+      BannerData(id: 4, kicker: 'Уровень 9', title: 'цель 4 200', sub: '4 ст. · 5 цв.', kind: BannerKind.level),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: RepaintBoundary(
+          key: key,
+          child: ColoredBox(
+            color: const Color(0xFF0B0B14),
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [for (final banner in banners) LevelBanner(banner: banner)],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await savePng(tester, await capture(tester, key, 1), '$out/banners.png');
+  });
 
   for (final device in windows) {
     testWidgets('desktop: ${device.name}', (tester) async {
@@ -83,6 +115,10 @@ void main() {
         }
         await settleApp(tester, frames: 6);
         await shoot('cube-pause');
+
+        await openApp(tester, key, 'ru');
+        await tapKey(tester, 'menu-settings');
+        await shoot('settings');
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

@@ -79,6 +79,10 @@ class GameEngine {
 
   final GameConfig _startConfig;
   GameConfig _config;
+
+  /// A hard drop lands at once instead of flying down: a player's choice, not
+  /// a rule, so it is neither saved nor part of the config.
+  bool instantDrop = false;
   final PlacementEngine _placement = const PlacementEngine();
   final GravityResolver _gravity = const GravityResolver();
 
@@ -629,7 +633,7 @@ class GameEngine {
     final cells = placement.row - piece.row;
     state.drop = DropInFlight(placement: placement, startRow: piece.row);
     _events.add(PieceDropped(piece.side, cells: cells));
-    _enterPhase(GamePhase.pieceDropping, _config.dropSeconds(cells));
+    _enterPhase(GamePhase.pieceDropping, instantDrop ? 0 : _config.dropSeconds(cells));
   }
 
   /// Writes a piece into the board and resolves what follows from it.
