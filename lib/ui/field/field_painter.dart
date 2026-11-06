@@ -276,6 +276,9 @@ class FieldAssets {
   final Map<Side, _Label> _labels = {};
   final _Batch _batch = _Batch();
   final Paint _imagePaint = Paint()..filterQuality = FilterQuality.low;
+
+  /// The see-through blocks where a piece will land.
+  final Paint _ghostPaint = Paint()..filterQuality = FilterQuality.low;
   final Paint _glowPaint = Paint()..filterQuality = FilterQuality.low;
   final Paint _flashPaint = Paint();
   final Paint _previewPaint = Paint();
@@ -1073,10 +1076,24 @@ class FieldPainter extends CustomPainter {
       );
       canvas.restore();
     }
+    canvas.restore();
+
+    // The blocks themselves, see-through, where they will lie: their colour,
+    // pips or sign tell what lands, then an outline round each.
     final count = stick.length;
     final lying = stick.isHorizontal;
     final flipped = stick.orientation.isFlipped;
-    final fill = Paint();
+    for (var i = 0; i < count; i++) {
+      final along = flipped ? count - 1 - i : i;
+      _add(stick.colors[i], left + (lying ? along : 0) + 0.5, bottom + (lying ? 0 : along) + 0.5, piece.side.index);
+    }
+    assets._batch.draw(
+      canvas,
+      assets._atlas!.image,
+      assets._ghostPaint..color = _white.withValues(alpha: 0.4 * strength),
+    );
+
+    _enter(canvas, piece.side.index);
     final edge = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6 * _px;
@@ -1084,10 +1101,9 @@ class FieldPainter extends CustomPainter {
       final along = flipped ? count - 1 - i : i;
       final tone = BlockTones.of(stick.colors[i]).base;
       final shape = RRect.fromRectAndRadius(
-        Rect.fromLTWH(left + (lying ? along : 0) + 0.07, -g.reach + rest + (lying ? 0 : along) + 0.07, 0.86, 0.86),
+        Rect.fromLTWH(left + (lying ? along : 0) + 0.07, bottom + (lying ? 0 : along) + 0.07, 0.86, 0.86),
         const Radius.circular(0.14),
       );
-      canvas.drawRRect(shape, fill..color = tone.withValues(alpha: 0.14 * strength));
       canvas.drawRRect(shape, edge..color = tone.withValues(alpha: 0.9 * strength));
     }
     canvas.restore();
