@@ -346,6 +346,9 @@ export interface TurnPreview {
 
 export class CubeGame {
   config!: CubeConfig;
+  /** A hard drop lands at once instead of flying down: a player's choice, not
+   * a rule, so it is neither saved nor part of the config. */
+  instantDrop = false;
   seed = 0;
   random: () => number = Math.random;
   hub!: Hub;
@@ -902,7 +905,7 @@ export class CubeGame {
     this.pieces.delete(piece.side);
     this.drop = { piece: { ...piece, pivot: rest }, from: piece.pivot, cells };
     this.events.push({ type: 'dropped', side: piece.side, cells });
-    this.enterPhase('dropping', this.config.dropBaseSeconds + this.config.dropSecondsPerCell * cells);
+    this.enterPhase('dropping', this.instantDrop ? 0 : this.config.dropBaseSeconds + this.config.dropSecondsPerCell * cells);
   }
 
   private commit(piece: Stick, dropped: boolean): void {

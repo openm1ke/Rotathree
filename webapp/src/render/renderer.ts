@@ -7,7 +7,8 @@ import { isHorizontal, pieceDepth, pieceWidth, type BlockColor, type Piece } fro
 import { SIDES, type Side } from '../game/side';
 import type { Effects } from './effects';
 import { fieldViewport, nextPiecePreviewRect, textureSpans } from './viewport';
-import { THEME, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
+import { BLOCK_HALF, paintBlock } from './blockLook';
+import { THEME, currentSkin, paletteRevision, paletteTones, rgba, tonesOf } from './theme';
 
 const QUARTER = Math.PI / 2;
 
@@ -295,9 +296,9 @@ export class GameRenderer {
 
   // ------------------------------------------------------------- sprites
 
-  /** One pre-rendered block per colour, exactly a cell big: flat, with a lit
-   * top edge and a shaded bottom one. Kept for the sizes in use, at rest and
-   * moving, so that turning the cross only switches between them. */
+  /** One pre-rendered block per colour, exactly a cell big, in the skin
+   * chosen (blockLook.ts). Kept for the sizes in use, at rest and moving, so
+   * that turning the cross only switches between them. */
   private ensureSprites(size: number): void {
     if (this.spriteRevision !== paletteRevision()) {
       this.spriteRevision = paletteRevision();
@@ -355,7 +356,7 @@ export class GameRenderer {
     if (flash > 0) {
       ctx.globalAlpha = Math.min(1, flash);
       ctx.fillStyle = '#ffffff';
-      roundedRect(ctx, -0.455, -0.455, 0.91, 0.91, 0.15);
+      roundedRect(ctx, -BLOCK_HALF, -BLOCK_HALF, BLOCK_HALF * 2, BLOCK_HALF * 2, 0.15);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -738,28 +739,24 @@ export class GameRenderer {
       this.laneFill ??= unitGradient(ctx, 0.02, 0.085);
       this.fillStretched(this.laneFill, piece.side, left, top, width, bottom - top, lit);
     }
-    this.frame(piece.side);
     const count = stick.colors.length;
     const lying = isHorizontal(stick);
+    // The blocks themselves, see-through, where they will lie: their colour
+    // or pips tell what lands, then an outline round each.
+    ctx.globalAlpha = 0.4 * strength;
+    for (let i = 0; i < count; i++) {
+      const along = stick.orientation >= 2 ? count - 1 - i : i;
+      this.block(stick.colors[i], left + (lying ? along : 0) + 0.5, bottom + (lying ? 0 : along) + 0.5, piece.side);
+    }
+    this.frame(piece.side);
     ctx.lineWidth = 1.6 * px;
+    ctx.globalAlpha = 0.9 * strength;
     for (let i = 0; i < count; i++) {
       // The outline is the same whichever end the first colour is at, but
       // each square keeps its own colour.
       const along = stick.orientation >= 2 ? count - 1 - i : i;
-      const tone = tonesOf(stick.colors[i]).base;
-      roundedRect(
-        ctx,
-        left + (lying ? along : 0) + 0.07,
-        -reach + rest + (lying ? 0 : along) + 0.07,
-        0.86,
-        0.86,
-        0.14,
-      );
-      ctx.globalAlpha = 0.14 * strength;
-      ctx.fillStyle = tone;
-      ctx.fill();
-      ctx.globalAlpha = 0.9 * strength;
-      ctx.strokeStyle = tone;
+      roundedRect(ctx, left + (lying ? along : 0) + 0.07, bottom + (lying ? 0 : along) + 0.07, 0.86, 0.86, 0.14);
+      ctx.strokeStyle = tonesOf(stick.colors[i]).base;
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -1059,36 +1056,14 @@ function roundedRect(
 
 /** One block per colour of the palette, `size` pixels square. */
 function makeSprites(size: number): HTMLCanvasElement[] {
-  return paletteTones().map((tones) => {
+  const skin = currentSkin();
+  return paletteTones().map((tones, slot) => {
     const sprite = document.createElement('canvas');
     sprite.width = sprite.height = Math.max(4, size);
     const g = sprite.getContext('2d')!;
     const s = sprite.width;
-    const pad = s * 0.045;
-    const side = s - pad * 2;
-    const radius = s * 0.16;
-
-    const body = g.createLinearGradient(0, pad, 0, pad + side);
-    body.addColorStop(0, tones.light);
-    body.addColorStop(0.3, tones.base);
-    body.addColorStop(1, tones.dark);
-    g.fillStyle = body;
-    roundedRect(g, pad, pad, side, side, radius);
-    g.fill();
-
-    // A flat face set into the bevel.
-    const inset = s * 0.16;
-    g.fillStyle = tones.base;
-    roundedRect(g, inset, inset, s - inset * 2, s - inset * 2, radius * 0.6);
-    g.fill();
-
-    // A soft highlight across the top of the face.
-    const shine = g.createLinearGradient(0, inset, 0, s - inset);
-    shine.addColorStop(0, 'rgba(255, 255, 255, 0.38)');
-    shine.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
-    g.fillStyle = shine;
-    roundedRect(g, inset, inset, s - inset * 2, s - inset * 2, radius * 0.6);
-    g.fill();
+    g.setTransform(s, 0, 0, s, s / 2, s / 2);
+    paintBlock(g, tones, skin, slot);
     return sprite;
   });
 }

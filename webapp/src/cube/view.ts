@@ -13,7 +13,8 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { paletteRevision, paletteTones } from '../render/theme';
+import { luminance } from '../render/blockLook';
+import { currentSkin, paletteRevision, paletteTones } from '../render/theme';
 import {
   SIDES,
   dot,
@@ -63,6 +64,10 @@ interface Tone {
   base: THREE.Color;
   light: THREE.Color;
   dark: THREE.Color;
+  /** The pips on its faces, as the colour dice have them; 0 for none. */
+  pips: number;
+  /** 1 for dark pips, on a block too light for white ones. */
+  darkPips: number;
 }
 
 interface Placed {
@@ -189,6 +194,7 @@ const TILE_VERTEX = /* glsl */ `
   attribute vec3 aLight;
   attribute vec3 aDark;
   attribute vec3 aLook;
+  attribute vec2 aPips;
   varying vec3 vObjectNormal;
   varying vec3 vFaceNormal;
   varying float vUp;
@@ -196,11 +202,15 @@ const TILE_VERTEX = /* glsl */ `
   varying vec3 vLight;
   varying vec3 vDark;
   varying vec3 vLook;
+  varying vec3 vLocal;
+  varying vec2 vPips;
   void main() {
     vBase = aBase;
     vLight = aLight;
     vDark = aDark;
     vLook = aLook;
+    vLocal = position;
+    vPips = aPips;
     mat4 model = modelMatrix * instanceMatrix;
     mat3 turn = mat3(model);
     vObjectNormal = normal;
@@ -227,7 +237,37 @@ const TILE_FRAGMENT = /* glsl */ `
   varying vec3 vLight;
   varying vec3 vDark;
   varying vec3 vLook; // brightness, white flash, opacity
+  varying vec3 vLocal;
+  varying vec2 vPips; // how many, dark or white
   uniform float uOpacity;
+  // How much of a pip covers a point of a face: the pips of a die of
+  // count 1 to 9, as blockLook.ts lays them out (face coordinates, y down).
+  float pip(vec2 uv, vec2 at, float r) {
+    return 1.0 - smoothstep(r - 0.012, r + 0.004, length(uv - at * 0.2));
+  }
+  float pipMask(vec2 uv, float count) {
+    float r = count > 6.5 ? 0.062 : (count < 1.5 ? 0.1 : 0.072);
+    float m = 0.0;
+    bool centre = count == 1.0 || count == 3.0 || count == 5.0 || count == 7.0 || count == 9.0;
+    if (centre) m = max(m, pip(uv, vec2(0.0, 0.0), r));
+    if (count >= 2.0) {
+      m = max(m, pip(uv, vec2(-1.0, -1.0), r));
+      m = max(m, pip(uv, vec2(1.0, 1.0), r));
+    }
+    if (count >= 4.0) {
+      m = max(m, pip(uv, vec2(1.0, -1.0), r));
+      m = max(m, pip(uv, vec2(-1.0, 1.0), r));
+    }
+    if (count >= 6.0) {
+      m = max(m, pip(uv, vec2(-1.0, 0.0), r));
+      m = max(m, pip(uv, vec2(1.0, 0.0), r));
+    }
+    if (count >= 8.0) {
+      m = max(m, pip(uv, vec2(0.0, -1.0), r));
+      m = max(m, pip(uv, vec2(0.0, 1.0), r));
+    }
+    return m;
+  }
   void main() {
     vec3 n = normalize(vObjectNormal);
     // 1 on the flat of a face, 0 on its rounded rim.
@@ -241,6 +281,15 @@ const TILE_FRAGMENT = /* glsl */ `
     float fy = clamp((0.37 - vUp) / 0.74, 0.0, 1.0);
     vec3 face = mix(vBase, vec3(1.0), 0.34 * max(0.0, 1.0 - fy * 2.0) * toEye);
     vec3 colour = mix(rim, face, onFace);
+    if (vPips.x > 0.5) {
+      // The face's own (u, v), y down on the face looking at the eye.
+      vec3 a = abs(n);
+      vec2 uv = a.x >= a.y && a.x >= a.z ? vec2(vLocal.z * -sign(n.x), -vLocal.y)
+        : a.y >= a.z ? vec2(vLocal.x, vLocal.z * sign(n.y))
+        : vec2(vLocal.x * sign(n.z), -vLocal.y);
+      vec3 ink = vPips.y > 0.5 ? vec3(0.016, 0.014, 0.022) : vec3(1.0);
+      colour = mix(colour, ink, pipMask(uv, vPips.x) * onFace);
+    }
     colour *= clamp(0.72 + 0.28 * toEye + 0.12 * vFaceNormal.y, 0.0, 1.0) * vLook.x;
     colour = mix(colour, vec3(1.0), vLook.y);
     gl_FragColor = vec4(colour, vLook.z * uOpacity);
@@ -417,7 +466,7 @@ export class CubeView {
     this.buildCross();
     this.buildHub();
     const maxCubes = this.n * this.n * this.n + 64;
-    const tileAttributes = { aBase: 3, aLight: 3, aDark: 3, aLook: 3 };
+    const tileAttributes = { aBase: 3, aLight: 3, aDark: 3, aLook: 3, aPips: 2 };
     this.solid = this.cubeLayer(this.tileMaterial('solid'), tileAttributes, 1, maxCubes, new RoundedBoxGeometry(1, 1, 1, 3, ROUND));
     // While the hub is open, a stick hidden behind blocks shows through them
     // faintly: drawn again only where something nearer covers it.
@@ -638,7 +687,14 @@ export class CubeView {
     if (this.tonesRevision === paletteRevision()) return;
     this.tonesRevision = paletteRevision();
     const colour = (css: string) => new THREE.Color().setStyle(css, THREE.SRGBColorSpace);
-    this.tones = paletteTones().map((t) => ({ base: colour(t.base), light: colour(t.light), dark: colour(t.dark) }));
+    const dice = currentSkin() === 'colourDice';
+    this.tones = paletteTones().map((t, slot) => ({
+      base: colour(t.base),
+      light: colour(t.light),
+      dark: colour(t.dark),
+      pips: dice ? slot + 1 : 0,
+      darkPips: luminance(t.base) > 0.72 ? 1 : 0,
+    }));
   }
 
   /** Centre of a data cell in the hub's own frame. */
@@ -710,6 +766,7 @@ export class CubeView {
         buffers.aLight.setXYZ(i, light.r, light.g, light.b);
         buffers.aDark.setXYZ(i, dark.r, dark.g, dark.b);
         buffers.aLook.setXYZ(i, item.brightness, item.flash, item.alpha);
+        buffers.aPips.setXY(i, item.tone.pips, item.tone.darkPips);
       });
     }
     for (const item of clear.items) {
@@ -1378,14 +1435,8 @@ export class CubeView {
     // Where the stick on top will land, and the lane down to it. A stick in
     // front or behind lands in the cells it is over, and says so itself.
     const piece = game.activePiece;
-    if (piece && game.inPlane(piece.side) && !game.isGameOver) {
-      const ghost = game.ghost();
-      const cells = pieceCells(piece);
-      if (ghost && !ghost.every(({ p }, i) => p.every((v, j) => v === cells[i].p[j]))) {
-        for (const { p, color } of ghost) this.pushClear(this.local(p), (this.tones[color] ?? this.tones[0]).light, 1, 0.16, 1);
-        if (this.look.lane) this.pushLanes(piece, ghost);
-      }
-    }
+    const aimed = !!piece && game.inPlane(piece.side) && !game.isGameOver;
+    this.pushGhost(dt, piece ?? null, aimed ? game.ghost() : null);
     this.pushBehindMarks(game, `game:${hub.version}:${this.targetQ.toArray().join()}`);
     this.pushNext();
     this.flushLayers();
@@ -1417,9 +1468,34 @@ export class CubeView {
     }
   }
 
+  /** How much of the landing place shows, 0 to 1: it fades out as a tip
+   * begins and back in where the stick will land once the tip is done, so
+   * that the old one does not hang on and the new one does not jump in. */
+  private ghostShown = 1;
+
+  /** Where the stick on top will land — the blocks themselves, see-through,
+   * with an outline, as the flat game shows it — and the lane down to it. */
+  private pushGhost(dt: number, piece: Stick | null, ghost: StickCell[] | null): void {
+    this.ghostShown = this.tilting ? Math.max(0, this.ghostShown - dt / 0.12) : Math.min(1, this.ghostShown + dt / 0.3);
+    if (!piece || !ghost || this.ghostShown < 0.01) return;
+    const cells = pieceCells(piece);
+    if (ghost.every(({ p }, i) => p.every((v, j) => v === cells[i].p[j]))) return;
+    const shown = this.ghostShown * this.ghostShown * (3 - 2 * this.ghostShown);
+    for (const { p, color } of ghost) {
+      this.pushSolid(this.local(p), color, { alpha: 0.4 * shown });
+      this.pushClear(this.local(p), (this.tones[color] ?? this.tones[0]).light, shown, 0, 1);
+    }
+    if (this.look.lane) this.pushLanes(piece, ghost, shown);
+  }
+
+  /** How much of the landing place shows, for the tests. */
+  get landingShown(): number {
+    return this.ghostShown;
+  }
+
   /** A faint column under each lane of the stick, down to the landing spot —
    * the flat game's aiming lane. */
-  private pushLanes(piece: Stick, ghost: StickCell[]): void {
+  private pushLanes(piece: Stick, ghost: StickCell[], alpha = 1): void {
     const n = normalOf(piece.side);
     const { axis } = SIDES[piece.side];
     const lanes = new Map<string, { p: Vec; height: number; ghost: Vec }>();
@@ -1437,7 +1513,7 @@ export class CubeView {
       if (length < 0.05) continue;
       const size: [number, number, number] = [0.91, 0.91, 0.91];
       size[axis] = length;
-      this.pushClear(top.add(bottom).multiplyScalar(0.5), WHITE, 1, 0.07, 0, { size });
+      this.pushClear(top.add(bottom).multiplyScalar(0.5), WHITE, alpha, 0.07, 0, { size });
     }
   }
 }

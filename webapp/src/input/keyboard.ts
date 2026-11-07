@@ -8,9 +8,11 @@ export interface Handling {
   dasMs: number;
   /** Auto repeat rate: milliseconds between repeats; 0 slides to the wall. */
   arrMs: number;
+  /** A hard drop lands at once, with no flight down; it flies when unset. */
+  instantDrop?: boolean;
 }
 
-export const defaultHandling: Handling = { dasMs: 150, arrMs: 35 };
+export const defaultHandling: Handling = { dasMs: 150, arrMs: 35, instantDrop: false };
 
 /** What the keyboard asks of the game. */
 export interface ActionSink {

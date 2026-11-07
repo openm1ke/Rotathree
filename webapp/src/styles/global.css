@@ -1425,68 +1425,100 @@ input:focus-visible {
   animation: banner-veil var(--life, 2s) ease-in-out both;
 }
 
-.banner__sweep {
-  position: absolute;
-  inset: -30% -60%;
-  background: linear-gradient(
-    105deg,
-    transparent 42%,
-    rgba(125, 240, 197, 0.16) 47%,
-    rgba(255, 255, 255, 0.5) 50%,
-    rgba(120, 205, 255, 0.16) 53%,
-    transparent 58%
-  );
-  animation: banner-sweep 1100ms 80ms var(--ease-snap) both;
-}
-
+/* A small card, drawn like the pause: a border of light round a dark glass. */
 .banner__card {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4em;
-  padding: 1.2em 3em;
-  background: linear-gradient(90deg, transparent, rgba(7, 7, 12, 0.84) 22%, rgba(7, 7, 12, 0.84) 78%, transparent);
+  gap: 0.35em;
+  min-width: 13em;
+  max-width: min(22em, 86%);
+  padding: 1em 1.3em 1.05em;
+  border: 1.5px solid transparent;
+  border-radius: 1.35em;
+  background:
+    linear-gradient(180deg, rgba(27, 26, 44, 0.96), rgba(11, 11, 20, 0.96)) padding-box,
+    linear-gradient(135deg, rgba(120, 205, 255, 0.75), rgba(143, 91, 255, 0.5), rgba(255, 61, 139, 0.55)) border-box;
+  box-shadow:
+    0 0 2.2em -0.3em rgba(120, 205, 255, 0.3),
+    0 0.6em 1.5em rgba(0, 0, 0, 0.6);
   text-align: center;
-  animation: banner-card var(--life, 2s) var(--ease-snap) both;
+  animation: banner-pop var(--life, 2s) var(--ease-snap) both;
+}
+
+.banner__badge {
+  display: grid;
+  place-items: center;
+  width: 2.75em;
+  height: 2.75em;
+  margin-bottom: 0.25em;
+  padding: 0.12em;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--violet));
+  box-shadow: 0 0 1em rgba(120, 205, 255, 0.4);
+  color: var(--text);
+}
+
+.banner__badge svg {
+  width: 100%;
+  height: 100%;
+  padding: 0.55em;
+  border-radius: 50%;
+  background: #151423;
 }
 
 .banner__kicker {
-  font-size: 1.05em;
+  font-size: 0.72em;
   font-weight: 800;
-  letter-spacing: 0.26em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #7df0c5;
+  color: var(--accent);
 }
 
 .banner__title {
-  font-size: 3.4em;
+  font-size: 1.8em;
   font-weight: 900;
   font-style: italic;
-  line-height: 0.95;
-  text-transform: uppercase;
-  text-shadow: 0 0 0.5em rgba(125, 240, 197, 0.5);
-  animation: banner-title 620ms var(--ease-back) both;
+  line-height: 1.05;
+  text-shadow: 0 0 0.55em rgba(120, 205, 255, 0.5);
+  animation: banner-title 520ms var(--ease-back) both;
+}
+
+.banner__blocks {
+  margin-top: 0.35em;
+  animation: pop 420ms 120ms var(--ease-back) both;
 }
 
 .banner__sub {
-  font-size: 1.02em;
+  margin-top: 0.45em;
+  padding: 0.35em 0.8em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.82em;
   font-weight: 600;
   color: var(--text-dim);
 }
 
-.banner__dots {
-  display: inline-flex;
-  gap: 0.35em;
-  margin-top: 0.3em;
-}
-
-.banner__dots i {
-  width: 1.1em;
-  height: 1.1em;
-  border-radius: 0.3em;
-  box-shadow: inset 0 -0.2em 0 rgba(0, 0, 0, 0.22);
-  animation: pop 420ms var(--ease-back) both;
+@keyframes banner-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  9% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  14%,
+  82% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.4em) scale(0.97);
+  }
 }
 
 /* A banner waiting for the player comes in and stays. */
@@ -1508,8 +1540,8 @@ input:focus-visible {
 }
 
 @keyframes banner-card-in {
-  from { opacity: 0; transform: scaleY(0.2); }
-  to { opacity: 1; transform: scaleY(1); }
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes banner-veil {
@@ -1553,8 +1585,7 @@ input:focus-visible {
 @keyframes banner-title {
   from {
     opacity: 0;
-    transform: scale(1.9);
-    letter-spacing: 0.3em;
+    transform: scale(1.25);
   }
 }
 
@@ -2487,15 +2518,20 @@ select:focus-visible {
 }
 .navitem__done i { display: block; height: 100%; background: var(--accent); }
 .blocks { position: relative; display: block; width: 100%; height: 100%; }
+/* The field's classic block: a cushion with round edges lit at the top left
+ * and shaded at the bottom right, its middle domed, a soft gloss on top. */
 .blocks i {
   position: absolute;
   width: 31%;
   height: 31%;
-  border-radius: 22%;
-  background: var(--block);
+  border-radius: 24%;
+  background:
+    radial-gradient(ellipse 62% 30% at 46% 24%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--block), #fff 32%), var(--block) 55%, color-mix(in srgb, var(--block), #000 22%));
   box-shadow:
-    inset 0 2px 0 color-mix(in srgb, var(--block), #fff 45%),
-    inset 0 -2px 0 color-mix(in srgb, var(--block), #000 35%);
+    inset 1.5px 1.5px 1.5px color-mix(in srgb, var(--block), #fff 50%),
+    inset -1.5px -1.5px 2px color-mix(in srgb, var(--block), #000 42%),
+    0 1px 1.5px rgba(0, 0, 0, 0.35);
 }
 .blocks i.blocks__faint { opacity: 0.32; }
 .blocks i.blocks__track {
@@ -2504,6 +2540,7 @@ select:focus-visible {
   margin-top: 11%;
   border-radius: 9px;
   opacity: 0.35;
+  background: var(--block);
   box-shadow: none;
 }
 /* Picked, a tile's blocks hop, one after another. */
@@ -2533,4 +2570,345 @@ select:focus-visible {
 }
 @media (max-width: 359px) {
   .navitem--tile.navitem--small .navitem__picture { display: none; }
+}
+
+/* ------------------------------------------------------------ block skins */
+
+.block-row {
+  display: block;
+}
+
+.skins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.skin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.skin .block-row {
+  max-width: 100%;
+  height: auto;
+}
+
+.skin:hover,
+.skin:focus-visible {
+  border-color: rgba(120, 205, 255, 0.6);
+  outline: none;
+}
+
+.skin--active {
+  border: 1.5px solid var(--accent);
+  background: rgba(120, 205, 255, 0.1);
+}
+
+.skin__title {
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.skin--active .skin__title {
+  color: var(--accent);
+}
+
+.skin--active .skin__title::after {
+  content: ' ✓';
+}
+
+/* ------------------------------------------------------------------ pause */
+
+/* A border of light, brightest at the top left, round a dark glass. */
+.pause-card {
+  position: relative;
+  width: min(400px, 92vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 22px 22px 14px;
+  border-radius: 24px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(180deg, rgba(27, 26, 44, 0.97), rgba(11, 11, 20, 0.97)) padding-box,
+    linear-gradient(135deg, rgba(255, 61, 139, 0.7), rgba(143, 91, 255, 0.45), rgba(120, 205, 255, 0.25)) border-box;
+  box-shadow:
+    0 0 48px -6px rgba(143, 91, 255, 0.28),
+    0 14px 30px rgba(0, 0, 0, 0.66);
+  animation: dialog-in 240ms var(--ease-back) both;
+}
+
+.pause-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pause-card__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.pause-card__title {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  font-size: 36px;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(143, 91, 255, 0.6);
+}
+
+.pause-card__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.pause-card__note svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* A round button in a ring of colour: the sound, and the pause sign that
+ * leads back into the game. */
+.ring {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--violet));
+  box-shadow: 0 0 18px rgba(120, 205, 255, 0.35);
+  cursor: pointer;
+  transition: transform 140ms ease-out, box-shadow 140ms ease-out;
+}
+
+.ring--go {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #ff2e7e, #a53bff);
+  box-shadow: 0 0 20px rgba(255, 61, 139, 0.35);
+}
+
+.ring__face {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #151423;
+  color: var(--text);
+  transition: background-color 140ms ease-out;
+}
+
+.ring__face > span {
+  display: grid;
+  place-items: center;
+}
+
+.ring svg {
+  width: 50%;
+  height: 50%;
+}
+
+.ring__face > span svg {
+  width: 26px;
+  height: 26px;
+}
+
+.ring__hover {
+  display: none !important;
+}
+
+.ring:hover,
+.ring:focus-visible {
+  transform: scale(1.08);
+  outline: none;
+}
+
+.ring:hover .ring__face,
+.ring:focus-visible .ring__face {
+  background: #221f35;
+}
+
+.ring--go:hover .ring__idle {
+  display: none !important;
+}
+
+.ring--go:hover .ring__hover {
+  display: grid !important;
+}
+
+/* Back into the game: the gradient of "go", a play sign, and the key. */
+.pause-card__resume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 18px;
+  padding: 13px 16px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 50%),
+    linear-gradient(90deg, #ff2e7e, #a53bff);
+  box-shadow: 0 6px 22px rgba(255, 61, 139, 0.35);
+  color: #fff;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: filter 140ms ease-out, border-color 140ms ease-out;
+}
+
+.pause-card__resume:hover {
+  filter: brightness(1.08);
+}
+
+.pause-card__resume:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.pause-card__resume > svg {
+  width: 28px;
+  height: 28px;
+}
+
+.pause-card__resume-label {
+  flex: 1;
+  text-align: left;
+}
+
+.pause-card__resume kbd {
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  font-family: inherit;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.pause-card__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pause-card__tiles--pairs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* A square of glass with an icon over its name, lit when pointed at. */
+.pause-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  color: #d5d9ea;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 140ms ease-out, background 140ms ease-out, box-shadow 140ms ease-out, color 140ms ease-out;
+}
+
+.pause-tile svg {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+}
+
+.pause-tile:hover,
+.pause-tile:focus-visible {
+  outline: none;
+  border-color: rgba(120, 205, 255, 0.8);
+  background: linear-gradient(180deg, rgba(120, 205, 255, 0.22), rgba(120, 205, 255, 0.08));
+  box-shadow: 0 0 16px rgba(120, 205, 255, 0.25);
+  color: var(--text);
+}
+
+.pause-card__links {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.pause-card__links > * + * {
+  border-left: 1px solid var(--line);
+}
+
+.pause-link {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 6px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pause-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pause-link svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.pause-link--danger {
+  color: #ff7a90;
+}
+
+.pause-link:hover,
+.pause-link:focus-visible {
+  outline: none;
+  color: var(--text);
+}
+
+.pause-link--danger:hover,
+.pause-link--danger:focus-visible {
+  color: #ff9aac;
 }

@@ -124,6 +124,9 @@ const EPSILON = 1e-9;
 export class GameEngine {
   /** Step times may change during a game (see `setSteps` and `setRamp`). */
   config: GameConfig;
+  /** A hard drop lands at once instead of flying down: a player's choice, not
+   * a rule, so it is neither saved nor part of the config. */
+  instantDrop = false;
   readonly incoming: IncomingController;
   /** The glasses in play, in the order they came into play. */
   sides: Side[];
@@ -690,7 +693,7 @@ export class GameEngine {
     const cells = placement.row - piece.row;
     this.state.drop = { placement, startRow: piece.row };
     this.events.push({ type: 'pieceDropped', side: piece.side, cells });
-    this.enterPhase('pieceDropping', dropSeconds(this.config, cells));
+    this.enterPhase('pieceDropping', this.instantDrop ? 0 : dropSeconds(this.config, cells));
   }
 
   /** Writes a piece into the board and resolves what follows from it. */

@@ -27,6 +27,7 @@ import { CampaignProgress } from './CampaignProgress';
 import { LevelBanner, type BannerData } from './LevelBanner';
 import { EMPTY_HUD, formatScore, type Callout, type HudState } from './hudState';
 import { BackButton, Button, GameIconButton, Overlay, SoundButton } from './ui';
+import { PauseCard } from './PauseCard';
 import { formatColours, formatDuration, formatNumber, formatPoints } from './format';
 import { isAdShowing, isPlatformHidden, subscribeVisibility } from '../platform/lifecycle';
 import { PLAYGAMA_BUILD } from '../platform/target';
@@ -395,6 +396,7 @@ export function GameScreen(props: Props) {
           kicker: `Уровень ${index + 1} пройден`,
           title: formatPoints(levelScore),
           sub: `Дальше: ${to.colours} цв. · ${to.glasses} ст. · цель ${formatScore(to.target)}`,
+          kind: 'passed',
         },
         2.2,
         true,
@@ -422,6 +424,7 @@ export function GameScreen(props: Props) {
             title: formatColours(to.colours),
             sub: 'стаканы снова по одному',
             colours: stageColours(to.colours),
+            kind: 'stage',
           },
           2.2,
           true,
@@ -431,7 +434,7 @@ export function GameScreen(props: Props) {
         if (to.glasses > from.glasses) {
           engine.addGlass();
           showBanner(
-            { kicker: 'Новый стакан', title: `${to.glasses}-й стакан`, sub: 'первая фигура уже в пути' },
+            { kicker: 'Новый стакан', title: `${to.glasses}-й стакан`, sub: 'первая фигура уже в пути', kind: 'glass' },
             1.6,
             false,
           );
@@ -459,6 +462,7 @@ export function GameScreen(props: Props) {
           title: savedBanner.title,
           sub: savedBanner.sub,
           colours: stageColours(savedBanner.colours),
+          kind: savedBanner.pendingLevel !== null ? 'passed' : savedBanner.colours > 0 ? 'stage' : 'level',
         },
         savedBanner.left,
         savedBanner.blocking,
@@ -793,7 +797,7 @@ export function GameScreen(props: Props) {
       return {
         data: session.mode === 'campaign'
           ? { kicker: `Уровень ${campaignLevel + 1}`, title: `цель ${formatScore(at.target)}`, sub: `${at.glasses} ст. · ${at.colours} цв.` }
-          : { kicker: MODE_NAMES[session.mode], title: 'Поехали!' },
+          : { kicker: MODE_NAMES[session.mode], title: 'Поехали!', kind: 'start' as const },
         left: 0,
         blocking: true,
         then: null,
@@ -883,6 +887,8 @@ export function GameScreen(props: Props) {
       drawnNextPieceOpacity = s.hud.nextPieceOpacity;
 
       if (current === 'playing' && !holding) {
+        // The settings may change in a game, from its own settings page.
+        engine.instantDrop = s.handling.instantDrop === true;
         keyboard.update(seconds);
         pads.update(seconds);
         if (!tutorial || engine.phase !== 'playing' || freePlay()) engine.update(seconds);
@@ -1187,35 +1193,36 @@ export function GameScreen(props: Props) {
 
       {!tutorial && status === 'paused' && !blocked && (
         <Overlay label="Пауза" onDismiss={() => actions.current.togglePause()}>
-          <div className="dialog dialog--narrow">
-            <span className="kicker"><T>
+          <PauseCard
+            kicker={<T>
               {mode}
               {playingLevel ? ` · уровень ${level + 1} из ${CAMPAIGN_LAST + 1}` : ''}
-            </T></span>
-            <h2 className="dialog__title"><T>Пауза</T></h2>
-            {playingLevel && (
-              <p className="dialog__note"><T>
-                Цель {formatPoints(playingLevel.target)} · {playingLevel.colours} цв. · {playingLevel.glasses} ст.
-              </T></p>
-            )}
-            <div className="dialog__actions">
-              <Button primary autoFocus onClick={() => actions.current.togglePause()}><T>
-                Продолжить
-              </T></Button>
-              <Button onClick={() => actions.current.retry()}><T>{retryLabel}</T></Button>
-              <Button onClick={props.onSettings}><T>Настройки</T></Button>
-              {session.mode === 'custom' && !tutorial && (
-                <Button onClick={() => actions.current.leave(props.onCustomise)}><T>Изменить режим</T></Button>
-              )}
-              {session.mode !== 'custom' && (
-                <Button onClick={() => actions.current.leave(props.onLevels)}><T>К уровням</T></Button>
-              )}
-              {!tutorial && <Button onClick={() => actions.current.leave(props.onExit, true)}><T>В меню</T></Button>}
-              <Button ghost onClick={() => actions.current.leave(props.onExit, false)}><T>
-                {tutorial ? 'В меню' : 'Завершить партию'}
-              </T></Button>
-            </div>
-          </div>
+            </T>}
+            note={playingLevel && <T>
+              Цель {formatPoints(playingLevel.target)} · {playingLevel.colours} цв. · {playingLevel.glasses} ст.
+            </T>}
+            onResume={() => actions.current.togglePause()}
+            sound={props.onToggleMusic && { on: settings.audio.music || settings.audio.sounds, toggle: props.onToggleMusic }}
+            tiles={[
+              { icon: 'replay', label: retryLabel, onClick: () => actions.current.retry() },
+              { icon: 'settings', label: 'Настройки', onClick: () => props.onSettings() },
+              ...(session.mode === 'custom' && !tutorial
+                ? [{ icon: 'edit' as const, label: 'Изменить режим', onClick: () => actions.current.leave(props.onCustomise) }]
+                : []),
+              ...(session.mode !== 'custom'
+                ? [{ icon: 'levels' as const, label: 'К уровням', onClick: () => actions.current.leave(props.onLevels) }]
+                : []),
+            ]}
+            links={[
+              ...(!tutorial ? [{ icon: 'home' as const, label: 'В меню', onClick: () => actions.current.leave(props.onExit, true) }] : []),
+              {
+                icon: tutorial ? 'home' : 'flag',
+                label: tutorial ? 'В меню' : 'Завершить партию',
+                danger: !tutorial,
+                onClick: () => actions.current.leave(props.onExit, false),
+              },
+            ]}
+          />
         </Overlay>
       )}
 

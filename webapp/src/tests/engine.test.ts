@@ -96,6 +96,23 @@ describe('fewer glasses', () => {
     expect(engine.activeSide).toBe(RIGHT); // left and right face each other
   });
 
+  it('an instant hard drop lands at the next step, a flying one later', () => {
+    const flying = newEngine();
+    flying.incoming.put(TOP, lying([R, B, Y]), { column: 0 });
+    flying.dropActive();
+    flying.update(0.001);
+    expect(flying.phase).toBe('pieceDropping');
+    expect(flying.state.piecesPlaced).toBe(0);
+
+    const instant = newEngine();
+    instant.instantDrop = true;
+    instant.incoming.put(TOP, lying([R, B, Y]), { column: 0 });
+    instant.dropActive();
+    instant.update(0.001);
+    expect(instant.phase).not.toBe('pieceDropping');
+    expect(instant.state.piecesPlaced).toBe(1);
+  });
+
   it('a locked piece is replaced in its own glass and no other appears', () => {
     const engine = newEngine({ glassCount: 2 });
     engine.incoming.put(TOP, lying([R, B, Y]), { column: 0 });

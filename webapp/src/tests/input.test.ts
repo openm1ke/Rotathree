@@ -273,7 +273,11 @@ describe('settings storage', () => {
       effects: { explosion: 'sideways', turnMs: 5000 },
       hud: { keyHints: 'no', opacity: 0 },
     });
-    expect(cleaned.handling).toEqual({ dasMs: 0, arrMs: 35 });
+    expect(cleaned.handling).toEqual({ dasMs: 0, arrMs: 35, instantDrop: false });
+    expect(sanitizeSettings({ handling: { instantDrop: true } }).handling.instantDrop).toBe(true);
+    expect(cleaned.look).toEqual({ skin: 'classic' });
+    expect(sanitizeSettings({ look: { skin: 'retro' } }).look.skin).toBe('retro');
+    expect(sanitizeSettings({ look: { skin: 'neon' } }).look.skin).toBe('classic');
     expect(cleaned.effects).toEqual({ explosion: 'varied', fieldBackground: true, screenShake: true, turnMs: 800 });
     expect(cleaned.hud).toEqual({ nextPiece: true, nextPieceOpacity: 1, keyHints: true, score: true, stats: true, opacity: 0.1 });
     expect(cleaned.bindings).toEqual(defaultBindings);

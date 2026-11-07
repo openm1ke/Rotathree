@@ -344,7 +344,7 @@ test('web forms are centered and settings tabs scroll and swipe without wrapping
     await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   };
   await swipe(300, 70);
-  await expect(page.getByRole('tab', { name: 'Цвета', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Вид', exact: true })).toHaveAttribute('aria-selected', 'true');
   await swipe(70, 300);
   await expect(page.getByRole('tab', { name: 'Управление', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: 'Интерфейс', exact: true }).click();
@@ -660,11 +660,11 @@ test.describe('automatic English locale', () => {
       await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await expectEnglish(page);
       if (title === 'Settings') {
-        for (const tab of ['Colors', 'Effects', 'Interface', 'Controls', 'Sound', 'Licenses']) {
+        for (const tab of ['Look', 'Effects', 'Interface', 'Controls', 'Sound', 'Licenses']) {
           await page.getByRole('tab', { name: tab, exact: true }).click();
           await expectEnglish(page);
         }
-        await page.getByRole('tab', { name: 'Colors', exact: true }).click();
+        await page.getByRole('tab', { name: 'Look', exact: true }).click();
         await page.getByRole('button', { name: 'Copy current palette', exact: true }).click();
         await expect(page.getByRole('button', { name: 'My palette 1', exact: true })).toBeVisible();
         await expectEnglish(page);

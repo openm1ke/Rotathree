@@ -52,16 +52,46 @@ export function toneOf(hex: string): BlockTones {
   };
 }
 
+/** How a block is drawn. The game is the same in every one — blocks of a
+ * colour match — only their look changes. */
+export type BlockSkin = 'classic' | 'retro' | 'colourDice';
+
+/** The skins there are, in the order the settings offer them, with their
+ * names. */
+export const BLOCK_SKINS: readonly { id: BlockSkin; title: string }[] = [
+  { id: 'classic', title: 'Классика' },
+  { id: 'retro', title: 'Ретро' },
+  { id: 'colourDice', title: 'Цветные кости' },
+];
+
+/** A stored skin, or the classic for anything else (or one no longer offered). */
+export const blockSkin = (raw: unknown): BlockSkin =>
+  BLOCK_SKINS.find((skin) => skin.id === raw)?.id ?? 'classic';
+
 let tones: BlockTones[] = DEFAULT_COLOURS.map(toneOf);
+let colours: readonly string[] = DEFAULT_COLOURS;
+let skin: BlockSkin = 'classic';
 let revision = 0;
 
 /** Replaces the colours of the block slots. */
-export function setPalette(colours: readonly string[]): void {
-  tones = colours.map(toneOf);
+export function setPalette(next: readonly string[]): void {
+  setLook(next, skin);
+}
+
+/** Replaces the colours of the block slots and how they are drawn. */
+export function setLook(next: readonly string[], nextSkin: BlockSkin): void {
+  if (next === colours && nextSkin === skin) return;
+  colours = next;
+  skin = nextSkin;
+  tones = next.map(toneOf);
   revision++;
 }
 
-/** Changes every time the palette changes, so cached sprites can be checked. */
+/** How the blocks are drawn now. */
+export const currentSkin = (): BlockSkin => skin;
+
+/** Changes every time the palette or the skin changes, so cached sprites can
+ * be checked. */
 export const paletteRevision = (): number => revision;
 
 export const tonesOf = (color: number): BlockTones => tones[color];

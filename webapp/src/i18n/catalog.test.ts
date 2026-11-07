@@ -16,7 +16,7 @@ describe('language selection', () => {
   });
   it('persists manual choices without disturbing existing settings', () => {
     for (const language of ['auto', 'ru', 'en'] as const) {
-      const settings = { ...defaultSettings(), language, handling: { dasMs: 210, arrMs: 20 } };
+      const settings = { ...defaultSettings(), language, handling: { dasMs: 210, arrMs: 20, instantDrop: false } };
       expect(sanitizeSettings(JSON.parse(JSON.stringify(settings)))).toEqual(settings);
     }
     expect(sanitizeSettings({ handling: { dasMs: 210 } }).language).toBe('auto');

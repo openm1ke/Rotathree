@@ -2,6 +2,7 @@ import { languageChoice, type LanguageChoice } from '../i18n/catalog';
 import { DEFAULT_COLOURS, COLOUR_NAMES } from '../render/theme';
 import { defaultBindings, cloneBindings, sanitizeBindings, type Bindings } from '../input/bindings';
 import { defaultHandling, type Handling } from '../input/keyboard';
+import { blockSkin, type BlockSkin } from '../render/theme';
 import { CAMPAIGN } from '../game/campaign';
 import { DEFAULT_CUSTOM, MODE_NAMES, sanitizeCustom, type CustomSetup, type ModeId } from '../game/modes';
 import { sanitizeCubeRuns, type CubeRuns } from '../cube/save';
@@ -82,6 +83,8 @@ export interface Settings {
   padButtons: PadButtons;
   audio: AudioOptions;
   cube: CubeOptions;
+  /** How the blocks are drawn, in both games. */
+  look: { skin: BlockSkin };
 }
 
 /** Cube, the 3D mode: what it is played with and what its picture shows. */
@@ -170,6 +173,7 @@ export const defaultSettings = (): Settings => ({
   padButtons: structuredClone(DEFAULT_BUTTONS),
   audio: { music: true, musicVolume: 0.1, sounds: true, soundsVolume: 0.3 },
   cube: { ...DEFAULT_CUBE },
+  look: { skin: 'classic' },
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -236,6 +240,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     handling: {
       dasMs: numberIn(handling.dasMs, 0, 400, base.handling.dasMs),
       arrMs: numberIn(handling.arrMs, 0, 150, base.handling.arrMs),
+      instantDrop: handling.instantDrop === true,
     },
     palettes: sanitizePalettes(stored.palettes),
     effects: {
@@ -275,6 +280,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       grid: flag('grid'),
       inactiveFalls: flag('inactiveFalls'),
     },
+    look: { skin: blockSkin(((stored.look ?? {}) as Record<string, unknown>).skin) },
   };
 }
 

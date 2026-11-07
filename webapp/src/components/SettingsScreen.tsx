@@ -6,7 +6,8 @@ import { TouchControls } from './TouchControls';
 import { DEFAULT_POSITIONS, type PadSide } from '../input/padPlacement';
 import { DEFAULT_BUTTONS, DEFAULT_TWEAK, PAD_SHAPES, SHAPE_LABELS, type PadShape, type PadTweak } from '../input/padShape';
 import { useEffect, useRef, useState } from 'react';
-import { COLOUR_NAMES } from '../render/theme';
+import { BLOCK_SKINS, COLOUR_NAMES } from '../render/theme';
+import { BlockRow } from './BlockRow';
 import {
   ACTIONS,
   GROUP_TITLES,
@@ -32,7 +33,7 @@ type Tab = 'controls' | 'colours' | 'effects' | 'interface' | 'sound' | 'license
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['controls', 'Управление'],
-  ['colours', 'Цвета'],
+  ['colours', 'Вид'],
   ['effects', 'Эффекты'],
   ['interface', 'Интерфейс'],
   ['sound', 'Звуки'],
@@ -334,6 +335,15 @@ export function SettingsScreen({ settings, stored, overlay, active, cube = false
               ))}
             </>
           )}
+          <section className="group">
+            <h3><T>Сброс</T></h3>
+            <Toggle
+              label="Мгновенный сброс"
+              value={settings.handling.instantDrop === true}
+              onChange={(instantDrop) => onChange({ ...settings, handling: { ...settings.handling, instantDrop } })}
+            />
+            <p className="hint"><T>Мгновенный: фигура сразу встаёт на место, без полёта вниз — как в tetr.io.</T></p>
+          </section>
           <section className="group">
             <h3><T>Автоповтор движения</T></h3>
             <Slider
@@ -659,8 +669,30 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
     onChange({ ...settings, palettes: { ...palettes, sets } });
   };
 
+  const skin = settings.look.skin;
   return (
     <>
+      <section className="group">
+        <h3><T>Блоки</T></h3>
+        <p className="hint"><T>Как выглядят фигуры в обеих играх. Совпадают по-прежнему блоки одного цвета.</T></p>
+        <div className="skins">
+          {BLOCK_SKINS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              data-nav
+              className={`skin ${option.id === skin ? 'skin--active' : ''}`}
+              aria-pressed={option.id === skin}
+              data-skin={option.id}
+              onClick={() => onChange({ ...settings, look: { skin: option.id } })}
+            >
+              <BlockRow skin={option.id} colours={active.colours.slice(0, 5)} unit={34} />
+              <span className="skin__title"><T>{option.title}</T></span>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="group">
         <h3><T>Наборы</T></h3>
         <div className="chips">
@@ -708,9 +740,7 @@ function ColoursTab({ settings, onChange }: { settings: Settings; onChange: (nex
       <section className="group">
         <h3><T>Так это выглядит</T></h3>
         <div className="preview">
-          {active.colours.map((colour, i) => (
-            <div key={i} className="preview__block" style={{ background: colour }} />
-          ))}
+          <BlockRow skin={skin} colours={active.colours} unit={40} />
         </div>
       </section>
     </>

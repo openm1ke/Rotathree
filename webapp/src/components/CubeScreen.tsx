@@ -24,6 +24,7 @@ import { TouchControls } from './TouchControls';
 import { EMPTY_HUD, type Callout, type HudState } from './hudState';
 import { TutorialPanel } from './TutorialPanel';
 import { BackButton, Button, GameIconButton, Overlay, SoundButton } from './ui';
+import { PauseCard } from './PauseCard';
 import { formatDuration, formatNumber } from './format';
 
 type Status = 'playing' | 'paused' | 'over' | 'done';
@@ -622,6 +623,8 @@ export function CubeScreen(props: Props) {
         game.config.depthFalls = s.cube.depthFalls;
         game.config.inactiveFalls = s.cube.inactiveFalls;
       }
+      // The settings may change in a game, from its own settings page.
+      game.instantDrop = s.handling.instantDrop === true;
       const play = current === 'playing' && !frozen;
       if (play) {
         keyboard.update(seconds);
@@ -859,21 +862,21 @@ export function CubeScreen(props: Props) {
 
       {status === 'paused' && !looking && !blocked && (
         <Overlay label="Пауза" onDismiss={() => actions.current.togglePause()}>
-          <div className="dialog dialog--narrow">
-            <span className="kicker"><T>{mode}</T></span>
-            <h2 className="dialog__title"><T>Пауза</T></h2>
-            <div className="dialog__actions">
-              <Button primary autoFocus onClick={() => actions.current.togglePause()}><T>
-                Продолжить
-              </T></Button>
-              <Button onClick={() => actions.current.look(true)}><T>Осмотреть куб</T></Button>
-              <Button onClick={() => actions.current.retry()}><T>{retryLabel}</T></Button>
-              <Button onClick={props.onSettings}><T>Настройки</T></Button>
-              <Button onClick={() => actions.current.leave(back)}><T>{backLabel}</T></Button>
-              <Button onClick={() => actions.current.leave(props.onExit)}><T>В меню</T></Button>
-              <Button ghost onClick={() => actions.current.leave(props.onExit, false)}><T>Завершить партию</T></Button>
-            </div>
-          </div>
+          <PauseCard
+            kicker={<T>{mode}</T>}
+            onResume={() => actions.current.togglePause()}
+            sound={props.onToggleMusic && { on: settings.audio.music || settings.audio.sounds, toggle: props.onToggleMusic }}
+            tiles={[
+              { icon: 'look', label: 'Осмотреть куб', onClick: () => actions.current.look(true) },
+              { icon: 'replay', label: retryLabel, onClick: () => actions.current.retry() },
+              { icon: 'settings', label: 'Настройки', onClick: () => props.onSettings() },
+              { icon: 'levels', label: backLabel, onClick: () => actions.current.leave(back) },
+            ]}
+            links={[
+              { icon: 'home', label: 'В меню', onClick: () => actions.current.leave(props.onExit) },
+              { icon: 'flag', label: 'Завершить партию', danger: true, onClick: () => actions.current.leave(props.onExit, false) },
+            ]}
+          />
         </Overlay>
       )}
 

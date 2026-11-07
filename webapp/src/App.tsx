@@ -12,7 +12,7 @@ import { StatisticsScreen } from './components/StatisticsScreen';
 import { Overlay, SoundButton } from './components/ui';
 import { DEFAULT_CUSTOM, type CustomSetup } from './game/modes';
 import type { Session } from './game/session';
-import { setPalette } from './render/theme';
+import { setLook } from './render/theme';
 import {
   addRun,
   loadCustom,
@@ -208,7 +208,7 @@ export default function App() {
   // Everything the player sets up is written at once, so it survives closing
   // the tab; the block colours follow the active set.
   useEffect(() => {
-    setPalette(activeColours);
+    setLook(activeColours, settings.look.skin);
     written('settings', saveSettings(settings));
   }, [settings, activeColours, written]);
   useEffect(() => {

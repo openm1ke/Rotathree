@@ -174,7 +174,9 @@ export function Overlay({
         }
         const items = () => [
           ...(root.current?.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea, [tabindex="0"]',
+            // Not what has been taken out of the keyboard's way (tabindex -1),
+            // such as the pause's rings, which are for the mouse and fingers.
+            'button:not(:disabled):not([tabindex="-1"]), input:not(:disabled), select:not(:disabled), textarea, [tabindex="0"]',
           ) ?? []),
         ].filter((el) => el.getClientRects().length > 0);
         // Up and down, or W and S, walk the dialog's buttons round, as in the
